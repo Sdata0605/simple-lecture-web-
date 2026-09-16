@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EducationalVideoPlayerDialog } from "./player/EducationalVideoPlayerDialog";
 import { V4PlayerDialog } from "./V4PlayerDialog";
+import { V5PlayerDialog } from "./V5PlayerDialog";
 import { V4Notes } from "./v4/V4Notes";
 
 import { extractJobIdFromUrl } from "./player/utils/mediaResolver";
@@ -464,13 +465,39 @@ export const RecordedVideos = ({
     });
   }, [courseId, topicId, chapterId, isAuthenticated, lecturesLoading, lecturesStatus, lecturesFetchStatus, lecturesError, publishedLectures, hasPublishedLectures, hasLegacyAILecture, aiGeneratedVideoUrl, aiPresentationJson]);
 
+  /**
+   * Shared close handler for every AI lecture player (V5 / V4 / Educational).
+   * Flushes the accumulated watch time before tearing the player down — it
+   * lived inline in each branch before, which meant a new branch could silently
+   * drop watch-time tracking.
+   */
+  const handleAIPlayerOpenChange = useCallback((open: boolean) => {
+    if (open) return;
+    if (lectureStartTimeRef.current && currentLectureTitleRef.current) {
+      const secondsWatched = Math.floor((Date.now() - lectureStartTimeRef.current) / 1000);
+      if (secondsWatched > 0) {
+        updateWatchTime.mutate({
+          videoTitle: currentLectureTitleRef.current,
+          additionalSeconds: secondsWatched,
+        });
+      }
+      lectureStartTimeRef.current = null;
+      currentLectureTitleRef.current = null;
+    }
+    setWatchingLectureId(null);
+    setActiveAILanguage(null);
+  }, [updateWatchTime]);
+
   useEffect(() => {
     if (!watchingLecture) return;
     logPreviewReplay('player-open-branch', {
-      branch: watchingLecture.external_job_id &&
-        (watchingLecture.is_marketing || isV4EligibleChapter(chapterNumber))
-          ? 'v4-player'
-          : 'educational-player',
+      branch: !watchingLecture.external_job_id
+        ? 'educational-player'
+        : watchingLecture.is_marketing
+          ? 'v5-player'
+          : isV4EligibleChapter(chapterNumber)
+            ? 'v4-player'
+            : 'educational-player',
       lectureId: watchingLecture.id,
       externalJobId: watchingLecture.external_job_id,
       courseId,
@@ -758,29 +785,21 @@ export const RecordedVideos = ({
         </DialogContent>
       </Dialog>
 
-      {/* AI Lecture Player Dialog - For published lectures from jobs */}
+      {/* AI Lecture Player Dialog - For published lectures from jobs.
+          Marketing lectures play in V5 (merged video + synced key points),
+          matching the mobile app. V4-eligible chapters stay on V4. */}
       {watchingLecture && (
-        watchingLecture.external_job_id &&
-        (watchingLecture.is_marketing || isV4EligibleChapter(chapterNumber)) ? (
+        watchingLecture.external_job_id && watchingLecture.is_marketing ? (
+          <V5PlayerDialog
+            open={!!watchingLecture}
+            onOpenChange={handleAIPlayerOpenChange}
+            initialJobId={watchingLecture.external_job_id}
+            initialLanguage={activeAILanguage ?? selectedAILanguage}
+          />
+        ) : watchingLecture.external_job_id && isV4EligibleChapter(chapterNumber) ? (
           <V4PlayerDialog
             open={!!watchingLecture}
-            onOpenChange={(open) => {
-              if (!open) {
-                if (lectureStartTimeRef.current && currentLectureTitleRef.current) {
-                  const secondsWatched = Math.floor((Date.now() - lectureStartTimeRef.current) / 1000);
-                  if (secondsWatched > 0) {
-                    updateWatchTime.mutate({
-                      videoTitle: currentLectureTitleRef.current,
-                      additionalSeconds: secondsWatched,
-                    });
-                  }
-                  lectureStartTimeRef.current = null;
-                  currentLectureTitleRef.current = null;
-                }
-                setWatchingLectureId(null);
-                setActiveAILanguage(null);
-              }
-            }}
+            onOpenChange={handleAIPlayerOpenChange}
             documentName={topicTitle || watchingLecture.document_name || 'AI Lecture'}
             initialJobId={watchingLecture.external_job_id}
             initialLanguage={activeAILanguage ?? selectedAILanguage}
@@ -793,24 +812,7 @@ export const RecordedVideos = ({
         ) : (
           <EducationalVideoPlayerDialog
             open={!!watchingLecture}
-            onOpenChange={(open) => {
-              if (!open) {
-                // Save watch time when closing
-                if (lectureStartTimeRef.current && currentLectureTitleRef.current) {
-                  const secondsWatched = Math.floor((Date.now() - lectureStartTimeRef.current) / 1000);
-                  if (secondsWatched > 0) {
-                    updateWatchTime.mutate({
-                      videoTitle: currentLectureTitleRef.current,
-                      additionalSeconds: secondsWatched,
-                    });
-                  }
-                  lectureStartTimeRef.current = null;
-                  currentLectureTitleRef.current = null;
-                }
-                setWatchingLectureId(null);
-                setActiveAILanguage(null);
-              }
-            }}
+            onOpenChange={handleAIPlayerOpenChange}
             presentationData={lectureDetails?.presentation_json || undefined}
             externalJobId={watchingLecture.external_job_id || undefined}
             documentName={topicTitle || watchingLecture.document_name || 'AI Lecture'}

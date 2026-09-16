@@ -4,8 +4,15 @@
   --v5-line: rgba(162, 201, 192, 0.2);
   --v5-mint: #7ce0c3;
   --v5-gold: #f5c66a;
-  width: 100vw;
-  height: 100dvh;
+  /* Anchored as a full-viewport overlay, matching .v4-player. Without this the
+     player is a normal in-flow block: portalled to the end of document.body it
+     renders *below* the page instead of on top of it. (It looked fine on the
+     standalone /v5-player route only because it was the sole content there.)
+     `inset: 0` rather than 100vw/100dvh also avoids the horizontal overflow
+     100vw causes when a scrollbar is present. */
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
@@ -575,16 +582,17 @@
     max-width: 72px;
   }
 
+  /* Key points sit over the left of the video, vertically centred — the same
+     placement the mobile app uses, rather than a full-width bottom sheet. */
   .v5-keypoints {
-    right: 12px;
-    bottom: 24px;
     left: 12px;
-    top: auto;
-    width: auto;
-    max-height: 42%;
+    right: auto;
+    top: 50%;
+    bottom: auto;
+    width: 54%;
+    max-height: 86%;
     padding: 11px;
-    transform: none;
-    animation-name: v5-point-in;
+    transform: translateY(-50%);
   }
 
   .v5-keypoint {
@@ -600,8 +608,9 @@
 
   .v5-keypoints-toggle {
     left: 12px;
-    top: 12px;
+    top: 50%;
     bottom: auto;
+    transform: translateY(-50%);
   }
 
   .v5-controls {
@@ -617,6 +626,79 @@
 
   .v5-fullscreen-controls > span {
     display: none;
+  }
+}
+
+/* Portrait phone: hug the video to a 16:9 strip under the header, like the
+   mobile app, instead of stretching the stage down the whole viewport and
+   floating a small letterboxed frame in the middle of it. The extra grid row
+   absorbs the leftover height so header / stage / controls stack at the top. */
+@media (max-width: 760px) and (orientation: portrait) {
+  .v5-player {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+
+  .v5-stage {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 0;
+  }
+}
+
+/* Landscape phone — this is what a mobile fullscreen actually is. The
+   max-width breakpoint above never matches here (a phone in landscape is
+   ~840px wide), so the compact rules are keyed off height instead. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .v5-header {
+    min-height: 52px;
+    padding: 6px 10px;
+  }
+
+  .v5-header__status {
+    display: none;
+  }
+
+  /* Matches the mobile app's 38% landscape panel. */
+  .v5-keypoints {
+    left: clamp(10px, 2vw, 20px);
+    right: auto;
+    top: 50%;
+    bottom: auto;
+    width: 38%;
+    max-height: 78%;
+    padding: 10px;
+    transform: translateY(-50%);
+  }
+
+  .v5-keypoint {
+    grid-template-columns: 22px minmax(0, 1fr);
+    padding: 6px;
+    font-size: 11px;
+  }
+
+  .v5-keypoints-toggle {
+    left: clamp(10px, 2vw, 20px);
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+
+  .v5-controls {
+    padding: 7px 10px 8px;
+  }
+
+  .v5-fullscreen-controls {
+    right: 12px;
+    bottom: 10px;
+    left: 12px;
+    padding: 8px 11px;
+  }
+
+  /* The mobile app deliberately never crops the lecture frame, so mobile
+     fullscreen letterboxes rather than filling edge to edge. Desktop keeps
+     the `cover` treatment defined on .v5-stage:fullscreen above. */
+  .v5-stage:fullscreen .v5-video {
+    object-fit: contain;
   }
 }
 
