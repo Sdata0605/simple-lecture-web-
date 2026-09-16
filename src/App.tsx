@@ -257,6 +257,7 @@ const PipelineMonitorPage = lazyWithRetry(() => import("./components/admin/Pipel
 const VisitorAnalytics = lazyWithRetry(() => import("./pages/admin/VisitorAnalytics"));
 const AdminAnalytics = lazyWithRetry(() => import("./pages/admin/AdminAnalytics"));
 const AdminAskAI = lazyWithRetry(() => import("./pages/admin/AdminAskAI"));
+const RealTimeQuestions = lazyWithRetry(() => import("./pages/admin/RealTimeQuestions"));
 
 // Instructor pages
 const InstructorProtectedRoute = lazyWithRetry(() => import("./components/instructor/InstructorProtectedRoute").then(m => ({ default: m.InstructorProtectedRoute })));
@@ -449,6 +450,7 @@ const App = () => (
                     <Route path="pipeline-monitor" element={<PipelineMonitorPage />} />
                     <Route path="analytics" element={<AdminAnalytics />} />
                     <Route path="ask-ai" element={<AdminAskAI />} />
+                    <Route path="real-time-questions" element={<RealTimeQuestions />} />
                     <Route path="visitor-analytics" element={<VisitorAnalytics />} />
                     <Route path="kannada-scan" element={<KannadaCoverageScan />} />
                     <Route path="kannada-queue" element={<KannadaQueue />} />

@@ -16,6 +16,12 @@ supabase/.temp/
 .env.*
 !.env.example
 
+# Secret backups — never commit, even if a broader rule is relaxed later
+.env.supabase-secrets.backup
+*.secrets.backup
+secrets.json
+.supabase-secrets*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
