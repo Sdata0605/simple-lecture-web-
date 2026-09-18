@@ -172,6 +172,9 @@ verify_jwt = false
 [functions.athena-proxy]
 verify_jwt = false
 
+[functions.counselor-avatar-proxy]
+verify_jwt = false
+
 
 [functions.notes-auto-pipeline]
 verify_jwt = false

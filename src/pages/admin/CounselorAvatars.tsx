@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { SUPABASE_DIRECT_URL } from "@/lib/supabaseUrl";
 
 interface DynamicAvatar {
   id: string;
@@ -54,8 +55,20 @@ function cleanBaseUrl(value: string) {
   return value.trim().replace(/\/+$/, "");
 }
 
+// Direct http:// URL to the avatar server — only safe for plain <a href>
+// navigation (full-page nav isn't blocked by mixed-content policy the way
+// fetch()/XHR is), never for fetch(). Used for video/audio/download links.
 function buildUrl(baseUrl: string, path: string) {
   return `${cleanBaseUrl(baseUrl)}${path}`;
+}
+
+// Routed through counselor-avatar-proxy so the HTTPS admin panel can call
+// this plain-HTTP server without the browser blocking it as mixed content.
+// Use for every fetch()/XHR call to the avatar API.
+const PROXY_URL = `${SUPABASE_DIRECT_URL}/functions/v1/counselor-avatar-proxy`;
+function buildProxyUrl(baseUrl: string, path: string) {
+  const search = new URLSearchParams({ path, base: cleanBaseUrl(baseUrl) });
+  return `${PROXY_URL}?${search.toString()}`;
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
@@ -112,9 +125,9 @@ export default function CounselorAvatars() {
     setLoading(true);
     try {
       const [healthResult, queueResult, libraryResult] = await Promise.allSettled([
-        fetch(buildUrl(normalizedBaseUrl, "/api/health")).then((r) => parseJsonResponse<any>(r)),
-        fetch(buildUrl(normalizedBaseUrl, "/api/queue")).then((r) => parseJsonResponse<any>(r)),
-        fetch(buildUrl(normalizedBaseUrl, "/api/library/list")).then((r) => parseJsonResponse<{ avatars?: DynamicAvatar[] }>(r)),
+        fetch(buildProxyUrl(normalizedBaseUrl, "/api/health")).then((r) => parseJsonResponse<any>(r)),
+        fetch(buildProxyUrl(normalizedBaseUrl, "/api/queue")).then((r) => parseJsonResponse<any>(r)),
+        fetch(buildProxyUrl(normalizedBaseUrl, "/api/library/list")).then((r) => parseJsonResponse<{ avatars?: DynamicAvatar[] }>(r)),
       ]);
 
       if (healthResult.status === "fulfilled") setHealth(healthResult.value);
@@ -152,7 +165,7 @@ export default function CounselorAvatars() {
       if (audioFile) form.append("audio", audioFile);
       if (avatarName.trim()) form.append("name", avatarName.trim());
 
-      const data = await fetch(buildUrl(normalizedBaseUrl, "/api/library/upload"), {
+      const data = await fetch(buildProxyUrl(normalizedBaseUrl, "/api/library/upload"), {
         method: "POST",
         body: form,
       }).then((r) => parseJsonResponse<UploadResponse>(r));
@@ -175,7 +188,7 @@ export default function CounselorAvatars() {
     if (!window.confirm(`Delete avatar ${avatarId}?`)) return;
 
     try {
-      await fetch(buildUrl(normalizedBaseUrl, `/api/library/delete/${encodeURIComponent(avatarId)}`), {
+      await fetch(buildProxyUrl(normalizedBaseUrl, `/api/library/delete/${encodeURIComponent(avatarId)}`), {
         method: "DELETE",
       }).then((r) => parseJsonResponse<any>(r));
       toast({ title: "Avatar deleted" });
@@ -203,7 +216,7 @@ export default function CounselorAvatars() {
       form.append("tts_engine", ttsEngine);
       form.append("emotion", emotion);
 
-      const data = await fetch(buildUrl(normalizedBaseUrl, "/api/generate"), {
+      const data = await fetch(buildProxyUrl(normalizedBaseUrl, "/api/generate"), {
         method: "POST",
         body: form,
       }).then((r) => parseJsonResponse<GenerateResponse>(r));
@@ -221,7 +234,7 @@ export default function CounselorAvatars() {
     if (!lastTask?.task_id) return;
 
     try {
-      const data = await fetch(buildUrl(normalizedBaseUrl, `/api/status/${encodeURIComponent(lastTask.task_id)}`)).then((r) => parseJsonResponse<any>(r));
+      const data = await fetch(buildProxyUrl(normalizedBaseUrl, `/api/status/${encodeURIComponent(lastTask.task_id)}`)).then((r) => parseJsonResponse<any>(r));
       setTaskStatus(data);
     } catch (error: any) {
       toast({ title: "Status check failed", description: error.message, variant: "destructive" });
