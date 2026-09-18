@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Activity,
   BookOpen,
   CheckCircle2,
   ChevronRight,
+  Copy,
+  Eye,
   FileText,
   Loader2,
   Plus,
@@ -38,6 +40,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { ImportSubjectToAthenaDialog } from "@/components/admin/ImportSubjectToAthenaDialog";
+import { DoubtsMarkdown } from "@/components/learning/doubts/DoubtsMarkdown";
+import {
+  getDocumentMarkdown,
+  getLinkedSourceSubject,
+  saveDocumentMarkdown,
+  saveLinkedSourceSubject,
+} from "@/lib/athenaDocumentMarkdownStore";
+import { useImportableSubjects, useSourceSubjectContent } from "@/hooks/useImportSourceSubject";
+import { normalizeTitleForMatch } from "@/lib/athenaTitleMatch";
 import {
   useAthenaChapters,
   useAthenaDocuments,
@@ -425,17 +437,116 @@ function CurriculumTab({ subjectId }: { subjectId: string }) {
   );
 }
 
+// ---------------- Submitted-markdown viewer ----------------
+// Athena never hands back a submitted document's original text (only
+// status/chunk metadata) — so this reads from the local cache populated at
+// upload time. See src/lib/athenaDocumentMarkdownStore.ts.
+
+function MarkdownViewerDialog({
+  title,
+  markdown,
+  open,
+  onOpenChange,
+}: {
+  title: string;
+  markdown: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(markdown);
+      toast({ title: "Copied to clipboard" });
+    } catch {
+      toast({ title: "Copy failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="truncate pr-8">{title}</DialogTitle>
+          <DialogDescription>The exact markdown submitted for this document.</DialogDescription>
+        </DialogHeader>
+        <Tabs defaultValue="raw">
+          <div className="flex items-center justify-between">
+            <TabsList>
+              <TabsTrigger value="raw">Raw</TabsTrigger>
+              <TabsTrigger value="rendered">Rendered</TabsTrigger>
+            </TabsList>
+            <Button variant="outline" size="sm" onClick={handleCopy} className="gap-1.5">
+              <Copy className="h-3.5 w-3.5" /> Copy
+            </Button>
+          </div>
+          <TabsContent value="raw" className="mt-3">
+            <pre className="max-h-[60vh] overflow-auto rounded-md border bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words font-mono">
+              {markdown}
+            </pre>
+          </TabsContent>
+          <TabsContent value="rendered" className="mt-3">
+            <div className="max-h-[60vh] overflow-auto rounded-md border p-4 text-sm">
+              <DoubtsMarkdown variant="assistant" content={markdown} />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ---------------- Documents tab ----------------
 
 function DocumentsTab({ subjectId }: { subjectId: string }) {
   const [selectedChapterId, setSelectedChapterId] = useState<string>("none");
   const [selectedTopicId, setSelectedTopicId] = useState<string>("none");
   const [files, setFiles] = useState<File[]>([]);
+  const [viewerDoc, setViewerDoc] = useState<{ title: string; markdown: string } | null>(null);
+  // Which app subject this Athena subject was imported from — lets "View"
+  // recover markdown for documents the local cache never saw (e.g. uploaded
+  // before this feature existed, or in a different browser).
+  const [linkedAppSubjectId, setLinkedAppSubjectId] = useState<string>(
+    () => getLinkedSourceSubject(subjectId) ?? "",
+  );
 
   const chapters = useAthenaChapters(subjectId);
   const topics = useAthenaTopics(selectedChapterId !== "none" ? selectedChapterId : undefined);
   const documents = useAthenaDocuments(subjectId);
   const upload = useUploadAthenaDocuments();
+  const linkableSubjects = useImportableSubjects();
+  const linkedSubjectContent = useSourceSubjectContent(linkedAppSubjectId || undefined);
+
+  const handleLinkSubject = (v: string) => {
+    setLinkedAppSubjectId(v);
+    saveLinkedSourceSubject(subjectId, v);
+  };
+
+  // Title -> resolved markdown, built from whatever app subject is linked —
+  // matches on the same title the import used as the document's filename.
+  const markdownByTopicTitle = useMemo(() => {
+    const map = new Map<string, string>();
+    const content = linkedSubjectContent.data;
+    if (!content) return map;
+    for (const list of Object.values(content.topicsByChapter)) {
+      for (const t of list) {
+        if (t.markdown) map.set(normalizeTitleForMatch(t.title), t.markdown);
+      }
+    }
+    return map;
+  }, [linkedSubjectContent.data]);
+
+  const resolveMarkdown = (doc: { id: string; title?: string; filename: string }) => {
+    const cached = getDocumentMarkdown(subjectId, doc.id);
+    if (cached) return { markdown: cached, source: "cache" as const };
+    // Athena's document title already went through the same stripping on the
+    // way in (see athenaTitleMatch.ts) — normalize both sides the same way
+    // so punctuation the upload couldn't keep (apostrophes, dashes, "?") doesn't
+    // break the match.
+    const title = normalizeTitleForMatch(doc.title || doc.filename.replace(/\.md$/i, ""));
+    const fromApp = markdownByTopicTitle.get(title);
+    if (fromApp) return { markdown: fromApp, source: "app" as const };
+    return null;
+  };
 
   const handleUpload = async () => {
     if (files.length === 0) {
@@ -443,12 +554,26 @@ function DocumentsTab({ subjectId }: { subjectId: string }) {
       return;
     }
     try {
+      // Text-readable files (.md/.txt) get cached locally before upload so
+      // "View markdown" has something to show later — Athena's API doesn't
+      // store/return this. PDFs/DOCX are binary, so there's nothing to cache.
+      const textByName = new Map<string, string>();
+      await Promise.all(
+        files
+          .filter((f) => /\.(md|txt)$/i.test(f.name))
+          .map(async (f) => textByName.set(f.name, await f.text())),
+      );
+
       const res = await upload.mutateAsync({
         files,
         subjectId,
         chapterId: selectedChapterId !== "none" ? selectedChapterId : undefined,
         topicId: selectedTopicId !== "none" ? selectedTopicId : undefined,
       });
+      for (const u of res.uploaded ?? []) {
+        const text = textByName.get(u.filename);
+        if (text && u.document_id) saveDocumentMarkdown(subjectId, u.document_id, text);
+      }
       toast({ title: "Upload started", description: `${res.uploaded?.length ?? files.length} file(s) submitted for processing.` });
       setFiles([]);
     } catch (err) {
@@ -501,8 +626,29 @@ function DocumentsTab({ subjectId }: { subjectId: string }) {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Submitted Documents</CardTitle>
+        <CardHeader className="space-y-3">
+          <div>
+            <CardTitle className="text-base">Submitted Documents</CardTitle>
+            <CardDescription>
+              "Not available" means this browser never saw the raw text (uploaded elsewhere, or before markdown
+              viewing existed). Link the app subject it came from to recover it.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2 max-w-md">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">Link to app subject</Label>
+            <Select value={linkedAppSubjectId} onValueChange={handleLinkSubject}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder={linkableSubjects.isLoading ? "Loading…" : "Not linked"} />
+              </SelectTrigger>
+              <SelectContent>
+                {(linkableSubjects.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}{s.categories?.name ? ` — ${s.categories.name}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -510,32 +656,77 @@ function DocumentsTab({ subjectId }: { subjectId: string }) {
               <TableRow>
                 <TableHead>File</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Markdown</TableHead>
                 <TableHead className="text-right">Chunks</TableHead>
                 <TableHead>Created</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {documents.isLoading && (
-                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
               )}
               {!documents.isLoading && (documents.data ?? []).length === 0 && (
-                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No documents submitted yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No documents submitted yet.</TableCell></TableRow>
               )}
-              {(documents.data ?? []).map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell>
-                    <div className="font-medium">{d.title || d.filename}</div>
-                    {d.error_message && <div className="text-xs text-destructive">{d.error_message}</div>}
-                  </TableCell>
-                  <TableCell><DocumentStatusBadge status={d.status} /></TableCell>
-                  <TableCell className="text-right">{d.total_chunks ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{timeAgo(d.created_at)}</TableCell>
-                </TableRow>
-              ))}
+              {(documents.data ?? []).map((d) => {
+                const resolved = resolveMarkdown(d);
+                return (
+                  <TableRow key={d.id}>
+                    <TableCell>
+                      <div className="font-medium">{d.title || d.filename}</div>
+                      {d.error_message && <div className="text-xs text-destructive">{d.error_message}</div>}
+                    </TableCell>
+                    <TableCell><DocumentStatusBadge status={d.status} /></TableCell>
+                    <TableCell>
+                      {resolved ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5"
+                          onClick={() => {
+                            // Backfill the cache on first live-recovered view so
+                            // this is instant next time, without a fresh lookup.
+                            if (resolved.source === "app") saveDocumentMarkdown(subjectId, d.id, resolved.markdown);
+                            setViewerDoc({ title: d.title || d.filename, markdown: resolved.markdown });
+                          }}
+                        >
+                          <Eye className="h-3.5 w-3.5" /> View
+                        </Button>
+                      ) : linkedAppSubjectId && linkedSubjectContent.isLoading ? (
+                        <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Checking…
+                        </span>
+                      ) : (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title={
+                            linkedAppSubjectId
+                              ? "No topic titled like this was found in the linked app subject"
+                              : "Link the app subject above to try recovering this from the database"
+                          }
+                        >
+                          Not available
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">{d.total_chunks ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{timeAgo(d.created_at)}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {viewerDoc && (
+        <MarkdownViewerDialog
+          title={viewerDoc.title}
+          markdown={viewerDoc.markdown}
+          open={!!viewerDoc}
+          onOpenChange={(v) => !v && setViewerDoc(null)}
+        />
+      )}
     </div>
   );
 }
@@ -572,6 +763,7 @@ export default function RealTimeQuestions() {
               ))}
             </SelectContent>
           </Select>
+          <ImportSubjectToAthenaDialog onImported={setSubjectId} />
           <NewSubjectDialog onCreated={setSubjectId} />
         </div>
       </div>

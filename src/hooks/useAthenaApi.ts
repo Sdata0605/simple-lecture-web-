@@ -22,7 +22,10 @@ export interface AthenaChapter {
 export interface AthenaTopic {
   id: string;
   title: string;
-  topic_number?: number | null;
+  // The upstream Athena API 500s if topic_number is sent as a JSON number —
+  // it only accepts a string (see useCreateAthenaTopic below). Keep the read
+  // side widened to match what actually comes back.
+  topic_number?: string | number | null;
 }
 
 export interface AthenaDocument {
@@ -92,12 +95,15 @@ async function parseJsonResponse(res: Response) {
   return body;
 }
 
-async function athenaGet<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
+// Exported (not just used by the hooks below) so imperative bulk flows —
+// e.g. ImportSubjectToAthenaDialog's sequential import pipeline — can call
+// the Athena API directly without going through React Query mutations.
+export async function athenaGet<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   const res = await fetch(buildUrl(path, params));
   return parseJsonResponse(res);
 }
 
-async function athenaPostJson<T>(path: string, payload: unknown): Promise<T> {
+export async function athenaPostJson<T>(path: string, payload: unknown): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -106,7 +112,7 @@ async function athenaPostJson<T>(path: string, payload: unknown): Promise<T> {
   return parseJsonResponse(res);
 }
 
-async function athenaUpload<T>(path: string, formData: FormData): Promise<T> {
+export async function athenaUpload<T>(path: string, formData: FormData): Promise<T> {
   const res = await fetch(buildUrl(path), { method: "POST", body: formData });
   return parseJsonResponse(res);
 }
@@ -163,8 +169,13 @@ export function useAthenaTopics(chapterId?: string) {
 export function useCreateAthenaTopic() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { chapterId: string; title: string; topicNumber?: number }) =>
-      athenaPostJson<AthenaTopic>("/topics", payload),
+    mutationFn: ({ topicNumber, ...payload }: { chapterId: string; title: string; topicNumber?: number | string }) =>
+      // Upstream 500s on a JSON number here — it only accepts topic_number as
+      // a string (confirmed by direct testing against the Athena API).
+      athenaPostJson<AthenaTopic>("/topics", {
+        ...payload,
+        topicNumber: topicNumber !== undefined && topicNumber !== "" ? String(topicNumber) : undefined,
+      }),
     onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["athena", "topics", vars.chapterId] }),
   });
 }
