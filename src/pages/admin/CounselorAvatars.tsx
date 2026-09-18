@@ -52,7 +52,11 @@ const LANGUAGES = ["english", "kannada", "hindi", "bengali", "tamil", "telugu", 
 const SPEAKERS = ["abhilash", "vidya", "manisha", "karun", "hitesh", "anushka", "arya"];
 
 function cleanBaseUrl(value: string) {
-  return value.trim().replace(/\/+$/, "");
+  const trimmed = value.trim().replace(/\/+$/, "");
+  // A saved/typed value can lose its scheme (e.g. "204.12.237.78:5004"
+  // instead of "http://204.12.237.78:5004") — the proxy rejects that as an
+  // invalid base URL outright, so default to http:// rather than erroring.
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
 }
 
 // Direct http:// URL to the avatar server — only safe for plain <a href>
@@ -254,7 +258,7 @@ export default function CounselorAvatars() {
             <Activity className="h-5 w-5" />
             Avatar Server
           </CardTitle>
-          <CardDescription>Doc default is localhost:5004. For this admin panel, use the reachable server IP with port 5004.</CardDescription>
+          <CardDescription>Doc default is localhost:5004. For this admin panel, use the reachable server IP with port 5004. (http:// is added automatically if you leave it off.)</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
