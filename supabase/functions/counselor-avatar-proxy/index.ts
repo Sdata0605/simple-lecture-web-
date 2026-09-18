@@ -82,14 +82,19 @@ Deno.serve(async (req) => {
       ? (isMultipart ? await req.arrayBuffer() : await req.text())
       : undefined;
 
-    const MAX_ATTEMPTS = method === 'GET' ? 2 : (isMultipart ? 1 : 3);
+    const isGet = method === 'GET';
+    // GET (health/queue/library-list) should be near-instant, so give it
+    // more, shorter-timeout attempts — 3 chances at a brief upstream blip
+    // (e.g. the GPU box momentarily busy/restarting) rather than 2 long ones,
+    // without leaving a page load hanging for minutes if it's genuinely down.
+    const MAX_ATTEMPTS = isGet ? 3 : (isMultipart ? 1 : 3);
     let lastErr = 'Upstream fetch failed';
     let lastStatus: number | undefined;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const controller = new AbortController();
       // Avatar generation can take a while; uploads longer still.
-      const timeoutMs = isMultipart ? 300_000 : 60_000;
+      const timeoutMs = isMultipart ? 300_000 : (isGet ? 20_000 : 60_000);
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const upstream = await fetch(upstreamUrl, {
