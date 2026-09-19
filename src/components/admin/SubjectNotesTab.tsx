@@ -4,8 +4,15 @@ import {
   AlertCircle,
   BookOpenText,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
+  CircleX,
+  Clock3,
   ClipboardCopy,
+  FileBarChart2,
   FileJson,
+  Image as ImageIcon,
   ListChecks,
   Loader2,
   PauseCircle,
@@ -16,6 +23,7 @@ import {
   RotateCcw,
   Send,
   Square,
+  TriangleAlert,
   WandSparkles,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -201,6 +209,166 @@ const JsonView = ({ value, empty = "No data loaded." }: { value: unknown; empty?
   </ScrollArea>
 );
 
+// ---------------- Notes Report ----------------
+// Cross-references the app's own topic list (ground truth for what SHOULD
+// exist) against the Notes API's /notes/chapter/{id} response (ground truth
+// for what's actually been generated). Matched strictly by topic_id, never
+// by title/number, so a rename or duplicate title can't produce a false
+// match. notes_status === "done" is treated as "published" because the
+// student-facing reader (useImportantNotes) reads this exact same endpoint —
+// there's no separate publish step in this pipeline.
+
+interface ReportTopicRow {
+  id: string;
+  chapter_id: string;
+  topic_number: string;
+  title: string;
+  updated_at: string | null;
+}
+
+type TopicReportStatus = "not_created" | "done" | "failed" | "other";
+
+interface TopicReportEntry {
+  topic: ReportTopicRow;
+  status: TopicReportStatus;
+  rawStatus?: string;
+  errorMessage?: string;
+  documentTitle?: string;
+  generatedAt?: string;
+  sectionsCount: number;
+  questionsCount: number;
+  answersCount: number;
+  formulasCount: number;
+  noteImagesExpected: number;
+  noteImagesActual: number;
+  answerImagesExpected: number;
+  answerImagesActual: number;
+  possiblyStale: boolean;
+}
+
+interface ChapterReportEntry {
+  chapter: { id: string; chapter_number: number; title: string };
+  topics: TopicReportEntry[];
+  // Set only for a real failure (network/5xx) — a 404 "No notes found for
+  // this chapter" is the normal, expected shape for an untouched chapter and
+  // must NOT be treated as an error, or every fresh chapter would misreport
+  // as broken instead of "not created".
+  fetchError?: string;
+}
+
+const NOTES_REPORT_NATURAL_COMPARE = (a: string, b: string) =>
+  String(a || "").localeCompare(String(b || ""), undefined, { numeric: true, sensitivity: "base" });
+
+function buildTopicReportEntry(topic: ReportTopicRow, apiEntry: any | null): TopicReportEntry {
+  if (!apiEntry) {
+    return {
+      topic,
+      status: "not_created",
+      sectionsCount: 0,
+      questionsCount: 0,
+      answersCount: 0,
+      formulasCount: 0,
+      noteImagesExpected: 0,
+      noteImagesActual: 0,
+      answerImagesExpected: 0,
+      answerImagesActual: 0,
+      possiblyStale: false,
+    };
+  }
+
+  const rawStatus: string = apiEntry.notes_status || "unknown";
+  const status: TopicReportStatus =
+    rawStatus === "done" ? "done" : rawStatus === "failed" ? "failed" : "other";
+
+  const sections = Array.isArray(apiEntry.note_sections) ? apiEntry.note_sections : [];
+  const questions = Array.isArray(apiEntry.questions) ? apiEntry.questions : [];
+  const answers = Array.isArray(apiEntry.question_answers) ? apiEntry.question_answers : [];
+
+  const noteImagesExpected = sections.reduce(
+    (n: number, s: any) => n + (Array.isArray(s?.image_descriptions) ? s.image_descriptions.length : 0),
+    0,
+  );
+  const noteImagesActual = Array.isArray(apiEntry.note_images) ? apiEntry.note_images.length : 0;
+
+  const answerImagesExpected = answers.reduce(
+    (n: number, a: any) => n + (Array.isArray(a?.image_descriptions) ? a.image_descriptions.length : 0),
+    0,
+  );
+  const answerImagesActual =
+    answers.reduce((n: number, a: any) => n + (Array.isArray(a?.answer_images) ? a.answer_images.length : 0), 0) +
+    (Array.isArray(apiEntry.answer_images) ? apiEntry.answer_images.length : 0);
+
+  const generatedAt: string | undefined = apiEntry.generated_at || undefined;
+  // Best-effort staleness signal, not a hard fact — updated_at can move for
+  // reasons unrelated to content (e.g. reordering), so this is worded as a
+  // possibility in the UI, never asserted outright.
+  const possiblyStale = !!(
+    topic.updated_at &&
+    generatedAt &&
+    new Date(topic.updated_at).getTime() > new Date(generatedAt).getTime()
+  );
+
+  return {
+    topic,
+    status,
+    rawStatus,
+    errorMessage: apiEntry.error_message || undefined,
+    documentTitle: apiEntry.document_title || undefined,
+    generatedAt,
+    sectionsCount: sections.length,
+    questionsCount: questions.length,
+    answersCount: answers.length,
+    formulasCount: Array.isArray(apiEntry.latex_formulas) ? apiEntry.latex_formulas.length : 0,
+    noteImagesExpected,
+    noteImagesActual,
+    answerImagesExpected,
+    answerImagesActual,
+    possiblyStale,
+  };
+}
+
+function TopicStatusBadge({ entry }: { entry: TopicReportEntry }) {
+  if (entry.status === "not_created") {
+    return (
+      <Badge variant="outline" className="gap-1 text-muted-foreground">
+        <CircleHelp className="h-3 w-3" /> Not created
+      </Badge>
+    );
+  }
+  if (entry.status === "failed") {
+    return (
+      <Badge variant="destructive" className="gap-1">
+        <CircleX className="h-3 w-3" /> Failed
+      </Badge>
+    );
+  }
+  if (entry.status === "done") {
+    return (
+      <Badge className="gap-1 bg-emerald-600 hover:bg-emerald-600">
+        <CheckCircle2 className="h-3 w-3" /> Published
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="secondary" className="gap-1">
+      <Clock3 className="h-3 w-3" /> {entry.rawStatus || "In progress"}
+    </Badge>
+  );
+}
+
+function ImageCountLabel({ actual, expected, label }: { actual: number; expected: number; label: string }) {
+  if (expected === 0 && actual === 0) {
+    return <span className="text-muted-foreground">{label}: none expected</span>;
+  }
+  const complete = actual >= expected;
+  return (
+    <span className={complete ? "text-emerald-700" : "font-medium text-destructive"}>
+      {label}: {actual}/{expected}
+      {!complete && " missing"}
+    </span>
+  );
+}
+
 export function SubjectNotesTab({
   subjectId,
   subjectName,
@@ -229,6 +397,12 @@ export function SubjectNotesTab({
   const [logsResult, setLogsResult] = useState<any>(null);
   const [logName, setLogName] = useState("notes");
   const [logTail, setLogTail] = useState("200");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportChapters, setReportChapters] = useState<ChapterReportEntry[] | null>(null);
+  const [reportGeneratedAt, setReportGeneratedAt] = useState<Date | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [collapsedReportChapters, setCollapsedReportChapters] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBase);
@@ -247,6 +421,24 @@ export function SubjectNotesTab({
         .select("id, chapter_number, title")
         .eq("subject_id", subjectId)
         .order("chapter_number", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Every topic across every chapter of this subject — the ground truth for
+  // the Report (independent of whatever single chapter/topic is selected
+  // above via the dropdowns).
+  const chapterIdsKey = chapters.map((c: any) => c.id).join(",");
+  const { data: allSubjectTopics = [], isLoading: allTopicsLoading } = useQuery({
+    queryKey: ["subject-notes-report-all-topics", subjectId, chapterIdsKey],
+    enabled: !!subjectId && chapters.length > 0,
+    queryFn: async (): Promise<ReportTopicRow[]> => {
+      const chapterIds = chapters.map((c: any) => c.id);
+      const { data, error } = await supabase
+        .from("subject_topics")
+        .select("id, chapter_id, topic_number, title, updated_at")
+        .in("chapter_id", chapterIds);
       if (error) throw error;
       return data || [];
     },
@@ -604,6 +796,116 @@ export function SubjectNotesTab({
       setBatchStatus(await apiRequest(apiBase, "/notes/batch/status"));
     });
 
+  // One /notes/chapter/{id} call per chapter, in parallel — that endpoint
+  // already embeds every topic's full sections/images/questions, so this
+  // scales to a whole subject without a call per topic. Each chapter's
+  // result is matched back to this subject's real topic list by topic_id.
+  const loadReport = async () => {
+    if (!subjectId) return;
+    if (chapters.length === 0) {
+      setReportChapters([]);
+      setReportGeneratedAt(new Date());
+      setReportError(null);
+      return;
+    }
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const settled = await Promise.allSettled(
+        chapters.map((chapter: any) =>
+          apiRequest(apiBase, `/notes/chapter/${encodeURIComponent(chapter.id)}`),
+        ),
+      );
+
+      const topicsByChapter = new Map<string, ReportTopicRow[]>();
+      for (const t of allSubjectTopics) {
+        const list = topicsByChapter.get(t.chapter_id) ?? [];
+        list.push(t);
+        topicsByChapter.set(t.chapter_id, list);
+      }
+      for (const list of topicsByChapter.values()) {
+        list.sort((a, b) => NOTES_REPORT_NATURAL_COMPARE(a.topic_number, b.topic_number));
+      }
+
+      const chapterEntries: ChapterReportEntry[] = chapters.map((chapter: any, idx: number) => {
+        const result = settled[idx];
+        const realTopics = topicsByChapter.get(chapter.id) ?? [];
+        const apiTopicsById = new Map<string, any>();
+        let fetchError: string | undefined;
+
+        if (result.status === "fulfilled") {
+          const apiTopics = Array.isArray(result.value?.topics) ? result.value.topics : [];
+          for (const t of apiTopics) {
+            if (t?.topic_id) apiTopicsById.set(t.topic_id, t);
+          }
+        } else {
+          const message = result.reason?.message || String(result.reason);
+          // The API 404s with this exact message for a chapter with zero
+          // generated notes — that's the normal "nothing created yet" case,
+          // not a real failure, so every topic just falls through to
+          // "not created" below rather than showing a chapter-level error.
+          if (!/no notes found/i.test(message)) {
+            fetchError = message;
+          }
+        }
+
+        const topicEntries = realTopics.map((topic) =>
+          buildTopicReportEntry(topic, apiTopicsById.get(topic.id) || null),
+        );
+
+        return {
+          chapter: { id: chapter.id, chapter_number: chapter.chapter_number, title: chapter.title },
+          topics: topicEntries,
+          fetchError,
+        };
+      });
+
+      setReportChapters(chapterEntries);
+      setReportGeneratedAt(new Date());
+      setCollapsedReportChapters({});
+    } catch (error: any) {
+      setReportError(error?.message || String(error));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const openReport = () => {
+    setReportOpen(true);
+    if (!reportChapters && !reportLoading) {
+      void loadReport();
+    }
+  };
+
+  const toggleReportChapter = (id: string) => {
+    setCollapsedReportChapters((current) => ({ ...current, [id]: !current[id] }));
+  };
+
+  const copyReportSummary = () => {
+    if (!reportChapters) return;
+    const lines: string[] = [`Notes report — ${subjectName || subjectId}`];
+    if (reportGeneratedAt) lines.push(`Generated ${reportGeneratedAt.toLocaleString()}`);
+    lines.push("");
+    for (const c of reportChapters) {
+      lines.push(`${c.chapter.chapter_number}. ${c.chapter.title}`);
+      if (c.fetchError) lines.push(`  ⚠ Could not load this chapter: ${c.fetchError}`);
+      for (const t of c.topics) {
+        const parts = [`  ${t.topic.topic_number} ${t.topic.title} — ${t.rawStatus ? t.rawStatus : "not created"}`];
+        if (t.status === "done" || t.status === "failed" || t.status === "other") {
+          parts.push(
+            `(notes images ${t.noteImagesActual}/${t.noteImagesExpected}, answer images ${t.answerImagesActual}/${t.answerImagesExpected}, ${t.questionsCount} questions, ${t.answersCount} answers)`,
+          );
+        }
+        if (t.errorMessage) parts.push(`— error: ${t.errorMessage}`);
+        if (t.possiblyStale) parts.push("— possibly outdated (source edited after generation)");
+        lines.push(parts.join(" "));
+      }
+      lines.push("");
+    }
+    navigator.clipboard.writeText(lines.join("\n"));
+    toast({ title: "Report copied as text" });
+  };
+
   const startBatch = () =>
     runAction("batch-start", async () => {
       setBatchStatus(
@@ -760,6 +1062,52 @@ export function SubjectNotesTab({
       toast({ title: "Pipeline stopped", description: "Queued topics will not be submitted." });
     });
 
+  const reportSummary = useMemo(() => {
+    if (!reportChapters) return null;
+    let totalTopics = 0;
+    let notCreated = 0;
+    let published = 0;
+    let failed = 0;
+    let other = 0;
+    let noteImgExpected = 0;
+    let noteImgActual = 0;
+    let ansImgExpected = 0;
+    let ansImgActual = 0;
+    let staleCount = 0;
+    let chapterErrors = 0;
+    for (const c of reportChapters) {
+      if (c.fetchError) chapterErrors++;
+      for (const t of c.topics) {
+        totalTopics++;
+        if (t.status === "not_created") {
+          notCreated++;
+          continue;
+        }
+        if (t.status === "done") published++;
+        else if (t.status === "failed") failed++;
+        else other++;
+        noteImgExpected += t.noteImagesExpected;
+        noteImgActual += t.noteImagesActual;
+        ansImgExpected += t.answerImagesExpected;
+        ansImgActual += t.answerImagesActual;
+        if (t.possiblyStale) staleCount++;
+      }
+    }
+    return {
+      totalTopics,
+      notCreated,
+      published,
+      failed,
+      other,
+      noteImgExpected,
+      noteImgActual,
+      ansImgExpected,
+      ansImgActual,
+      staleCount,
+      chapterErrors,
+    };
+  }, [reportChapters]);
+
   const dataLoading = documentLoading || questionsLoading || importantQuery.isLoading;
   const pipelineProgress = displayPipelineRun?.total_items
     ? Math.round((Number(displayPipelineRun.completed_items || 0) / Number(displayPipelineRun.total_items)) * 100)
@@ -827,15 +1175,21 @@ export function SubjectNotesTab({
                 Select a chapter and topic to inspect one payload, or queue multiple topics below.
               </CardDescription>
             </div>
-            <Button variant="outline" onClick={() => setJobsOpen(true)}>
-              <ListChecks className="mr-2 h-4 w-4" />
-              View all jobs
-              {!!pipelineJobsQuery.data?.length && (
-                <Badge variant="secondary" className="ml-2">
-                  {pipelineJobsQuery.data.length}
-                </Badge>
-              )}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={openReport}>
+                <FileBarChart2 className="mr-2 h-4 w-4" />
+                Report
+              </Button>
+              <Button variant="outline" onClick={() => setJobsOpen(true)}>
+                <ListChecks className="mr-2 h-4 w-4" />
+                View all jobs
+                {!!pipelineJobsQuery.data?.length && (
+                  <Badge variant="secondary" className="ml-2">
+                    {pipelineJobsQuery.data.length}
+                  </Badge>
+                )}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -1533,6 +1887,230 @@ export function SubjectNotesTab({
                     </div>
                   </details>
                 </article>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent className="max-h-[90vh] max-w-6xl overflow-hidden p-0">
+          <DialogHeader className="border-b px-6 py-5">
+            <div className="flex items-start justify-between gap-4 pr-8">
+              <div>
+                <DialogTitle className="flex items-center gap-2">
+                  <FileBarChart2 className="h-5 w-5" />
+                  Notes Report — {subjectName || "Subject"}
+                </DialogTitle>
+                <DialogDescription className="mt-1">
+                  Every chapter and topic, whether notes exist and are published, and how many images
+                  were expected vs. actually generated. "Published" here means the student reader can
+                  already see it — this pipeline has no separate publish step beyond generation finishing.
+                  {reportGeneratedAt && (
+                    <span className="ml-1 text-xs">Generated {reportGeneratedAt.toLocaleTimeString()}.</span>
+                  )}
+                </DialogDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={copyReportSummary} disabled={!reportChapters}>
+                  <ClipboardCopy className="mr-2 h-3.5 w-3.5" />
+                  Copy as text
+                </Button>
+                <Button size="sm" onClick={loadReport} disabled={reportLoading || chaptersLoading || allTopicsLoading}>
+                  {reportLoading ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                  )}
+                  {reportChapters ? "Refresh" : "Generate report"}
+                </Button>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <ScrollArea className="h-[76vh] px-6 py-4">
+            {(reportLoading || chaptersLoading || allTopicsLoading) && !reportChapters && (
+              <div className="grid min-h-48 place-items-center text-sm text-muted-foreground">
+                <Loader2 className="mb-2 h-7 w-7 animate-spin" />
+                Fetching notes status for every chapter…
+              </div>
+            )}
+
+            {reportError && (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                <span>{reportError}</span>
+                <Button variant="outline" size="sm" onClick={loadReport}>
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                  Retry
+                </Button>
+              </div>
+            )}
+
+            {!reportLoading && reportChapters && reportChapters.length === 0 && (
+              <div className="grid min-h-48 place-items-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                This subject has no chapters yet.
+              </div>
+            )}
+
+            {reportSummary && (
+              <div className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">Topics total</div>
+                  <div className="mt-1 text-lg font-semibold">{reportSummary.totalTopics}</div>
+                </div>
+                <div className="rounded-lg border bg-emerald-50 p-3 dark:bg-emerald-950/30">
+                  <div className="text-xs text-muted-foreground">Published</div>
+                  <div className="mt-1 text-lg font-semibold text-emerald-700">{reportSummary.published}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">Not created</div>
+                  <div className="mt-1 text-lg font-semibold">{reportSummary.notCreated}</div>
+                </div>
+                <div className="rounded-lg border bg-destructive/5 p-3">
+                  <div className="text-xs text-muted-foreground">Failed</div>
+                  <div className="mt-1 text-lg font-semibold text-destructive">{reportSummary.failed}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">In progress / other</div>
+                  <div className="mt-1 text-lg font-semibold">{reportSummary.other}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <ImageIcon className="h-3 w-3" /> Images (notes + answers)
+                  </div>
+                  <div
+                    className={`mt-1 text-lg font-semibold ${
+                      reportSummary.noteImgActual + reportSummary.ansImgActual <
+                      reportSummary.noteImgExpected + reportSummary.ansImgExpected
+                        ? "text-destructive"
+                        : "text-emerald-700"
+                    }`}
+                  >
+                    {reportSummary.noteImgActual + reportSummary.ansImgActual}/
+                    {reportSummary.noteImgExpected + reportSummary.ansImgExpected}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {reportSummary && (reportSummary.staleCount > 0 || reportSummary.chapterErrors > 0) && (
+              <div className="mb-5 space-y-2">
+                {reportSummary.staleCount > 0 && (
+                  <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                    <TriangleAlert className="h-4 w-4 shrink-0" />
+                    {reportSummary.staleCount} topic{reportSummary.staleCount === 1 ? "" : "s"} may be
+                    outdated — the topic's source was edited after its notes were generated.
+                  </div>
+                )}
+                {reportSummary.chapterErrors > 0 && (
+                  <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    <TriangleAlert className="h-4 w-4 shrink-0" />
+                    {reportSummary.chapterErrors} chapter{reportSummary.chapterErrors === 1 ? "" : "s"}{" "}
+                    could not be checked (see below) — counts above exclude them, so the real totals may
+                    be higher.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-3 pb-4">
+              {reportChapters?.map((c) => {
+                const collapsed = collapsedReportChapters[c.chapter.id];
+                const chapterPublished = c.topics.filter((t) => t.status === "done").length;
+                return (
+                  <div key={c.chapter.id} className="rounded-xl border bg-card">
+                    <button
+                      type="button"
+                      onClick={() => toggleReportChapter(c.chapter.id)}
+                      className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-muted/40"
+                    >
+                      <div className="flex items-center gap-2">
+                        {collapsed ? (
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="font-semibold">
+                          {c.chapter.chapter_number}. {c.chapter.title}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {c.fetchError && (
+                          <Badge variant="destructive" className="gap-1">
+                            <TriangleAlert className="h-3 w-3" /> Couldn't check
+                          </Badge>
+                        )}
+                        <span>
+                          {chapterPublished}/{c.topics.length} published
+                        </span>
+                      </div>
+                    </button>
+
+                    {c.fetchError && (
+                      <div className="mx-3 mb-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                        <span>{c.fetchError}</span>
+                      </div>
+                    )}
+
+                    {!collapsed && (
+                      <div className="space-y-2 border-t p-3">
+                        {c.topics.length === 0 && (
+                          <div className="py-3 text-center text-sm text-muted-foreground">
+                            No topics in this chapter.
+                          </div>
+                        )}
+                        {c.topics.map((t) => (
+                          <div key={t.topic.id} className="rounded-lg border bg-muted/20 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">
+                                  {t.topic.topic_number} {t.topic.title}
+                                </span>
+                                {t.possiblyStale && (
+                                  <span title="Source was edited after notes were generated">
+                                    <TriangleAlert className="h-3.5 w-3.5 text-amber-500" />
+                                  </span>
+                                )}
+                              </div>
+                              <TopicStatusBadge entry={t} />
+                            </div>
+
+                            {(t.status === "done" || t.status === "failed" || t.status === "other") && (
+                              <div className="mt-2 grid gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+                                <span>Sections: {t.sectionsCount}</span>
+                                <span>
+                                  Questions: {t.questionsCount} · Answered: {t.answersCount}
+                                  {t.answersCount < t.questionsCount && (
+                                    <span className="ml-1 font-medium text-destructive">missing</span>
+                                  )}
+                                </span>
+                                <ImageCountLabel actual={t.noteImagesActual} expected={t.noteImagesExpected} label="Notes images" />
+                                <ImageCountLabel
+                                  actual={t.answerImagesActual}
+                                  expected={t.answerImagesExpected}
+                                  label="Answer images"
+                                />
+                                <span>Formulas: {t.formulasCount}</span>
+                                {t.generatedAt && <span>Generated: {new Date(t.generatedAt).toLocaleString()}</span>}
+                                {t.documentTitle && (
+                                  <span className="truncate" title={t.documentTitle}>
+                                    Source: {t.documentTitle}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {t.errorMessage && (
+                              <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                                {t.errorMessage}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
