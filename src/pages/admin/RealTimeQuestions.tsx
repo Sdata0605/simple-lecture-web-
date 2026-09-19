@@ -41,6 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { ImportSubjectToAthenaDialog } from "@/components/admin/ImportSubjectToAthenaDialog";
+import { LinkAthenaSubjectDialog } from "@/components/admin/LinkAthenaSubjectDialog";
 import { DoubtsMarkdown } from "@/components/learning/doubts/DoubtsMarkdown";
 import {
   getDocumentMarkdown,
@@ -763,6 +764,12 @@ export default function RealTimeQuestions() {
               ))}
             </SelectContent>
           </Select>
+          {activeSubjectId && (
+            <LinkAthenaSubjectDialog
+              athenaSubjectId={activeSubjectId}
+              athenaSubjectName={subjects.data?.find((s) => s.id === activeSubjectId)?.name}
+            />
+          )}
           <ImportSubjectToAthenaDialog onImported={setSubjectId} />
           <NewSubjectDialog onCreated={setSubjectId} />
         </div>

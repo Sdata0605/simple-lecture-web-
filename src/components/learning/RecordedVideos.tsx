@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EducationalVideoPlayerDialog } from "./player/EducationalVideoPlayerDialog";
 import { V4PlayerDialog } from "./V4PlayerDialog";
 import { V5PlayerDialog } from "./V5PlayerDialog";
+import { PostLectureDoubtDialog } from "./postLecture/PostLectureDoubtDialog";
 import { V4Notes } from "./v4/V4Notes";
 
 import { extractJobIdFromUrl } from "./player/utils/mediaResolver";
@@ -144,6 +145,38 @@ export const RecordedVideos = ({
 
   const markWatched = useMarkVideoWatched();
   const updateWatchTime = useUpdateVideoWatchTime();
+
+  // Athena's subject/topic IDs are a separate system from this app's own —
+  // resolved here (not baked into props) so the post-lecture "ask a
+  // question" prompt only appears once an admin has linked this subject
+  // (ImportSubjectToAthenaDialog / LinkAthenaSubjectDialog), and degrades to
+  // simply not showing the prompt otherwise rather than erroring.
+  const { data: athenaLink } = useQuery({
+    queryKey: ["athena-link", subjectId, topicId],
+    enabled: !!subjectId,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data: subjectRow, error: subjectErr } = await supabase
+        .from("popular_subjects")
+        .select("athena_subject_id, name")
+        .eq("id", subjectId!)
+        .maybeSingle();
+      if (subjectErr) throw subjectErr;
+      if (!subjectRow?.athena_subject_id) return { athenaSubjectId: null, athenaTopicId: null, subjectName: subjectRow?.name };
+
+      let athenaTopicId: string | null = null;
+      if (topicId) {
+        const { data: topicRow } = await supabase
+          .from("subject_topics")
+          .select("athena_topic_id")
+          .eq("id", topicId)
+          .maybeSingle();
+        athenaTopicId = topicRow?.athena_topic_id ?? null;
+      }
+      return { athenaSubjectId: subjectRow.athena_subject_id, athenaTopicId, subjectName: subjectRow.name };
+    },
+  });
+  const [postLectureDialogOpen, setPostLectureDialogOpen] = useState(false);
   
   // Checker reviews for lectures
   const lectureIds = useMemo(() => 
@@ -795,6 +828,7 @@ export const RecordedVideos = ({
             onOpenChange={handleAIPlayerOpenChange}
             initialJobId={watchingLecture.external_job_id}
             initialLanguage={activeAILanguage ?? selectedAILanguage}
+            onVideoEnded={athenaLink?.athenaSubjectId ? () => setPostLectureDialogOpen(true) : undefined}
           />
         ) : watchingLecture.external_job_id && isV4EligibleChapter(chapterNumber) ? (
           <V4PlayerDialog
@@ -829,6 +863,15 @@ export const RecordedVideos = ({
         )
       )}
 
+      {athenaLink?.athenaSubjectId && (
+        <PostLectureDoubtDialog
+          open={postLectureDialogOpen}
+          onOpenChange={setPostLectureDialogOpen}
+          subjectName={athenaLink.subjectName}
+          athenaSubjectId={athenaLink.athenaSubjectId}
+          athenaTopicId={athenaLink.athenaTopicId ?? undefined}
+        />
+      )}
     </div>
   );
 };

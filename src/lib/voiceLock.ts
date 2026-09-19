@@ -4,7 +4,7 @@
  * Prevents conflicts between AITeachingAssistant and SalesAssistant.
  */
 
-type VoiceOwner = 'teaching' | 'sales' | 'doubts' | null;
+type VoiceOwner = 'teaching' | 'sales' | 'doubts' | 'postLecture' | null;
 
 let currentOwner: VoiceOwner = null;
 let onReleaseCallbacks: Map<VoiceOwner, () => void> = new Map();

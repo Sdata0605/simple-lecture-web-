@@ -19,6 +19,11 @@ interface V5PlayerProps {
   initialLanguage?: V5Language;
   onExit: () => void;
   onLanguageChange?: (language: V5Language) => void;
+  /** Fires once when the lecture video actually finishes playing (distinct
+   * from onExit, which fires when the user closes the player early). Purely
+   * an event hook for the parent — does not change anything about how V5
+   * itself plays, renders, or controls video. */
+  onVideoEnded?: () => void;
 }
 
 export function V5Player({
@@ -26,6 +31,7 @@ export function V5Player({
   initialLanguage = 'english',
   onExit,
   onLanguageChange,
+  onVideoEnded,
 }: V5PlayerProps) {
   const stageRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -257,7 +263,10 @@ export function V5Player({
           className="v5-video"
           key={`${language}-${sourceIndex}`}
           onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
-          onEnded={() => setIsPlaying(false)}
+          onEnded={() => {
+            setIsPlaying(false);
+            onVideoEnded?.();
+          }}
           onError={() => {
             if (sourceIndex < sources.length - 1) {
               setSourceIndex((index) => index + 1);

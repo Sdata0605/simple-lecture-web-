@@ -4590,6 +4590,7 @@ export type Database = {
       }
       popular_subjects: {
         Row: {
+          athena_subject_id: string | null
           category_id: string
           content_json: Json | null
           created_at: string | null
@@ -4605,6 +4606,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          athena_subject_id?: string | null
           category_id: string
           content_json?: Json | null
           created_at?: string | null
@@ -4620,6 +4622,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          athena_subject_id?: string | null
           category_id?: string
           content_json?: Json | null
           created_at?: string | null
@@ -6731,6 +6734,7 @@ export type Database = {
           ai_generated_podcast_url: string | null
           ai_generated_video_url: string | null
           ai_presentation_json: Json | null
+          athena_topic_id: string | null
           chapter_id: string
           content_json: Json | null
           content_markdown: string | null
@@ -6751,6 +6755,7 @@ export type Database = {
           ai_generated_podcast_url?: string | null
           ai_generated_video_url?: string | null
           ai_presentation_json?: Json | null
+          athena_topic_id?: string | null
           chapter_id: string
           content_json?: Json | null
           content_markdown?: string | null
@@ -6771,6 +6776,7 @@ export type Database = {
           ai_generated_podcast_url?: string | null
           ai_generated_video_url?: string | null
           ai_presentation_json?: Json | null
+          athena_topic_id?: string | null
           chapter_id?: string
           content_json?: Json | null
           content_markdown?: string | null

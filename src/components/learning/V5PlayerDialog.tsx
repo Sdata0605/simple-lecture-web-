@@ -21,6 +21,9 @@ interface V5PlayerDialogProps {
   initialJobId?: string;
   /** Free-form language string from the lecture list, normalised below. */
   initialLanguage?: string | null;
+  /** Fires once when the lecture actually finishes playing — see V5Player's
+   * own onVideoEnded doc comment. Optional, purely a pass-through. */
+  onVideoEnded?: () => void;
 }
 
 const toV5Language = (value?: string | null): V5Language =>
@@ -31,6 +34,7 @@ export const V5PlayerDialog = ({
   onOpenChange,
   initialJobId,
   initialLanguage,
+  onVideoEnded,
 }: V5PlayerDialogProps) => {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
@@ -52,6 +56,7 @@ export const V5PlayerDialog = ({
       jobId={activeJobId}
       initialLanguage={toV5Language(initialLanguage)}
       onExit={() => onOpenChange(false)}
+      onVideoEnded={onVideoEnded}
     />,
     document.body,
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertCircle,
   BookOpen,
@@ -225,10 +226,22 @@ export function ImportSubjectToAthenaDialog({ onImported }: { onImported: (athen
         athenaSubjectId = created.id;
       }
 
+      // Record the link so the student-facing "ask a question" feature knows
+      // which Athena subject this app subject's /ask calls should scope to —
+      // there's no other way to derive this (Athena's IDs are a separate
+      // system with no prior stored connection back to this app).
+      await supabase
+        .from("popular_subjects")
+        .update({ athena_subject_id: athenaSubjectId })
+        .eq("id", sourceSubjectId)
+        .then(({ error }) => {
+          if (error) console.warn("[ImportSubjectToAthenaDialog] Failed to save athena_subject_id link:", error);
+        });
+
       // 2. Chapters already on the target subject — dedupe re-imports by title.
       const existingChapters = await athenaGet<{ chapters: AthenaChapter[] }>(
         `/subjects/${athenaSubjectId}/chapters`,
-      ).then((d) => d.chapters ?? []).catch(() => []);
+      ).then((d) => d.chapters ?? []).catch(() => [] as AthenaChapter[]);
       const chapterByTitle = new Map<string, string>(
         existingChapters.map((c) => [c.title.trim().toLowerCase(), c.id]),
       );
@@ -264,7 +277,7 @@ export function ImportSubjectToAthenaDialog({ onImported }: { onImported: (athen
 
         const existingTopics = await athenaGet<{ topics: AthenaTopic[] }>(
           `/chapters/${athenaChapterId}/topics`,
-        ).then((d) => d.topics ?? []).catch(() => []);
+        ).then((d) => d.topics ?? []).catch(() => [] as AthenaTopic[]);
         const topicByTitle = new Map<string, string>(
           existingTopics.map((t) => [t.title.trim().toLowerCase(), t.id]),
         );
@@ -295,6 +308,14 @@ export function ImportSubjectToAthenaDialog({ onImported }: { onImported: (athen
             setTopicStatus((prev) => ({ ...prev, [topic.id]: { status: "failed", message: (err as Error).message } }));
             continue;
           }
+
+          void supabase
+            .from("subject_topics")
+            .update({ athena_topic_id: athenaTopicId })
+            .eq("id", topic.id)
+            .then(({ error }) => {
+              if (error) console.warn("[ImportSubjectToAthenaDialog] Failed to save athena_topic_id link:", error);
+            });
 
           const markdown = topic.markdown;
           if (!markdown) {
