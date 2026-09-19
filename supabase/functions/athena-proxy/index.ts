@@ -18,7 +18,10 @@ const corsHeaders = {
 };
 
 const DEFAULT_BASE = 'http://116.202.230.124:8090';
-const ALLOWED_PATH = /^\/[a-zA-Z0-9_\-\/]*$/;
+// Allows a leading dot for file extensions (HyperFrame paths like
+// /hf/seg_0/index.html and /hf/seg_0_female.mp3) — the original pattern
+// rejected any path containing "." with a bare "Invalid path" 400.
+const ALLOWED_PATH = /^\/[a-zA-Z0-9_\-\/.]*$/;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -93,8 +96,13 @@ Deno.serve(async (req) => {
         });
         clearTimeout(timeoutId);
         const upstreamCT = upstream.headers.get('content-type') || 'application/json';
-        // Pass through non-text (SSE/binary) responses as a stream; JSON/text as text.
-        if (upstreamCT.includes('text/event-stream')) {
+        // Pass through SSE and binary media (HyperFrame audio) as a raw
+        // stream — reading these through .text() would corrupt non-UTF8
+        // bytes (silently breaking mp3 playback). JSON/HTML/text still go
+        // through the buffered path below so retry-on-5xx keeps working.
+        const isBinaryMedia = /^(audio|video|image)\//.test(upstreamCT) ||
+          upstreamCT.includes('application/octet-stream');
+        if (upstreamCT.includes('text/event-stream') || isBinaryMedia) {
           return new Response(upstream.body, {
             status: upstream.status,
             headers: { ...corsHeaders, 'Content-Type': upstreamCT },
