@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Languages, LoaderCircle, Minimize, Play } from 'lucide-react';
+import { ArrowLeft, Languages, LoaderCircle, Play } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import type { V5Language, V5Presentation, V5SubtitleData } from './types';
 import {
   buildSectionTimeline,
@@ -7,7 +8,6 @@ import {
   getPresentationUrl,
   getSubtitlesUrl,
   getTimelinePosition,
-  formatV5Time,
   hasMergedVideo,
 } from './utils';
 import { V5Controls } from './V5Controls';
@@ -24,6 +24,12 @@ interface V5PlayerProps {
    * an event hook for the parent — does not change anything about how V5
    * itself plays, renders, or controls video. */
   onVideoEnded?: () => void;
+  /** When set, shows an "Ask AI" button; clicking it pauses the lecture and
+   * calls this so the parent can open its assistant. */
+  onAskAI?: () => void;
+  /** Whether that assistant is open. When it closes, the lecture resumes if
+   * it was playing when "Ask AI" was pressed. */
+  askAIOpen?: boolean;
 }
 
 export function V5Player({
@@ -32,11 +38,14 @@ export function V5Player({
   onExit,
   onLanguageChange,
   onVideoEnded,
+  onAskAI,
+  askAIOpen,
 }: V5PlayerProps) {
   const stageRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fullscreenControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPositionRef = useRef<{ ratio: number; resume: boolean } | null>(null);
+  const resumeAfterAskRef = useRef(false);
   const [presentation, setPresentation] = useState<V5Presentation | null>(null);
   const [subtitleData, setSubtitleData] = useState<V5SubtitleData | null>(null);
   const [language, setLanguage] = useState<V5Language>(initialLanguage);
@@ -52,6 +61,7 @@ export function V5Player({
   const [needsTap, setNeedsTap] = useState(false);
   const [keyPointsHidden, setKeyPointsHidden] = useState(false);
   const [fullscreenControlsVisible, setFullscreenControlsVisible] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     let cancelled = false;
@@ -109,11 +119,22 @@ export function V5Player({
 
   useEffect(() => {
     const onFullscreen = () => {
-      setIsFullscreen(document.fullscreenElement === stageRef.current);
-      setFullscreenControlsVisible(false);
+      const nowFullscreen = document.fullscreenElement === stageRef.current;
+      setIsFullscreen(nowFullscreen);
       if (fullscreenControlsTimerRef.current) {
         clearTimeout(fullscreenControlsTimerRef.current);
         fullscreenControlsTimerRef.current = null;
+      }
+      if (nowFullscreen) {
+        // Show controls right away on entry (not hidden from frame one) —
+        // same as tapping the screen — then auto-hide after a beat.
+        setFullscreenControlsVisible(true);
+        fullscreenControlsTimerRef.current = setTimeout(() => {
+          setFullscreenControlsVisible(false);
+          fullscreenControlsTimerRef.current = null;
+        }, 1800);
+      } else {
+        setFullscreenControlsVisible(false);
       }
     };
     document.addEventListener('fullscreenchange', onFullscreen);
@@ -136,6 +157,53 @@ export function V5Player({
       fullscreenControlsTimerRef.current = null;
     }, 1800);
   }, [isFullscreen]);
+
+  // Mirrors V4Player's mobile fullscreen: lock/unlock landscape orientation
+  // so tapping fullscreen on a phone rotates and fills the screen
+  // horizontally, like YouTube, instead of just letterboxing in portrait.
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        if (isMobile && screen.orientation && 'unlock' in screen.orientation) {
+          try {
+            screen.orientation.unlock();
+          } catch {
+            /* noop */
+          }
+        }
+      } else {
+        await stageRef.current?.requestFullscreen();
+        if (isMobile && screen.orientation && 'lock' in screen.orientation) {
+          try {
+            await (screen.orientation as ScreenOrientation & { lock: (o: string) => Promise<void> }).lock(
+              'landscape',
+            );
+          } catch {
+            /* noop — some browsers (notably iOS Safari) don't support locking */
+          }
+        }
+      }
+    } catch {
+      /* noop */
+    }
+  }, [isMobile]);
+
+  const handleAskAI = useCallback(() => {
+    const video = videoRef.current;
+    resumeAfterAskRef.current = Boolean(video && !video.paused && !video.ended);
+    video?.pause();
+    onAskAI?.();
+  }, [onAskAI]);
+
+  // Read by handleMetadata, which is created once per playbackRate.
+  const askAIOpenRef = useRef(Boolean(askAIOpen));
+  useEffect(() => {
+    askAIOpenRef.current = Boolean(askAIOpen);
+    if (askAIOpen || !resumeAfterAskRef.current) return;
+    resumeAfterAskRef.current = false;
+    videoRef.current?.play().catch(() => setNeedsTap(true));
+  }, [askAIOpen]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -169,17 +237,22 @@ export function V5Player({
     setDuration(video.duration || 0);
     video.playbackRate = playbackRate;
 
+    // A source fallback can remount the video while the assistant is open —
+    // it must not start the lecture under the overlay (the mic would hear it).
+    // It resumes on close via resumeAfterAskRef if it was playing before.
+    const holdForAssistant = askAIOpenRef.current;
+
     const pending = pendingPositionRef.current;
     if (pending && video.duration) {
       video.currentTime = Math.min(video.duration - 0.05, pending.ratio * video.duration);
       pendingPositionRef.current = null;
-      if (pending.resume) {
+      if (pending.resume && !holdForAssistant) {
         video.play().then(() => setIsPlaying(true)).catch(() => setNeedsTap(true));
       }
       return;
     }
 
-    if (video.paused) {
+    if (video.paused && !holdForAssistant) {
       video.play()
         .then(() => {
           setIsPlaying(true);
@@ -222,6 +295,41 @@ export function V5Player({
   const title = presentation.presentation_title || presentation.title || 'V5 Presentation';
   const canUseKannada = hasMergedVideo(presentation, 'kannada');
 
+  // Shared by both <V5Controls> renders below — the normal bottom bar, and
+  // its copy floated inside .v5-stage for fullscreen (see toggleFullscreen's
+  // comment: Fullscreen API only shows the fullscreen element's own
+  // subtree, so the bar outside .v5-stage would otherwise be invisible).
+  const controlsProps = {
+    currentTime,
+    duration,
+    isFullscreen,
+    isMuted,
+    isPlaying,
+    onRateChange: (rate: number) => {
+      setPlaybackRate(rate);
+      if (videoRef.current) videoRef.current.playbackRate = rate;
+    },
+    onReplay: () => {
+      if (!videoRef.current) return;
+      videoRef.current.currentTime = 0;
+      videoRef.current.play().catch(() => setNeedsTap(true));
+    },
+    onSeek: (time: number) => {
+      if (!videoRef.current) return;
+      videoRef.current.currentTime = time;
+      setCurrentTime(time);
+    },
+    onToggleFullscreen: toggleFullscreen,
+    onToggleMute: () => {
+      if (!videoRef.current) return;
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(videoRef.current.muted);
+    },
+    onTogglePlay: togglePlay,
+    onAskAI: onAskAI ? handleAskAI : undefined,
+    playbackRate,
+  };
+
   return (
     <div className="v5-player">
       <header className="v5-header">
@@ -254,12 +362,17 @@ export function V5Player({
       <main
         className="v5-stage"
         onPointerDown={revealFullscreenControls}
-        onPointerLeave={() => setFullscreenControlsVisible(false)}
+        // Touch doesn't really "leave" the way a mouse does — this only
+        // hides-on-leave for mouse/pen so the tap-to-reveal timer isn't
+        // fought immediately after every tap on mobile.
+        onPointerLeave={(event) => {
+          if (event.pointerType !== 'touch') setFullscreenControlsVisible(false);
+        }}
         onPointerMove={revealFullscreenControls}
         ref={stageRef}
       >
         <video
-          autoPlay
+          autoPlay={!askAIOpen}
           className="v5-video"
           key={`${language}-${sourceIndex}`}
           onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
@@ -309,71 +422,13 @@ export function V5Player({
         </div>
 
         {isFullscreen && (
-          <div
-            className={`v5-fullscreen-controls ${fullscreenControlsVisible ? 'is-visible' : ''}`}
-          >
-            <span>{formatV5Time(currentTime)}</span>
-            <input
-              aria-label="Fullscreen presentation progress"
-              max={Math.max(duration, 0)}
-              min={0}
-              onChange={(event) => {
-                const nextTime = Number(event.target.value);
-                if (videoRef.current) videoRef.current.currentTime = nextTime;
-                setCurrentTime(nextTime);
-              }}
-              step={0.05}
-              type="range"
-              value={Math.min(currentTime, duration || 0)}
-              style={{
-                '--v5-progress': `${duration > 0 ? (currentTime / duration) * 100 : 0}%`,
-              } as React.CSSProperties}
-            />
-            <span>{formatV5Time(duration)}</span>
-            <button
-              aria-label="Exit fullscreen"
-              onClick={() => document.exitFullscreen().catch(() => {})}
-              title="Exit fullscreen"
-              type="button"
-            >
-              <Minimize size={20} />
-            </button>
+          <div className={`v5-fullscreen-controls ${fullscreenControlsVisible ? 'is-visible' : ''}`}>
+            <V5Controls {...controlsProps} />
           </div>
         )}
       </main>
 
-      <V5Controls
-        currentTime={currentTime}
-        duration={duration}
-        isFullscreen={isFullscreen}
-        isMuted={isMuted}
-        isPlaying={isPlaying}
-        onRateChange={(rate) => {
-          setPlaybackRate(rate);
-          if (videoRef.current) videoRef.current.playbackRate = rate;
-        }}
-        onReplay={() => {
-          if (!videoRef.current) return;
-          videoRef.current.currentTime = 0;
-          videoRef.current.play().catch(() => setNeedsTap(true));
-        }}
-        onSeek={(time) => {
-          if (!videoRef.current) return;
-          videoRef.current.currentTime = time;
-          setCurrentTime(time);
-        }}
-        onToggleFullscreen={() => {
-          if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-          else stageRef.current?.requestFullscreen().catch(() => {});
-        }}
-        onToggleMute={() => {
-          if (!videoRef.current) return;
-          videoRef.current.muted = !videoRef.current.muted;
-          setIsMuted(videoRef.current.muted);
-        }}
-        onTogglePlay={togglePlay}
-        playbackRate={playbackRate}
-      />
+      <V5Controls {...controlsProps} />
     </div>
   );
 }

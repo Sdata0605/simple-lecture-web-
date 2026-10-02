@@ -14,6 +14,8 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
   Maximize,
   Minimize,
   Pause,
@@ -23,6 +25,8 @@ import {
 import type { AthenaSegment, HyperframeVideoStatus } from "@/lib/api/athenaAsk";
 import { resolveHyperframeAssetUrl } from "@/lib/api/athenaAsk";
 import type { PostLectureAnswerPhase } from "@/hooks/usePostLectureAthenaAnswer";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { toast } from "sonner";
 import "./hyperframe-player.css";
 
 interface HyperframeAnswerPlayerProps {
@@ -46,6 +50,7 @@ export function HyperframeAnswerPlayer({
   questionText,
   onClose,
 }: HyperframeAnswerPlayerProps) {
+  const playerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const frameEls = useRef<(HTMLIFrameElement | null)[]>([]);
@@ -53,12 +58,33 @@ export function HyperframeAnswerPlayer({
   const maleAudioEls = useRef<(HTMLAudioElement | null)[]>([]);
   const frameReady = useRef<boolean[]>([]);
   const advanceTimerRef = useRef<number | null>(null);
+  const hideControlsTimerRef = useRef<number | null>(null);
+  const isMobile = useIsMobile();
 
   const [voice, setVoice] = useState<Voice>("female");
   const [currentIdx, setCurrentIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [beatCount, setBeatCount] = useState(0);
+  // Narration caption sometimes covers part of the visual (e.g. a diagram
+  // it's overlaid on) — let the student turn it off.
+  const [showCaption, setShowCaption] = useState(true);
+  // In fullscreen, header/controls auto-hide after a few seconds of no mouse
+  // movement so they don't block the presentation; always visible otherwise.
+  const [controlsVisible, setControlsVisible] = useState(true);
+  // Supabase forces `Content-Type: text/plain` + a locked-down CSP on any
+  // HTML an Edge Function returns (anti-phishing measure), so pointing an
+  // iframe's `src` straight at the proxy URL renders the GSAP page as inert
+  // text instead of executing it. Fetching the bytes ourselves and injecting
+  // them via `srcdoc` sidesteps that — it's no longer a navigation, so the
+  // response headers never apply.
+  const [frameHtml, setFrameHtml] = useState<string[]>([]);
+  // Explicit pixel size for .hf-video-wrapper, computed to fit-contain inside
+  // whatever box the flex layout gives it — see the ResizeObserver effect
+  // below. Fixes the video overflowing (and the stage scrolling) on short or
+  // landscape screens, where width-only scaling let the 16:9 box run taller
+  // than the viewport.
+  const [videoSize, setVideoSize] = useState({ w: 0, h: 0 });
 
   const currentAudioEls = useCallback(
     (idx: number) => (voice === "female" ? femaleAudioEls.current[idx] : maleAudioEls.current[idx]),
@@ -220,17 +246,45 @@ export function HyperframeAnswerPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [video?.html_paths.join("|")]);
 
-  // Scale the fixed 1920x1080 iframes to fit the wrapper.
+  // Fetch each beat's HTML ourselves instead of pointing the iframe `src` at
+  // the proxy URL — Supabase forces Content-Type: text/plain + a locked-down
+  // CSP on any HTML an Edge Function returns, so a direct `src` navigation
+  // renders the GSAP page as inert text. Injecting the fetched text via
+  // `srcdoc` isn't a navigation, so that sanitization never kicks in.
   useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
+    if (!video || !answerId || video.html_paths.length === 0) return;
+    let cancelled = false;
+    setFrameHtml([]);
+    Promise.all(
+      video.html_paths.map((path) => fetch(resolveHyperframeAssetUrl(answerId, path)).then((r) => r.text())),
+    ).then((htmls) => {
+      if (!cancelled) setFrameHtml(htmls);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [video, answerId]);
+
+  // Fit the fixed 1920x1080 iframes inside whatever box the flex layout
+  // gives us — scaling by the smaller of width/height (like object-fit:
+  // contain) instead of width alone, and capped so it doesn't blow up on
+  // very large desktop screens. This is also what keeps .hf-stage from ever
+  // needing to scroll: the wrapper's own box never exceeds its container.
+  useEffect(() => {
+    const box = wrapperRef.current;
+    if (!box) return;
+    const MAX_SCALE = 1280 / 1920;
     const apply = () => {
-      const w = wrapper.clientWidth || 0;
-      if (w > 0) wrapper.style.setProperty("--hf-scale", String(w / 1920));
+      const w = box.clientWidth || 0;
+      const h = box.clientHeight || 0;
+      if (w <= 0 || h <= 0) return;
+      const scale = Math.min(w / 1920, h / 1080, MAX_SCALE);
+      box.style.setProperty("--hf-scale", String(scale));
+      setVideoSize({ w: 1920 * scale, h: 1080 * scale });
     };
     apply();
     const obs = new ResizeObserver(apply);
-    obs.observe(wrapper);
+    obs.observe(box);
     return () => obs.disconnect();
   }, [beatCount]);
 
@@ -244,20 +298,79 @@ export function HyperframeAnswerPlayer({
   }, []);
 
   const toggleFullscreen = () => {
-    const el = stageRef.current;
+    // Fullscreen the whole player (header + stage + controls), not just the
+    // stage — the Fullscreen API only displays the requested element's own
+    // subtree, so targeting the stage alone would hide the header and
+    // controls entirely instead of just needing a hover to reveal them.
+    const el = playerRef.current;
     if (!el) return;
     if (!document.fullscreenElement) {
-      el.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
+      el.requestFullscreen?.()
+        .then(() => {
+          setIsFullscreen(true);
+          // Same as V4/V5: rotate to landscape on entry, like YouTube,
+          // instead of just letterboxing a wide presentation in portrait.
+          if (isMobile && screen.orientation && "lock" in screen.orientation) {
+            (screen.orientation as ScreenOrientation & { lock: (o: string) => Promise<void> })
+              .lock("landscape")
+              .catch(() => {});
+          }
+        })
+        .catch(() => toast.error("Fullscreen isn't available in this browser"));
     } else {
-      document.exitFullscreen?.().then(() => setIsFullscreen(false)).catch(() => {});
+      document.exitFullscreen?.()
+        .then(() => {
+          setIsFullscreen(false);
+          if (isMobile && screen.orientation && "unlock" in screen.orientation) {
+            try {
+              screen.orientation.unlock();
+            } catch {
+              /* noop */
+            }
+          }
+        })
+        .catch(() => {});
     }
   };
+
+  // Auto-hide header/controls after a few seconds of no mouse movement while
+  // fullscreen, so the student can see (and touch/click through to) every
+  // part of the presentation, not just the area controls don't cover.
+  useEffect(() => {
+    if (!isFullscreen) {
+      setControlsVisible(true);
+      if (hideControlsTimerRef.current) {
+        window.clearTimeout(hideControlsTimerRef.current);
+        hideControlsTimerRef.current = null;
+      }
+      return;
+    }
+    const root = playerRef.current;
+    if (!root) return;
+    const reveal = () => {
+      setControlsVisible(true);
+      if (hideControlsTimerRef.current) window.clearTimeout(hideControlsTimerRef.current);
+      hideControlsTimerRef.current = window.setTimeout(() => setControlsVisible(false), 2500);
+    };
+    reveal();
+    root.addEventListener("mousemove", reveal);
+    root.addEventListener("touchstart", reveal);
+    root.addEventListener("keydown", reveal);
+    return () => {
+      root.removeEventListener("mousemove", reveal);
+      root.removeEventListener("touchstart", reveal);
+      root.removeEventListener("keydown", reveal);
+      if (hideControlsTimerRef.current) window.clearTimeout(hideControlsTimerRef.current);
+    };
+  }, [isFullscreen]);
 
   const hasVideo = !!video && video.html_paths.length > 0;
   const currentSegment = segments[currentIdx];
 
+  const chromeHidden = isFullscreen && !controlsVisible;
+
   return createPortal(
-    <div className="hf-player">
+    <div className={`hf-player${chromeHidden ? " hf-player--idle" : ""}`} ref={playerRef}>
       <div className="hf-header">
         <button type="button" className="hf-header__close" onClick={onClose} aria-label="Close">
           <ArrowLeft size={18} />
@@ -266,7 +379,7 @@ export function HyperframeAnswerPlayer({
         {hasVideo && <span className="hf-header__badge">HyperFrame</span>}
       </div>
 
-      <div className="hf-stage" ref={stageRef}>
+      <div className={`hf-stage${hasVideo ? " hf-stage--video" : ""}`} ref={stageRef}>
         {(phase === "asking" || phase === "streaming") && segments.length === 0 && (
           <div className="hf-thinking">
             <Sparkles className="h-4 w-4 animate-pulse" />
@@ -309,29 +422,34 @@ export function HyperframeAnswerPlayer({
         )}
 
         {hasVideo && answerId && (
-          <>
-            <div className="hf-video-wrapper" ref={wrapperRef}>
+          <div className="hf-video-frame-box" ref={wrapperRef}>
+            <div
+              className="hf-video-wrapper"
+              style={videoSize.w ? { width: videoSize.w, height: videoSize.h } : undefined}
+            >
               <span className="hf-beat-counter">
                 {currentIdx + 1} / {beatCount}
               </span>
-              {video.html_paths.map((path, i) => (
-                <iframe
-                  key={i}
-                  ref={(el) => (frameEls.current[i] = el)}
-                  className="hf-frame"
-                  title={`Answer beat ${i + 1}`}
-                  sandbox="allow-scripts allow-same-origin"
-                  scrolling="no"
-                  loading="eager"
-                  src={resolveHyperframeAssetUrl(answerId, path)}
-                  style={{ opacity: i === currentIdx ? 1 : 0 }}
-                  onLoad={() => {
-                    frameReady.current[i] = true;
-                    if (i === currentIdxRef.current) playFrame(i);
-                    else stopFrame(i);
-                  }}
-                />
-              ))}
+              {video.html_paths.map((path, i) =>
+                frameHtml[i] ? (
+                  <iframe
+                    key={i}
+                    ref={(el) => (frameEls.current[i] = el)}
+                    className="hf-frame"
+                    title={`Answer beat ${i + 1}`}
+                    sandbox="allow-scripts allow-same-origin"
+                    scrolling="no"
+                    loading="eager"
+                    srcDoc={frameHtml[i]}
+                    style={{ opacity: i === currentIdx ? 1 : 0 }}
+                    onLoad={() => {
+                      frameReady.current[i] = true;
+                      if (i === currentIdxRef.current) playFrame(i);
+                      else stopFrame(i);
+                    }}
+                  />
+                ) : null,
+              )}
               {video.audio_female.map((path, i) =>
                 path ? (
                   <audio
@@ -355,14 +473,16 @@ export function HyperframeAnswerPlayer({
                 ) : null,
               )}
             </div>
-            <div className="hf-text-panel">
-              {currentSegment?.title && <div className="hf-text-panel__title">{currentSegment.title}</div>}
-              <div
-                className="hf-text-panel__caption"
-                dangerouslySetInnerHTML={{ __html: currentSegment?.html || currentSegment?.plain || "" }}
-              />
-            </div>
-          </>
+            {showCaption && (currentSegment?.title || currentSegment?.html || currentSegment?.plain) && (
+              <div className="hf-text-panel">
+                {currentSegment?.title && <div className="hf-text-panel__title">{currentSegment.title}</div>}
+                <div
+                  className="hf-text-panel__caption"
+                  dangerouslySetInnerHTML={{ __html: currentSegment?.html || currentSegment?.plain || "" }}
+                />
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -408,6 +528,15 @@ export function HyperframeAnswerPlayer({
                 />
               ))}
             </div>
+            <button
+              type="button"
+              className={`hf-btn hf-caption-btn${showCaption ? " is-active" : ""}`}
+              onClick={() => setShowCaption((v) => !v)}
+              aria-label={showCaption ? "Hide narration text" : "Show narration text"}
+              title={showCaption ? "Hide narration text" : "Show narration text"}
+            >
+              {showCaption ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
             <button type="button" className="hf-btn hf-fullscreen-btn" onClick={toggleFullscreen} aria-label="Fullscreen">
               {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
             </button>

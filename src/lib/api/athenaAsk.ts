@@ -154,7 +154,10 @@ export async function askAthenaQuestion(
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+    // Athena/the proxy send CRLF line endings, not bare LF — normalize (on the
+    // full buffer, so a \r\n split across two chunks still gets caught) so the
+    // "\n\n" frame separator and per-line parsing below actually match.
+    buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, "\n");
 
     let sepIndex: number;
     while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {

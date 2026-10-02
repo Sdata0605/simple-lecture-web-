@@ -1,0 +1,98 @@
+/* VoiceOrb — audio-reactive assistant orb. Plain CSS, `.vo-` prefix. */
+
+.vo-root {
+  --vo-size: 220px;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  /* Square box that never overflows small screens (portrait or landscape). */
+  width: var(--vo-size);
+  height: auto;
+  max-width: min(70vw, 38vh);
+  max-height: 38vh;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  vertical-align: middle;
+  isolation: isolate;
+}
+
+.vo-canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%) scale(var(--vo-scale, 1));
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+
+/* ---- Button variant ---------------------------------------------------- */
+
+.vo-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 0;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.vo-button:hover {
+  --vo-scale: 1.025;
+}
+
+.vo-button:active {
+  --vo-scale: 0.97;
+}
+
+/* Focus ring hugs the orb body (the box also contains the glow margin). */
+.vo-button::after {
+  content: "";
+  position: absolute;
+  inset: 9%;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow:
+    0 0 0 2px #07100f,
+    0 0 0 4px #7ce0c3,
+    0 0 18px 4px rgba(124, 224, 195, 0.35);
+  transition: opacity 160ms ease;
+}
+
+.vo-button:focus-visible::after {
+  opacity: 1;
+}
+
+/* ---- Reduced motion: static orb (no rAF loop) + gentle opacity pulse ---- */
+
+@keyframes vo-pulse {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vo-canvas {
+    transition: none;
+    transform: translate(-50%, -50%);
+    animation: vo-pulse 3.6s ease-in-out infinite;
+  }
+  .vo-button::after {
+    transition: none;
+  }
+}

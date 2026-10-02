@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EducationalVideoPlayerDialog } from "./player/EducationalVideoPlayerDialog";
 import { V4PlayerDialog } from "./V4PlayerDialog";
 import { V5PlayerDialog } from "./V5PlayerDialog";
-import { PostLectureDoubtDialog } from "./postLecture/PostLectureDoubtDialog";
+import { AskAIAssistant } from "./askAssistant/AskAIAssistant";
 import { V4Notes } from "./v4/V4Notes";
 
 import { extractJobIdFromUrl } from "./player/utils/mediaResolver";
@@ -176,7 +176,15 @@ export const RecordedVideos = ({
       return { athenaSubjectId: subjectRow.athena_subject_id, athenaTopicId, subjectName: subjectRow.name };
     },
   });
-  const [postLectureDialogOpen, setPostLectureDialogOpen] = useState(false);
+  // "mid" = student pressed Ask AI in the player, "end" = lecture finished.
+  const [assistantTrigger, setAssistantTrigger] = useState<"mid" | "end" | null>(null);
+  const openAssistant = useCallback((trigger: "mid" | "end") => {
+    // V5's fullscreen targets its own internal stage, not document.body. The
+    // assistant portals to body, so it would render outside the Fullscreen
+    // API's visible subtree (i.e. not appear at all) while V5 is fullscreen.
+    const exit = document.fullscreenElement ? document.exitFullscreen().catch(() => {}) : Promise.resolve();
+    void exit.finally(() => setAssistantTrigger(trigger));
+  }, []);
   
   // Checker reviews for lectures
   const lectureIds = useMemo(() => 
@@ -828,7 +836,9 @@ export const RecordedVideos = ({
             onOpenChange={handleAIPlayerOpenChange}
             initialJobId={watchingLecture.external_job_id}
             initialLanguage={activeAILanguage ?? selectedAILanguage}
-            onVideoEnded={athenaLink?.athenaSubjectId ? () => setPostLectureDialogOpen(true) : undefined}
+            onVideoEnded={athenaLink?.athenaSubjectId ? () => openAssistant("end") : undefined}
+            onAskAI={athenaLink?.athenaSubjectId ? () => openAssistant("mid") : undefined}
+            askAIOpen={assistantTrigger !== null}
           />
         ) : watchingLecture.external_job_id && isV4EligibleChapter(chapterNumber) ? (
           <V4PlayerDialog
@@ -863,10 +873,10 @@ export const RecordedVideos = ({
         )
       )}
 
-      {athenaLink?.athenaSubjectId && (
-        <PostLectureDoubtDialog
-          open={postLectureDialogOpen}
-          onOpenChange={setPostLectureDialogOpen}
+      {assistantTrigger && athenaLink?.athenaSubjectId && (
+        <AskAIAssistant
+          trigger={assistantTrigger}
+          onClose={() => setAssistantTrigger(null)}
           subjectName={athenaLink.subjectName}
           athenaSubjectId={athenaLink.athenaSubjectId}
           athenaTopicId={athenaLink.athenaTopicId ?? undefined}

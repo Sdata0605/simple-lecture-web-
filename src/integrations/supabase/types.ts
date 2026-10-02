@@ -10,7 +10,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -1656,6 +1681,7 @@ export type Database = {
           price_inr: number | null
           promotional_video_url: string | null
           rating: number | null
+          restricted_to_user_id: string | null
           review_count: number | null
           seo_canonical_url: string | null
           seo_description: string | null
@@ -1699,6 +1725,7 @@ export type Database = {
           price_inr?: number | null
           promotional_video_url?: string | null
           rating?: number | null
+          restricted_to_user_id?: string | null
           review_count?: number | null
           seo_canonical_url?: string | null
           seo_description?: string | null
@@ -1742,6 +1769,7 @@ export type Database = {
           price_inr?: number | null
           promotional_video_url?: string | null
           rating?: number | null
+          restricted_to_user_id?: string | null
           review_count?: number | null
           seo_canonical_url?: string | null
           seo_description?: string | null
@@ -2569,6 +2597,75 @@ export type Database = {
           total_questions?: number | null
         }
         Relationships: []
+      }
+      dubbing_jobs: {
+        Row: {
+          created_at: string | null
+          document_name: string | null
+          dubbed_languages: Json | null
+          error_message: string | null
+          external_job_id: string
+          id: string
+          languages: string[]
+          progress_message: string | null
+          server_ip: string | null
+          speaker: string | null
+          status: string | null
+          subject_id: string | null
+          tts_engine: string | null
+          updated_at: string | null
+          video_job_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          document_name?: string | null
+          dubbed_languages?: Json | null
+          error_message?: string | null
+          external_job_id: string
+          id?: string
+          languages: string[]
+          progress_message?: string | null
+          server_ip?: string | null
+          speaker?: string | null
+          status?: string | null
+          subject_id?: string | null
+          tts_engine?: string | null
+          updated_at?: string | null
+          video_job_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          document_name?: string | null
+          dubbed_languages?: Json | null
+          error_message?: string | null
+          external_job_id?: string
+          id?: string
+          languages?: string[]
+          progress_message?: string | null
+          server_ip?: string | null
+          speaker?: string | null
+          status?: string | null
+          subject_id?: string | null
+          tts_engine?: string | null
+          updated_at?: string | null
+          video_job_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dubbing_jobs_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "popular_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dubbing_jobs_video_job_id_fkey"
+            columns: ["video_job_id"]
+            isOneToOne: false
+            referencedRelation: "video_generation_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_otp_verifications: {
         Row: {
@@ -3892,6 +3989,191 @@ export type Database = {
           },
         ]
       }
+      notes_auto_pipeline_items: {
+        Row: {
+          attempts: number
+          chapter_id: string
+          chapter_number: number | null
+          chapter_title: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          external_document_id: string | null
+          final_response: Json | null
+          final_response_http_status: number | null
+          generation_http_status: number | null
+          generation_response: Json | null
+          id: string
+          import_http_status: number | null
+          import_response: Json | null
+          payload: Json | null
+          run_id: string
+          sequence_order: number
+          started_at: string | null
+          status: string
+          subject_id: string
+          topic_id: string
+          topic_number: string | null
+          topic_title: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          chapter_id: string
+          chapter_number?: number | null
+          chapter_title?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          external_document_id?: string | null
+          final_response?: Json | null
+          final_response_http_status?: number | null
+          generation_http_status?: number | null
+          generation_response?: Json | null
+          id?: string
+          import_http_status?: number | null
+          import_response?: Json | null
+          payload?: Json | null
+          run_id: string
+          sequence_order: number
+          started_at?: string | null
+          status?: string
+          subject_id: string
+          topic_id: string
+          topic_number?: string | null
+          topic_title: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          chapter_id?: string
+          chapter_number?: number | null
+          chapter_title?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          external_document_id?: string | null
+          final_response?: Json | null
+          final_response_http_status?: number | null
+          generation_http_status?: number | null
+          generation_response?: Json | null
+          id?: string
+          import_http_status?: number | null
+          import_response?: Json | null
+          payload?: Json | null
+          run_id?: string
+          sequence_order?: number
+          started_at?: string | null
+          status?: string
+          subject_id?: string
+          topic_id?: string
+          topic_number?: string | null
+          topic_title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_auto_pipeline_items_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "subject_chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_auto_pipeline_items_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "notes_auto_pipeline_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_auto_pipeline_items_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "popular_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_auto_pipeline_items_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "subject_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notes_auto_pipeline_runs: {
+        Row: {
+          api_base: string
+          completed_at: string | null
+          completed_items: number
+          created_at: string
+          created_by: string | null
+          current_topic_id: string | null
+          error_message: string | null
+          failed_items: number
+          id: string
+          started_at: string
+          status: string
+          stop_requested: boolean
+          subject_id: string
+          subject_name: string
+          total_items: number
+          updated_at: string
+        }
+        Insert: {
+          api_base?: string
+          completed_at?: string | null
+          completed_items?: number
+          created_at?: string
+          created_by?: string | null
+          current_topic_id?: string | null
+          error_message?: string | null
+          failed_items?: number
+          id?: string
+          started_at?: string
+          status?: string
+          stop_requested?: boolean
+          subject_id: string
+          subject_name: string
+          total_items?: number
+          updated_at?: string
+        }
+        Update: {
+          api_base?: string
+          completed_at?: string | null
+          completed_items?: number
+          created_at?: string
+          created_by?: string | null
+          current_topic_id?: string | null
+          error_message?: string | null
+          failed_items?: number
+          id?: string
+          started_at?: string
+          status?: string
+          stop_requested?: boolean
+          subject_id?: string
+          subject_name?: string
+          total_items?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_auto_pipeline_runs_current_topic_id_fkey"
+            columns: ["current_topic_id"]
+            isOneToOne: false
+            referencedRelation: "subject_topics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_auto_pipeline_runs_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "popular_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notice_reads: {
         Row: {
           id: string
@@ -4591,6 +4873,7 @@ export type Database = {
       popular_subjects: {
         Row: {
           athena_subject_id: string | null
+          avatar_id: string | null
           category_id: string
           content_json: Json | null
           created_at: string | null
@@ -4607,6 +4890,7 @@ export type Database = {
         }
         Insert: {
           athena_subject_id?: string | null
+          avatar_id?: string | null
           category_id: string
           content_json?: Json | null
           created_at?: string | null
@@ -4623,6 +4907,7 @@ export type Database = {
         }
         Update: {
           athena_subject_id?: string | null
+          avatar_id?: string | null
           category_id?: string
           content_json?: Json | null
           created_at?: string | null
@@ -6045,64 +6330,6 @@ export type Database = {
           },
         ]
       }
-      student_lecture_notes: {
-        Row: {
-          chapter_id: string | null
-          content: string
-          created_at: string
-          id: string
-          job_id: string
-          student_id: string
-          subject_id: string | null
-          topic_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          chapter_id?: string | null
-          content?: string
-          created_at?: string
-          id?: string
-          job_id: string
-          student_id: string
-          subject_id?: string | null
-          topic_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          chapter_id?: string | null
-          content?: string
-          created_at?: string
-          id?: string
-          job_id?: string
-          student_id?: string
-          subject_id?: string | null
-          topic_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "student_lecture_notes_chapter_id_fkey"
-            columns: ["chapter_id"]
-            isOneToOne: false
-            referencedRelation: "subject_chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "student_lecture_notes_subject_id_fkey"
-            columns: ["subject_id"]
-            isOneToOne: false
-            referencedRelation: "popular_subjects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "student_lecture_notes_topic_id_fkey"
-            columns: ["topic_id"]
-            isOneToOne: false
-            referencedRelation: "subject_topics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       student_activity_log: {
         Row: {
           activity_type: Database["public"]["Enums"]["activity_type"]
@@ -6290,6 +6517,64 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      student_lecture_notes: {
+        Row: {
+          chapter_id: string | null
+          content: string
+          created_at: string
+          id: string
+          job_id: string
+          student_id: string
+          subject_id: string | null
+          topic_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          chapter_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          job_id: string
+          student_id: string
+          subject_id?: string | null
+          topic_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chapter_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          job_id?: string
+          student_id?: string
+          subject_id?: string | null
+          topic_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_lecture_notes_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "subject_chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_lecture_notes_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "popular_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_lecture_notes_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "subject_topics"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       student_progress: {
         Row: {
@@ -8424,6 +8709,42 @@ export type Database = {
         Args: { _cooldown_seconds?: number; _run_id: string }
         Returns: boolean
       }
+      claim_notes_auto_pipeline_item: {
+        Args: never
+        Returns: {
+          attempts: number
+          chapter_id: string
+          chapter_number: number | null
+          chapter_title: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          external_document_id: string | null
+          final_response: Json | null
+          final_response_http_status: number | null
+          generation_http_status: number | null
+          generation_response: Json | null
+          id: string
+          import_http_status: number | null
+          import_response: Json | null
+          payload: Json | null
+          run_id: string
+          sequence_order: number
+          started_at: string | null
+          status: string
+          subject_id: string
+          topic_id: string
+          topic_number: string | null
+          topic_title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notes_auto_pipeline_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       create_ocr_result_rpc: {
         Args: {
           p_datalab_request_id?: string
@@ -8728,12 +9049,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -8757,11 +9078,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -8782,11 +9103,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -8807,11 +9128,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -8824,11 +9145,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -8838,6 +9159,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       activity_type: [

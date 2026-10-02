@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, FileJson, Video, FileText, Image, ChevronDown, ChevronUp, Sparkles, Copy, Check, Filter, X, Link as LinkIcon, Clock, BookOpen, ExternalLink, Eye, AlertCircle, RefreshCw, Activity, Rocket, Wrench, Square, Upload, ListChecks } from "lucide-react";
+import { Loader2, FileJson, Video, FileText, Image, ChevronDown, ChevronUp, Sparkles, Copy, Check, Filter, X, Link as LinkIcon, Clock, BookOpen, ExternalLink, Eye, AlertCircle, RefreshCw, Activity, Languages, Wrench, Upload, ListChecks } from "lucide-react";
 import { AutoSubmissionPipeline } from "./AutoSubmissionPipeline";
+import { DubbingPipeline } from "./DubbingPipeline";
 import { useAIAssistantDocuments } from "@/hooks/useAIAssistantDocuments";
 import { useServerIpSlots } from "@/hooks/useServerIpSlots";
 import { useSubjectChapters, useChapterTopics } from "@/hooks/useSubjectChaptersTopics";
@@ -20,11 +21,6 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { DocumentImageViewer } from "./DocumentImageViewer";
 import { VideoJobsDialog } from "./VideoJobsDialog";
-import { AutoPipelineDialog } from "./AutoPipelineDialog";
-import { AutoPipelineProgress } from "./AutoPipelineProgress";
-import { AutoPipelineScanReport } from "./AutoPipelineScanReport";
-import { useAutoPipeline } from "@/hooks/useAutoPipeline";
-import { useActivePipelineRun } from "@/hooks/useActivePipelineRun";
 import { TopicVisibilityControl } from "./TopicVisibilityControl";
 
 // Generate a unique job prefix: {SubjectNoSpaces}_{YYYYMMDDHHMMSSmmm}_{6CharCode}
@@ -81,7 +77,7 @@ interface SubjectVideoGeneratorTabProps {
 
 type JobStatus = 'idle' | 'submitting' | 'processing' | 'completed' | 'completed_with_errors' | 'failed';
 
-export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '69.197.145.4' }: SubjectVideoGeneratorTabProps) {
+export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '204.12.237.78' }: SubjectVideoGeneratorTabProps) {
   const queryClient = useQueryClient();
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"markdown" | "json">("markdown");
@@ -117,15 +113,8 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
   // Jobs dialog state
   const [jobsDialogOpen, setJobsDialogOpen] = useState(false);
   
-  // Auto pipeline state
-  const [pipelineMode, setPipelineMode] = useState<'manual' | 'auto' | 'auto-submission' | 'marketing'>('manual');
-  const [autoPipelineDialogOpen, setAutoPipelineDialogOpen] = useState(false);
-  const [scanReportOpen, setScanReportOpen] = useState(false);
-  const scanReportDismissedRef = useRef(false);
-  const selectedIpsRef = useRef<string[]>([]);
-  const resumeAttemptedRef = useRef<string | null>(null);
-  const autoPipeline = useAutoPipeline();
-  const { activeRun, dismissRun } = useActivePipelineRun(subjectId);
+  // Pipeline mode state
+  const [pipelineMode, setPipelineMode] = useState<'manual' | 'auto-submission' | 'marketing' | 'dubbing'>('manual');
 
   // Publish All state
   const [isPublishing, setIsPublishing] = useState(false);
@@ -346,95 +335,6 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
     toast.info('Update cancelled');
   }, [activeUpdateRun, subjectId, queryClient]);
 
-  // Hydrate pipeline from DB if there's an active run
-  // Continuously sync from DB-polled data (server-side pipeline)
-  useEffect(() => {
-    if (activeRun) {
-      // Always restore selectedIps from the active run (survives page refresh)
-      if (activeRun.selectedIps && activeRun.selectedIps.length > 0) {
-        selectedIpsRef.current = activeRun.selectedIps;
-      }
-
-      // If scan_complete from server, load scan results and open the report
-      if (activeRun.status === 'scan_complete' && activeRun.scanResults && activeRun.scanResults.length > 0) {
-        autoPipeline.hydrateFromRun({
-          id: activeRun.id,
-          status: activeRun.status,
-          chaptersData: activeRun.chaptersData,
-          currentChapterIndex: activeRun.currentChapterIndex,
-        });
-        // Load scan results from DB into autoPipeline state
-        autoPipeline.setScanResultsFromServer(activeRun.scanResults);
-        if (!scanReportDismissedRef.current) setScanReportOpen(true);
-        setPipelineMode('auto');
-        return;
-      }
-
-      // For scanning state, show progress + partial results in real-time
-      if (activeRun.status === 'scanning') {
-        autoPipeline.hydrateFromRun({
-          id: activeRun.id,
-          status: activeRun.status,
-          chaptersData: [],
-          currentChapterIndex: 0,
-        });
-        // Update progress counters from DB
-        autoPipeline.setScanProgress({
-          current: activeRun.completedJobs || 0,
-          total: activeRun.totalJobs || 0,
-        });
-        // Load partial scan results if available, keepScanning=true
-        if (activeRun.scanResults && activeRun.scanResults.length > 0) {
-          autoPipeline.setScanResultsFromServer(activeRun.scanResults, true);
-          if (!scanReportDismissedRef.current) setScanReportOpen(true);
-        }
-        setPipelineMode('auto');
-
-        // Auto-resume if scan is stalled (no update in 2+ minutes)
-        const updatedAt = new Date(activeRun.updatedAt).getTime();
-        const stalledMs = Date.now() - updatedAt;
-        const isStalled = stalledMs > 2 * 60 * 1000; // 2 minutes
-
-        if (isStalled && resumeAttemptedRef.current !== activeRun.id && chapters?.length) {
-          resumeAttemptedRef.current = activeRun.id;
-
-          // Find chapters already scanned
-          const scannedChapterIds = new Set(
-            (activeRun.scanResults || []).map((r: any) => r.chapterId)
-          );
-
-          // Get remaining unscanned chapters
-          const remainingChapterIds = chapters
-            .filter(c => !scannedChapterIds.has(c.id))
-            .map(c => c.id);
-
-          if (remainingChapterIds.length > 0) {
-            console.log(`[AutoResume] Resuming stalled scan ${activeRun.id}, ${remainingChapterIds.length} chapters remaining`);
-            toast.info(`Resuming scan: ${remainingChapterIds.length} chapters remaining`);
-
-            autoPipeline.scanSubject(
-              subjectId,
-              activeRun.subjectName,
-              chapters,
-              activeRun.selectedIps || selectedIpsRef.current,
-              remainingChapterIds
-            );
-          }
-        }
-        return;
-      }
-
-      // Always hydrate when activeRun data changes (polling updates)
-      autoPipeline.hydrateFromRun({
-        id: activeRun.id,
-        status: activeRun.status,
-        chaptersData: activeRun.chaptersData,
-        currentChapterIndex: activeRun.currentChapterIndex,
-      });
-      setPipelineMode('auto');
-    }
-  }, [activeRun]);
-  
   // Filter state
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
@@ -896,15 +796,11 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Tabs value={pipelineMode} onValueChange={(v) => setPipelineMode(v as 'manual' | 'auto' | 'auto-submission' | 'marketing')}>
+            <Tabs value={pipelineMode} onValueChange={(v) => setPipelineMode(v as 'manual' | 'auto-submission' | 'marketing' | 'dubbing')}>
               <TabsList className="h-8">
                 <TabsTrigger value="manual" className="text-xs gap-1 px-3">
                   <Wrench className="h-3.5 w-3.5" />
                   Manual
-                </TabsTrigger>
-                <TabsTrigger value="auto" className="text-xs gap-1 px-3">
-                  <Rocket className="h-3.5 w-3.5" />
-                  Auto
                 </TabsTrigger>
                 <TabsTrigger value="auto-submission" className="text-xs gap-1 px-3">
                   <ListChecks className="h-3.5 w-3.5" />
@@ -913,6 +809,10 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
                 <TabsTrigger value="marketing" className="text-xs gap-1 px-3">
                   <Video className="h-3.5 w-3.5" />
                   Marketing Videos
+                </TabsTrigger>
+                <TabsTrigger value="dubbing" className="text-xs gap-1 px-3">
+                  <Languages className="h-3.5 w-3.5" />
+                  Dubbing
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -928,114 +828,9 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '6
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Auto Mode */}
-        {pipelineMode === 'auto' && (
-          <div className="space-y-4">
-            {(autoPipeline.pipelineState === 'idle' || autoPipeline.pipelineState === 'cancelled') && !autoPipelineDialogOpen && !scanReportOpen ? (
-              <div className="text-center py-6 border rounded-lg bg-muted/20">
-                <Rocket className="h-10 w-10 mx-auto mb-3 opacity-60" />
-                <p className="text-sm text-muted-foreground mb-3">
-                  Auto mode scans all topics, audits existing jobs, and lets you review before starting.
-                </p>
-                <Button onClick={() => setAutoPipelineDialogOpen(true)} className="gap-2">
-                  <Rocket className="h-4 w-4" />
-                  Configure & Scan
-                </Button>
-              </div>
-            ) : autoPipeline.pipelineState === 'scanning' && !scanReportOpen ? (
-              <div className="text-center py-6 border rounded-lg bg-muted/20">
-                <RefreshCw className="h-10 w-10 mx-auto mb-3 opacity-60 animate-spin" />
-                <p className="text-sm font-medium mb-1">Scan running on server...</p>
-                <p className="text-xs text-muted-foreground mb-3">
-                  You can close this tab. The scan will continue on the server.
-                  {activeRun && ` Progress: ${activeRun.completedJobs}/${activeRun.totalJobs} topics scanned.`}
-                </p>
-                <div className="flex items-center justify-center gap-2">
-                  {activeRun && (
-                    <Button variant="destructive" size="sm" onClick={async () => {
-                      await dismissRun(activeRun.id);
-                      autoPipeline.resetPipeline();
-                    }} className="gap-2">
-                      <Square className="h-4 w-4" />
-                      Stop Scan
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" onClick={() => {
-                    scanReportDismissedRef.current = false;
-                    setScanReportOpen(true);
-                  }} className="gap-2">
-                    <Eye className="h-4 w-4" />
-                    View Progress
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    queryClient.invalidateQueries({ queryKey: ['active-pipeline-run'], exact: false });
-                  }} className="gap-2">
-                    <RefreshCw className="h-4 w-4" />
-                    Refresh
-                  </Button>
-                </div>
-              </div>
-            ) : autoPipeline.pipelineState === 'scan_complete' && !scanReportOpen ? (
-              <div className="text-center py-6 border rounded-lg bg-muted/20">
-                <Eye className="h-10 w-10 mx-auto mb-3 opacity-60" />
-                <p className="text-sm font-medium mb-1">Scan Complete!</p>
-                <p className="text-xs text-muted-foreground mb-3">Review the scan report and approve to start the pipeline.</p>
-                <Button onClick={() => setScanReportOpen(true)} className="gap-2">
-                  <Eye className="h-4 w-4" />
-                  Review Scan Report
-                </Button>
-              </div>
-            ) : (
-              <AutoPipelineProgress
-                pipelineState={autoPipeline.pipelineState}
-                chapters={autoPipeline.chapters}
-                currentChapterIndex={autoPipeline.currentChapterIndex}
-                activeIpSlots={autoPipeline.activeIpSlots}
-                onApproveChapter={autoPipeline.approveChapter}
-                onCancel={autoPipeline.cancelPipeline}
-                onReset={() => {
-                  if (activeRun) dismissRun(activeRun.id);
-                  autoPipeline.resetPipeline();
-                }}
-              />
-            )}
-
-            <AutoPipelineDialog
-              open={autoPipelineDialogOpen}
-              onOpenChange={setAutoPipelineDialogOpen}
-              chapters={chapters || []}
-              subjectName={subjectName}
-              onStart={(selectedIps, filteredChapters) => {
-                if (filteredChapters.length > 0) {
-                  selectedIpsRef.current = selectedIps;
-                  scanReportDismissedRef.current = false;
-                  setScanReportOpen(true);
-                  autoPipeline.scanSubject(subjectId, subjectName, filteredChapters, selectedIps);
-                }
-              }}
-            />
-
-            <AutoPipelineScanReport
-              open={scanReportOpen}
-              onOpenChange={(open) => {
-                setScanReportOpen(open);
-                if (!open) scanReportDismissedRef.current = true;
-              }}
-              scanResults={autoPipeline.scanResults}
-              isScanning={autoPipeline.pipelineState === 'scanning'}
-              scanProgress={autoPipeline.scanProgress}
-              onStart={(selectedResults) => {
-                setScanReportOpen(false);
-                if (chapters) {
-                  autoPipeline.startPipelineFromScan(subjectId, subjectName, chapters, selectedResults, selectedIpsRef.current);
-                }
-              }}
-              onCancel={() => {
-                setScanReportOpen(false);
-                autoPipeline.resetPipeline();
-              }}
-            />
-          </div>
+        {/* Dubbing Mode */}
+        {pipelineMode === 'dubbing' && (
+          <DubbingPipeline subjectId={subjectId} subjectName={subjectName} defaultServerIp={serverIp} />
         )}
 
         {/* Auto Submission Mode */}

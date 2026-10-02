@@ -1,0 +1,342 @@
+/* AskAIAssistant — full-screen voice assistant over the paused lecture.
+   Same palette family as v5-player.css / hyperframe-player.css. */
+
+.aa-overlay {
+  --aa-ink: #eef6f4;
+  --aa-muted: #91a7a3;
+  --aa-line: rgba(162, 201, 192, 0.18);
+  --aa-mint: #7ce0c3;
+  --aa-gold: #f5c66a;
+  --aa-rose: #fb7185;
+  position: fixed;
+  inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  /* Above V5Player (9999), same layer as the answer player it hands off to. */
+  z-index: 10000;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  color: var(--aa-ink);
+  /* Lets the paused lecture show through faintly — the assistant feels
+     layered over the lesson rather than replacing it. */
+  background:
+    radial-gradient(ellipse at 18% 8%, rgba(45, 212, 191, 0.16), transparent 46%),
+    radial-gradient(ellipse at 85% 95%, rgba(167, 139, 250, 0.16), transparent 50%),
+    rgba(4, 10, 9, 0.88);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  font-family: "Aptos", "Segoe UI", sans-serif;
+  animation: aa-enter 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.aa-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) 18px 10px;
+}
+
+.aa-topbar__title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 12px/1 "Cascadia Mono", monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--aa-mint);
+}
+
+.aa-topbar__title svg {
+  flex-shrink: 0;
+  color: var(--aa-gold);
+}
+
+.aa-topbar__subject {
+  overflow: hidden;
+  color: var(--aa-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.06em;
+}
+
+.aa-icon-btn {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--aa-line);
+  border-radius: 50%;
+  color: var(--aa-ink);
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.aa-icon-btn:hover {
+  border-color: rgba(124, 224, 195, 0.5);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.aa-icon-btn:focus-visible,
+.aa-send:focus-visible,
+.aa-input:focus-visible {
+  outline: 2px solid var(--aa-mint);
+  outline-offset: 2px;
+}
+
+.aa-center {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 3vh, 28px);
+  padding: 8px 20px;
+  overflow: hidden;
+}
+
+.aa-orb-wrap {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.aa-text {
+  width: min(640px, 100%);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.aa-status {
+  margin: 0;
+  color: var(--aa-mint);
+  font: 700 11px/1.4 "Cascadia Mono", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  animation: aa-fade 240ms ease both;
+}
+
+.aa-status.is-hearing {
+  color: #9dd7ff;
+}
+
+.aa-status.is-problem {
+  max-width: 460px;
+  color: var(--aa-muted);
+  font: 500 14px/1.5 "Aptos", "Segoe UI", sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Live transcript of what the student is saying — the loudest text on screen. */
+.aa-transcript {
+  margin: 0;
+  max-height: 30vh;
+  overflow: hidden;
+  font-size: clamp(19px, 2.6vw, 28px);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--aa-ink);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+/* What the assistant is currently saying out loud. */
+.aa-caption {
+  margin: 0;
+  font-family: "Georgia", serif;
+  font-size: clamp(17px, 2.2vw, 23px);
+  line-height: 1.4;
+  color: rgba(238, 246, 244, 0.86);
+  animation: aa-fade 260ms ease both;
+}
+
+.aa-question {
+  margin: 0;
+  max-width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--aa-line);
+  border-radius: 16px 16px 4px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 15px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  animation: aa-fade 240ms ease both;
+}
+
+.aa-question span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--aa-muted);
+  font: 700 9px/1.2 "Cascadia Mono", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.aa-notice {
+  margin: 0;
+  max-width: 460px;
+  padding: 10px 14px;
+  border: 1px solid rgba(251, 113, 133, 0.3);
+  border-radius: 12px;
+  color: #ffd9df;
+  background: rgba(251, 113, 133, 0.08);
+  font-size: 14px;
+  line-height: 1.45;
+  animation: aa-fade 240ms ease both;
+}
+
+.aa-composer {
+  width: min(680px, calc(100% - 24px));
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: max(14px, env(safe-area-inset-bottom));
+  padding: 6px 6px 6px 8px;
+  border: 1px solid var(--aa-line);
+  border-radius: 999px;
+  background: rgba(7, 16, 15, 0.82);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+
+.aa-composer:focus-within {
+  border-color: rgba(124, 224, 195, 0.45);
+}
+
+.aa-mic-chip {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--aa-muted);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.aa-mic-chip.is-live {
+  color: #062019;
+  background: var(--aa-mint);
+  box-shadow: 0 0 0 0 rgba(124, 224, 195, 0.5);
+  animation: aa-mic-pulse 1.6s ease-out infinite;
+}
+
+.aa-input {
+  min-width: 0;
+  flex: 1;
+  height: 40px;
+  border: 0;
+  outline: 0;
+  color: var(--aa-ink);
+  background: transparent;
+  /* 16px stops iOS Safari from zooming the page when the input is focused. */
+  font: 400 16px/1.2 "Aptos", "Segoe UI", sans-serif;
+}
+
+.aa-input::placeholder {
+  color: rgba(145, 167, 163, 0.8);
+}
+
+.aa-input:disabled {
+  opacity: 0.5;
+}
+
+.aa-send {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #062019;
+  background: var(--aa-mint);
+  cursor: pointer;
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.aa-send:hover:not(:disabled) {
+  transform: scale(1.06);
+}
+
+.aa-send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+@keyframes aa-enter {
+  from { opacity: 0; transform: scale(1.02); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes aa-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes aa-mic-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(124, 224, 195, 0.5); }
+  70% { box-shadow: 0 0 0 10px rgba(124, 224, 195, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(124, 224, 195, 0); }
+}
+
+/* Landscape phone: orb beside the text instead of stacked, so neither gets
+   squeezed into a few pixels of height. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .aa-topbar {
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-bottom: 4px;
+  }
+
+  .aa-center {
+    flex-direction: row;
+    gap: 28px;
+  }
+
+  .aa-text {
+    width: min(460px, 55vw);
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .aa-composer {
+    margin-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 480px) {
+  .aa-topbar {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .aa-center {
+    padding: 4px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-overlay,
+  .aa-status,
+  .aa-caption,
+  .aa-question,
+  .aa-notice {
+    animation: none;
+  }
+
+  .aa-mic-chip.is-live {
+    animation: none;
+  }
+}

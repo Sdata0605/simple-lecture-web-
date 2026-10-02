@@ -616,7 +616,7 @@ export default function SubjectForm() {
             <SubjectVideoGeneratorTab 
               subjectId={id} 
               subjectName={subject?.name || ""} 
-              serverIp={(subject as any)?.server_ip || '69.197.145.4'}
+              serverIp={(subject as any)?.server_ip || '204.12.237.78'}
             />
           ) : (
             <Card>
@@ -696,7 +696,7 @@ export default function SubjectForm() {
             <SubjectLanguagesTab
               subjectId={id}
               subjectName={subject?.name || ""}
-              serverIp={(subject as any)?.server_ip || '69.197.145.4'}
+              serverIp={(subject as any)?.server_ip || '204.12.237.78'}
             />
           ) : (
             <Card>

@@ -4,6 +4,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Sparkles,
   Volume2,
   VolumeX,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ interface V5ControlsProps {
   onReplay: () => void;
   onSeek: (time: number) => void;
   onRateChange: (rate: number) => void;
+  onAskAI?: () => void;
 }
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
@@ -39,6 +41,7 @@ export function V5Controls({
   onReplay,
   onSeek,
   onRateChange,
+  onAskAI,
 }: V5ControlsProps) {
   return (
     <div className="v5-controls">
@@ -78,6 +81,18 @@ export function V5Controls({
         </div>
 
         <div className="v5-controls__group">
+          {onAskAI && (
+            <button
+              aria-label="Ask AI a question about this lecture"
+              className="v5-controls__ask"
+              onClick={onAskAI}
+              title="Ask AI"
+              type="button"
+            >
+              <Sparkles size={16} />
+              <span>Ask AI</span>
+            </button>
+          )}
           <select
             aria-label="Playback speed"
             onChange={(event) => onRateChange(Number(event.target.value))}

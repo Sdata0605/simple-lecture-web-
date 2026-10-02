@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 // Default server IP - can be overridden per-request via server_ip parameter
-const DEFAULT_SERVER_IP = "69.197.145.4";
+const DEFAULT_SERVER_IP = "204.12.237.78";
 
 // Helper to construct API base URL from server IP
 function getExternalApiBase(serverIp?: string): string {
@@ -759,6 +759,8 @@ Deno.serve(async (req) => {
       story_hint, avatar_speaker,
       // Marketing / advanced overrides
       no_quiz, image_provider, image_model, avatar_id,
+      // Multilanguage dubbing fields
+      languages, speaker, tts_engine, skip_section_merge, skip_final_merge,
     } = body;
 
     // Get dynamic API base URLs from server_ip parameter
@@ -1060,6 +1062,87 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ ...data, player_url: playerUrl }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Multilanguage dubbing — see docs/api2.txt for the upstream API contract.
+    if (action === 'dub_languages') {
+      if (!job_id) {
+        return new Response(
+          JSON.stringify({ error: 'job_id is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (!Array.isArray(languages) || languages.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'languages must be a non-empty array' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`[dub_languages] Starting dubbing for job: ${job_id} -> [${languages.join(', ')}] on server: ${server_ip || DEFAULT_SERVER_IP}`);
+
+      const response = await fetch(`${dynamicApiBase}/job/${job_id}/dub_languages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          languages,
+          speaker: speaker || 'abhilash',
+          tts_engine: tts_engine || 'edgetts',
+          ...(avatar_id ? { avatar_id } : {}),
+          skip_avatar: !!skip_avatar,
+          skip_section_merge: !!skip_section_merge,
+          skip_final_merge: !!skip_final_merge,
+        }),
+      });
+      const raw = await response.text();
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        console.error(`[dub_languages] Non-JSON response (status ${response.status}) from ${dynamicApiBase}/job/${job_id}/dub_languages:`, raw.slice(0, 500));
+        return new Response(
+          JSON.stringify({
+            error: `Dubbing server at ${dynamicApiBase} returned an invalid response (HTTP ${response.status}). ` +
+              `The /job/<id>/dub_languages endpoint may not be deployed on this server yet.`,
+          }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify(data),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (action === 'dub_status') {
+      if (!job_id) {
+        return new Response(
+          JSON.stringify({ error: 'job_id is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const response = await fetch(`${dynamicApiBase}/job/${job_id}/dub_status`);
+      const raw = await response.text();
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        console.error(`[dub_status] Non-JSON response (status ${response.status}) from ${dynamicApiBase}/job/${job_id}/dub_status:`, raw.slice(0, 500));
+        return new Response(
+          JSON.stringify({
+            error: `Dubbing server at ${dynamicApiBase} returned an invalid response (HTTP ${response.status}). ` +
+              `The /job/<id>/dub_status endpoint may not be deployed on this server yet.`,
+          }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify(data),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

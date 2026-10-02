@@ -12,7 +12,16 @@
   --hf-gold: #f5c66a;
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  /* inset: 0 alone can leave a strip at the bottom uncovered on mobile Chrome
+     — it measures against the "layout viewport" (which includes the area
+     the address/toolbar can occupy), not the actually-visible one, so the
+     page underneath (its own bottom nav) shows through that gap. `dvh`
+     tracks the real visible height live as the toolbar shows/hides. */
+  height: 100vh;
+  height: 100dvh;
+  /* Must beat V5Player's own z-index: 9999 — V5 stays mounted (paused) behind
+     this after the lecture ends, so a tie or lower value renders invisibly. */
+  z-index: 10000;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
@@ -21,6 +30,34 @@
     radial-gradient(circle at 10% 10%, rgba(44, 116, 98, 0.22), transparent 32%),
     #07100f;
   font-family: "Aptos", "Segoe UI", sans-serif;
+}
+
+.hf-player:fullscreen {
+  width: 100vw;
+  height: 100vh;
+}
+
+.hf-player:fullscreen .hf-stage {
+  padding: 0;
+}
+
+/* Auto-hide header/controls after a few seconds of no mouse movement while
+   fullscreen (see the mousemove effect in the component) — lets the
+   presentation use the whole screen instead of always losing the top/bottom
+   strips to chrome. Not applied outside fullscreen. */
+.hf-header,
+.hf-controls {
+  transition: opacity 0.3s ease;
+}
+
+.hf-player--idle .hf-header,
+.hf-player--idle .hf-controls {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hf-player--idle {
+  cursor: none;
 }
 
 .hf-header {
@@ -77,11 +114,15 @@
   padding: 16px;
 }
 
-.hf-stage:fullscreen {
-  width: 100vw;
-  height: 100vh;
-  background: #000;
-  padding: 0;
+/* Video mode never scrolls — the wrapper below is always sized (via JS,
+   fit-contain against both width and height) to fit inside this box, so
+   there's nothing to scroll to. */
+.hf-stage--video {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ── Text fallback (shown immediately, and permanently if HF never finishes) ── */
@@ -142,12 +183,23 @@
 
 /* ── Video mode (animated iframe beats + narration audio) ── */
 
-.hf-video-wrapper {
+.hf-video-frame-box {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
-  max-width: 960px;
-  aspect-ratio: 16 / 9;
-  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.hf-video-wrapper {
+  /* width/height set inline via JS (fit-contain against the frame box, in
+     both dimensions) — no aspect-ratio/max-width here, since those only
+     ever respond to available width and would still overflow a short or
+     landscape-phone viewport. */
+  position: relative;
   border-radius: 14px;
   overflow: hidden;
   background: #000;
@@ -179,30 +231,41 @@
   font: 700 10px/1 "Cascadia Mono", monospace;
 }
 
-.hf-video-wrapper:fullscreen {
-  max-width: none;
-  aspect-ratio: auto;
-  width: 100vw;
-  height: 100vh;
-}
-
+/* Overlaid on the bottom edge of the video (like subtitles) instead of
+   stacked below it — so a long caption can never push the stage's total
+   height past the viewport and force a scroll. */
 .hf-text-panel {
-  max-width: 720px;
-  margin: 14px auto 0;
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  width: min(92%, 720px);
+  max-height: 32%;
+  overflow: hidden;
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(3, 12, 10, 0.72);
+  backdrop-filter: blur(8px);
   text-align: center;
+  z-index: 4;
 }
 
 .hf-text-panel__title {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-family: "Georgia", serif;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
 }
 
 .hf-text-panel__caption {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--hf-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .hf-controls {
@@ -293,6 +356,11 @@
   justify-self: end;
 }
 
+.hf-caption-btn.is-active {
+  color: var(--hf-mint);
+  border-color: rgba(124, 224, 195, 0.4);
+}
+
 @keyframes hf-fade-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -312,17 +380,33 @@
   .hf-stage { padding: 10px; }
 }
 
-/* Portrait phone: hug the video to a 16:9 strip, same convention as V5. */
+/* Portrait phone: hug the video to a compact 16:9 strip near the top instead
+   of centering it inside a stage stretched to fill the whole screen height —
+   same convention as V5 (v5-player.css) and V4 (v4-player.css). The trailing
+   1fr row absorbs the leftover height so header/stage/controls stack at the
+   top instead of the video floating in the middle with dead space above and
+   below it. Scoped to :has(.hf-stage--video) so the pre-video "Thinking…"
+   state still centers normally in the full-height stage. */
 @media (max-width: 760px) and (orientation: portrait) {
-  .hf-video-wrapper { max-width: 100%; }
+  .hf-player:has(.hf-stage--video) {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+
+  .hf-stage--video {
+    flex: 0 0 auto;
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 0;
+  }
 }
 
 /* Landscape phone — an actual mobile "fullscreen". Keyed off height, same
-   as V5, since a phone in landscape is ~700-900px wide either way. */
+   as V5, since a phone in landscape is ~700-900px wide either way. The video
+   wrapper itself needs no override here — its size is computed in JS to fit
+   whatever box .hf-video-frame-box has in every orientation. */
 @media (orientation: landscape) and (max-height: 520px) {
   .hf-header { min-height: 46px; padding: 6px 10px; }
   .hf-header__badge { display: none; }
   .hf-controls { padding: 7px 10px 8px; }
   .hf-text-panel { display: none; }
-  .hf-video-wrapper { max-width: 100%; max-height: 100%; }
 }

@@ -1,5 +1,8 @@
 project_id = "oxwhqvsoelqqsblmqkxx"
 
+[functions.dubbing-batch-tick]
+verify_jwt = false
+
 [functions.coverage-analyzer-proxy]
 verify_jwt = false
 

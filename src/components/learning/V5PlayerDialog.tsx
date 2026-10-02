@@ -24,6 +24,9 @@ interface V5PlayerDialogProps {
   /** Fires once when the lecture actually finishes playing — see V5Player's
    * own onVideoEnded doc comment. Optional, purely a pass-through. */
   onVideoEnded?: () => void;
+  /** Pass-throughs for the mid-lecture "Ask AI" button — see V5Player. */
+  onAskAI?: () => void;
+  askAIOpen?: boolean;
 }
 
 const toV5Language = (value?: string | null): V5Language =>
@@ -35,6 +38,8 @@ export const V5PlayerDialog = ({
   initialJobId,
   initialLanguage,
   onVideoEnded,
+  onAskAI,
+  askAIOpen,
 }: V5PlayerDialogProps) => {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
@@ -57,6 +62,8 @@ export const V5PlayerDialog = ({
       initialLanguage={toV5Language(initialLanguage)}
       onExit={() => onOpenChange(false)}
       onVideoEnded={onVideoEnded}
+      onAskAI={onAskAI}
+      askAIOpen={askAIOpen}
     />,
     document.body,
   );
