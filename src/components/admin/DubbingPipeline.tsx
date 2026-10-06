@@ -346,7 +346,7 @@ function NewDubbingForm({ subjectId, defaultServerIp }: { subjectId: string; def
 
   const videoUrlFor = (entry: DubbedLanguageEntry) => {
     const ip = selectedJob?.server_ip || defaultServerIp;
-    return `http://${ip}:5005/player/jobs/${selectedJob?.external_job_id}/${entry.video_path}`;
+    return `http://${ip}:5006/player/jobs/${selectedJob?.external_job_id}/${entry.video_path}`;
   };
 
   const languageName = (code: string) => DUB_LANGUAGES.find((l) => l.code === code)?.name || code;
@@ -666,7 +666,7 @@ function DubbingStatusList({ subjectId, defaultServerIp }: { subjectId: string; 
                       {job.dubbed_languages.map((entry) => (
                         <a
                           key={entry.lang}
-                          href={`http://${job.server_ip || defaultServerIp}:5005/player/jobs/${job.external_job_id}/${entry.video_path}`}
+                          href={`http://${job.server_ip || defaultServerIp}:5006/player/jobs/${job.external_job_id}/${entry.video_path}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs text-primary hover:underline"

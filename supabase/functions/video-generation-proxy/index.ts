@@ -14,7 +14,7 @@ const DEFAULT_SERVER_IP = "204.12.237.78";
 // Helper to construct API base URL from server IP
 function getExternalApiBase(serverIp?: string): string {
   const ip = serverIp || DEFAULT_SERVER_IP;
-  return `http://${ip}:5005`;
+  return `http://${ip}:5006`;
 }
 
 function getChatterboxApiBase(serverIp?: string): string {

@@ -242,7 +242,7 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '2
         }
 
         const reviewData = response.data;
-        const videoUrl = job.video_url || `http://${job.server_ip}:5005/player_v2/?job=${job.external_job_id}`;
+        const videoUrl = job.video_url || `http://${job.server_ip}:5006/player_v2/?job=${job.external_job_id}`;
 
         // Update the job as published
         const { error: updateError } = await supabase
@@ -489,7 +489,7 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '2
           pollingRef.current = null;
           
           setCompletedAt(data.completed_at || new Date().toISOString());
-          const videoUrl = `http://${serverIp}:5005/player_v2/?job=${extJobId}`;
+          const videoUrl = `http://${serverIp}:5006/player_v2/?job=${extJobId}`;
           setGeneratedVideoUrl(videoUrl);
           setJobStatus(data.status as JobStatus);
           
@@ -559,7 +559,7 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '2
         
         // Handle completed/completed_with_errors/failed status
         if ((data.status === 'completed' || data.status === 'completed_with_errors') && generatedId) {
-          const videoUrl = `http://${serverIp}:5005/player_v2/?job=${externalJobId}`;
+          const videoUrl = `http://${serverIp}:5006/player_v2/?job=${externalJobId}`;
           setGeneratedVideoUrl(videoUrl);
           setJobStatus(data.status as JobStatus);
           setCompletedAt(data.completed_at || new Date().toISOString());
