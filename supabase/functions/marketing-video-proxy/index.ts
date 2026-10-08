@@ -232,8 +232,11 @@ Deno.serve(async (req) => {
       } else if (avatar_speaker) {
         fd.append("avatar_speaker", String(avatar_speaker));
       }
-      let resolvedAvatarId = avatar_id ? String(avatar_id) : "";
-      if (!resolvedAvatarId && subject) {
+      let resolvedAvatarId = "";
+      if (avatar_id !== undefined && avatar_id !== null) {
+        // Explicitly passed in request — respect it (even if empty string "")
+        resolvedAvatarId = String(avatar_id).trim();
+      } else if (subject) {
         try {
           const admin = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
@@ -245,13 +248,10 @@ Deno.serve(async (req) => {
             .select("avatar_id")
             .ilike("name", String(subject).trim())
             .maybeSingle();
-          if (subRow?.avatar_id) resolvedAvatarId = String(subRow.avatar_id);
+          if (subRow?.avatar_id) resolvedAvatarId = String(subRow.avatar_id).trim();
         } catch (e) {
           console.warn("[marketing-video-proxy] Unable to resolve subject avatar_id:", e);
         }
-      }
-      if (!resolvedAvatarId) {
-        resolvedAvatarId = "avatar_5ab07dea"; // Global fallback default avatar ID
       }
       fd.append("avatar_id", resolvedAvatarId);
       console.log(`[marketing:submit] Structured Audit: subject="${subject}", raw_avatar_id="${avatar_id}", resolved_avatar_id="${resolvedAvatarId}"`);

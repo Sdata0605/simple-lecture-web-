@@ -203,20 +203,24 @@ async function processRun(supabase: any, run: any) {
       if (cfg.avatar_speaker) payload.avatar_speaker = cfg.avatar_speaker;
       if (cfg.tts_engine && cfg.tts_engine !== "default") payload.tts_engine = cfg.tts_engine;
 
-      let effectiveAvatarId = cfg.avatar_id as string | undefined;
-      if (!effectiveAvatarId && run.subject_id) {
+      let effectiveAvatarId = "";
+      if (typeof cfg.avatar_id === "string") {
+        // If avatar_id is explicitly specified in cfg (even as empty string ""), respect it.
+        effectiveAvatarId = cfg.avatar_id.trim();
+      } else if (run.subject_id) {
         const { data: subRow } = await supabase
           .from("popular_subjects")
           .select("avatar_id")
           .eq("id", run.subject_id)
           .maybeSingle();
-        if (subRow?.avatar_id) effectiveAvatarId = subRow.avatar_id;
+        if (subRow?.avatar_id) effectiveAvatarId = subRow.avatar_id.trim();
       }
-      if (!effectiveAvatarId) {
+      // Only fall back to global default for non-marketing jobs when no avatar_id was configured at all
+      if (!isMarketing && !effectiveAvatarId && cfg.avatar_id === undefined) {
         effectiveAvatarId = "avatar_5ab07dea"; // Global fallback default avatar ID
       }
       payload.avatar_id = effectiveAvatarId;
-      console.log(`[auto-submission-tick] Structured Audit: subject="${run.subject_name}", cfg_avatar_id="${cfg.avatar_id}", effective_avatar_id="${payload.avatar_id}"`);
+      console.log(`[auto-submission-tick] Structured Audit: subject="${run.subject_name}", isMarketing=${isMarketing}, cfg_avatar_id="${cfg.avatar_id}", effective_avatar_id="${payload.avatar_id}"`);
       if (cfg.model) payload.model = cfg.model;
       if (cfg.title) payload.title = cfg.title;
       // Explicit null when admin selected "None of these" for targeted languages.

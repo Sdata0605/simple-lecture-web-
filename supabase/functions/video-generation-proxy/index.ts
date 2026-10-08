@@ -975,8 +975,10 @@ Deno.serve(async (req) => {
       if (no_quiz !== undefined) formData.append('no_quiz', String(no_quiz));
       if (avatar_speaker) formData.append('avatar_speaker', String(avatar_speaker));
 
-      let resolvedAvatarId = avatar_id ? String(avatar_id) : '';
-      if (!resolvedAvatarId && subject) {
+      let resolvedAvatarId = '';
+      if (avatar_id !== undefined && avatar_id !== null) {
+        resolvedAvatarId = String(avatar_id).trim();
+      } else if (subject) {
         try {
           const admin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
@@ -988,14 +990,14 @@ Deno.serve(async (req) => {
             .select('avatar_id')
             .ilike('name', String(subject).trim())
             .maybeSingle();
-          if (subRow?.avatar_id) resolvedAvatarId = String(subRow.avatar_id);
+          if (subRow?.avatar_id) resolvedAvatarId = String(subRow.avatar_id).trim();
         } catch (err) {
           console.warn('[video-generation-proxy] Failed to resolve avatar_id from popular_subjects:', err);
         }
       }
 
-      if (!resolvedAvatarId) {
-        resolvedAvatarId = 'avatar_5ab07dea'; // Global fallback default avatar ID
+      if (!resolvedAvatarId && avatar_id === undefined) {
+        resolvedAvatarId = 'avatar_5ab07dea'; // Global fallback default avatar ID only when avatar_id was completely omitted
       }
 
       formData.append('avatar_id', resolvedAvatarId);

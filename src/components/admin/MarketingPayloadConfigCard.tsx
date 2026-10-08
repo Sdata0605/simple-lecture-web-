@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Sparkles, Save, Bot, Zap, Cloud, Cpu, Volume2, Globe, UserCheck, ShieldAlert } from "lucide-react";
+import { Sparkles, Save, Bot, Zap, Cloud, Cpu, Volume2, Globe, UserCheck, ShieldAlert, X } from "lucide-react";
 
 export interface MarketingPayloadConfig {
   avatar_id: string;
@@ -142,8 +142,13 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
   // Populate state on load
   useEffect(() => {
     if (savedAiSetting) {
-      if (savedAiSetting.avatar_id) setAvatarId(savedAiSetting.avatar_id);
-      else if (subjectData?.avatar_id) setAvatarId(subjectData.avatar_id);
+      if (typeof savedAiSetting.avatar_id === "string") {
+        setAvatarId(savedAiSetting.avatar_id);
+      } else if (subjectData?.avatar_id) {
+        setAvatarId(subjectData.avatar_id);
+      } else {
+        setAvatarId("");
+      }
 
       if (Array.isArray(savedAiSetting.target_languages)) {
         setTargetLanguages(savedAiSetting.target_languages);
@@ -173,7 +178,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
   useEffect(() => {
     if (onChange) {
       onChange({
-        avatar_id: avatarId,
+        avatar_id: avatarId.trim(),
         target_languages: targetLanguages.length > 0 ? targetLanguages : null,
         avatar_speaker: voice,
         avatar_language: avatarLanguage,
@@ -187,6 +192,11 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
   const saveConfigMutation = useMutation({
     mutationFn: async (newConfig: MarketingPayloadConfig) => {
       const settingKey = `marketing_payload_config_${subjectId}`;
+      const trimmedAvatarId = (newConfig.avatar_id ?? "").trim();
+      const configToSave: MarketingPayloadConfig = {
+        ...newConfig,
+        avatar_id: trimmedAvatarId,
+      };
 
       // Update ai_settings
       const { error: aiError } = await supabase
@@ -194,7 +204,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
         .upsert(
           {
             setting_key: settingKey,
-            setting_value: newConfig as any,
+            setting_value: configToSave as any,
             description: `Marketing payload config for subject ${subjectName} (${subjectId})`,
             updated_at: new Date().toISOString(),
           },
@@ -202,14 +212,12 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
         );
       if (aiError) throw aiError;
 
-      // Update popular_subjects avatar_id if changed
-      if (newConfig.avatar_id) {
-        const { error: subError } = await supabase
-          .from("popular_subjects")
-          .update({ avatar_id: newConfig.avatar_id })
-          .eq("id", subjectId);
-        if (subError) console.warn("Failed to update popular_subjects.avatar_id:", subError);
-      }
+      // Update popular_subjects avatar_id (clear to null if empty so DB is also updated)
+      const { error: subError } = await supabase
+        .from("popular_subjects")
+        .update({ avatar_id: trimmedAvatarId ? trimmedAvatarId : null })
+        .eq("id", subjectId);
+      if (subError) console.warn("Failed to update popular_subjects.avatar_id:", subError);
     },
     onSuccess: () => {
       toast.success(`Saved default marketing payload settings for ${subjectName}!`);
@@ -226,7 +234,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
       ? newConfig.target_languages
       : (targetLanguages.length > 0 ? targetLanguages : null);
     const configToSave: MarketingPayloadConfig = {
-      avatar_id: newConfig?.avatar_id ?? avatarId,
+      avatar_id: (newConfig?.avatar_id !== undefined ? newConfig.avatar_id : avatarId).trim(),
       target_languages: langs,
       avatar_speaker: newConfig?.avatar_speaker ?? voice,
       avatar_language: newConfig?.avatar_language ?? avatarLanguage,
@@ -313,31 +321,45 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
                 <UserCheck className="h-4 w-4 text-purple-400" />
                 1. Avatar ID
               </Label>
-              {subjectData?.avatar_id && (
+              {subjectData?.avatar_id && subjectData.avatar_id.trim() !== "" && (
                 <span className="text-[11px] text-purple-400/80 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800/40">
                   DB Saved: {subjectData.avatar_id}
                 </span>
               )}
             </div>
             <div className="flex gap-2">
-              <Input
-                value={avatarId}
-                onChange={(e) => setAvatarId(e.target.value)}
-                placeholder="e.g. avatar_5ab07dea or pramod"
-                className="bg-slate-950 text-white border-slate-700 text-sm font-mono focus:border-purple-500"
-              />
+              <div className="relative flex-1">
+                <Input
+                  value={avatarId}
+                  onChange={(e) => setAvatarId(e.target.value)}
+                  placeholder="e.g. avatar_5ab07dea or leave empty"
+                  className="bg-slate-950 text-white border-slate-700 text-sm font-mono focus:border-purple-500 pr-8"
+                />
+                {avatarId && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatarId("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded hover:bg-slate-800"
+                    title="Clear avatar ID"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
               <Select
-                value={avatarId}
+                value={avatarId === "" ? "__none__" : avatarId}
                 onValueChange={(val) => {
-                  setAvatarId(val);
-                  handleRequestSave({ avatar_id: val });
+                  const nextVal = val === "__none__" ? "" : val;
+                  setAvatarId(nextVal);
+                  handleRequestSave({ avatar_id: nextVal });
                 }}
               >
                 <SelectTrigger className="w-[140px] bg-slate-950 text-xs border-slate-700">
                   <SelectValue placeholder="Preset" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 text-white border-slate-700">
-                  {subjectData?.avatar_id && (
+                  <SelectItem value="__none__">None (No Avatar)</SelectItem>
+                  {subjectData?.avatar_id && subjectData.avatar_id.trim() !== "" && (
                     <SelectItem value={subjectData.avatar_id}>
                       DB Saved ({subjectData.avatar_id.slice(0, 12)}...)
                     </SelectItem>
@@ -351,7 +373,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
               </Select>
             </div>
             <p className="text-[11px] text-slate-400">
-              Visual avatar character sent as <code className="text-purple-300">avatar_id</code>. Editing requires admin confirmation.
+              Visual avatar character sent as <code className="text-purple-300">avatar_id</code>. Leave empty to pass an empty value. Editing requires admin confirmation.
             </p>
           </div>
 

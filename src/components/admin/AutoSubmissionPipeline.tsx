@@ -144,14 +144,30 @@ export function AutoSubmissionPipeline({ subjectId, subjectName, serverIp, kind 
         status: "queued",
       }));
 
-      let resolvedAvatarId = marketingConfig?.avatar_id || (pipelineConfig as any)?.avatar_id || "";
-      if (!resolvedAvatarId && subjectId) {
-        const { data: subRow } = await supabase
-          .from("popular_subjects")
-          .select("avatar_id")
-          .eq("id", subjectId)
-          .maybeSingle();
-        if (subRow?.avatar_id) resolvedAvatarId = subRow.avatar_id;
+      let resolvedAvatarId = "";
+      if (kind === "marketing") {
+        if (marketingConfig && typeof marketingConfig.avatar_id === "string") {
+          resolvedAvatarId = marketingConfig.avatar_id.trim();
+        } else if ((pipelineConfig as any)?.avatar_id !== undefined) {
+          resolvedAvatarId = String((pipelineConfig as any).avatar_id || "").trim();
+        } else if (subjectId) {
+          const { data: subRow } = await supabase
+            .from("popular_subjects")
+            .select("avatar_id")
+            .eq("id", subjectId)
+            .maybeSingle();
+          resolvedAvatarId = (subRow?.avatar_id || "").trim();
+        }
+      } else {
+        resolvedAvatarId = (pipelineConfig as any)?.avatar_id || "";
+        if (!resolvedAvatarId && subjectId) {
+          const { data: subRow } = await supabase
+            .from("popular_subjects")
+            .select("avatar_id")
+            .eq("id", subjectId)
+            .maybeSingle();
+          if (subRow?.avatar_id) resolvedAvatarId = subRow.avatar_id.trim();
+        }
       }
 
       // Combine base pipelineConfig with user-selected marketing payload config if in marketing mode
