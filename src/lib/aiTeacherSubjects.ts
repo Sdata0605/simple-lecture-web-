@@ -1,4 +1,4 @@
-import type { TeacherSubject } from "./aiTeacherApi";
+type Named = { id: string; name: string };
 
 const norm = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9ऀ-ॿಀ-೿\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -11,13 +11,13 @@ const ALIASES: Record<string, string[]> = {
   science: ["general science"],
 };
 
-function namesFor(s: TeacherSubject): string[] {
+function namesFor(s: Named): string[] {
   const n = norm(s.name);
   return [n, ...(ALIASES[n] ?? [])].filter(Boolean);
 }
 
 /** Longest-name-first so "social science" wins over "science". */
-export function detectSubject(text: string, subjects: TeacherSubject[]): TeacherSubject | null {
+export function detectSubject<T extends Named>(text: string, subjects: T[]): T | null {
   const t = ` ${norm(text)} `;
   const candidates = subjects
     .flatMap((s) => namesFor(s).map((n) => ({ s, n })))
@@ -32,14 +32,14 @@ const FILLER = new Set([
 ]);
 
 /** True when the message is just a subject choice ("social science", "I want to study maths"). */
-export function isOnlySubject(text: string, subject: TeacherSubject): boolean {
+export function isOnlySubject(text: string, subject: Named): boolean {
   let t = ` ${norm(text)} `;
   for (const n of namesFor(subject).sort((a, b) => b.length - a.length)) t = t.replace(` ${n} `, " ");
   return t.split(" ").filter(Boolean).every((w) => FILLER.has(w));
 }
 
 /** Resolve a name the voice teacher passes to select_subject. */
-export function matchSubjectByName(name: string, subjects: TeacherSubject[]): TeacherSubject | null {
+export function matchSubjectByName<T extends Named>(name: string, subjects: T[]): T | null {
   const n = norm(name);
   if (!n) return null;
   return (

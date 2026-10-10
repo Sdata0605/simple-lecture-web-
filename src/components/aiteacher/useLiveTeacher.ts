@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   teacherApi,
   type BankQuestion,
+  type CatalogSubject,
   type LiveSession,
   type RetrievalResult,
   type TeacherDocument,
@@ -108,6 +109,7 @@ export function useLiveTeacher({
   const msgIdRef = useRef(1);
   const subjectRef = useRef(subject);
   subjectRef.current = subject;
+  const catalogRef = useRef<CatalogSubject[]>([]);
   const subjectsRef = useRef(subjects);
   subjectsRef.current = subjects;
   const onSubjectRef = useRef(onSubject);
@@ -210,6 +212,51 @@ export function useLiveTeacher({
           } else {
             responses.push({ id: fc.id, name: fc.name, response: { status: "unknown_subject", available: list.map((x) => x.name), instruction: "Tell the student which subjects are available and ask them to choose one." } });
           }
+        } else if (fc.name === "start_lesson") {
+          const cat = catalogRef.current;
+          const hint = String(args.subject ?? "").trim();
+          const current = subjectRef.current;
+          const subj =
+            (hint ? matchSubjectByName(hint, cat) : null) ??
+            (current ? cat.find((c) => c.id === current.id) ?? null : null) ??
+            (cat.length === 1 ? cat[0] : null);
+          const chapterNo = Number(args.chapter_number);
+          const topicNo = args.topic_number === undefined || args.topic_number === null || args.topic_number === "" ? undefined : Number(args.topic_number);
+          const chapter = subj?.chapters.find((c) => c.number === chapterNo);
+          const topic = !chapter
+            ? undefined
+            : topicNo === undefined
+              ? chapter.topics[0]
+              : chapter.topics.find((t) => t.label === `${chapterNo}.${topicNo}`) ??
+                chapter.topics.find((t) => parseInt(t.label.split(".").pop() ?? "", 10) === topicNo);
+          if (!subj) {
+            responses.push({ id: fc.id, name: fc.name, response: { status: "need_subject", available: cat.map((c) => c.name), instruction: "Ask the student which subject." } });
+          } else if (!chapter) {
+            const nums = subj.chapters.map((c) => c.number);
+            responses.push({ id: fc.id, name: fc.name, response: { status: "chapter_not_found", subject: subj.name, chapters: `${Math.min(...nums)} to ${Math.max(...nums)}`, instruction: "Tell the student that chapter does not exist and offer a valid one." } });
+          } else if (!topic) {
+            responses.push({ id: fc.id, name: fc.name, response: { status: "topic_not_found", topics_in_chapter: chapter.topics.map((t) => `${t.label} ${t.title}`), instruction: "Tell the student which topics this chapter has and ask which one." } });
+          } else {
+            const ts: TeacherSubject = { id: subj.id, name: subj.name, topics: subj.chapters.reduce((n, c) => n + c.topics.length, 0) };
+            if (subjectRef.current?.id !== ts.id) { setReferences([]); setDocuments([]); setPractice([]); }
+            subjectRef.current = ts;
+            onSubjectRef.current(ts);
+            const r = await teacherApi<RetrievalResult>("search", { subjectId: subj.id, topicId: topic.id });
+            applyRetrieval(r);
+            responses.push({
+              id: fc.id, name: fc.name,
+              response: {
+                status: "ok",
+                subject: subj.name,
+                chapter: `${chapter.number}: ${chapter.title}`,
+                topic: `${topic.label} ${topic.title}`,
+                topics_in_chapter: chapter.topics.map((t) => `${t.label} ${t.title}`),
+                notes: r.references.slice(0, 10).map((x) => ({ source: x.heading_path, text: x.content.slice(0, 1000) })),
+                more_notes_available: r.references.length > 10,
+                instruction: "Start teaching this topic now, section by section from these notes. Say the chapter and topic name in one short sentence first.",
+              },
+            });
+          }
         } else if (fc.name === "present_slide") {
           const bullets = (Array.isArray(args.bullets) ? args.bullets : []).map(String).slice(0, 7);
           setBoard((b) => [...b, { kind: "slide", id: `s${Date.now()}`, title: String(args.title ?? ""), bullets }]);
@@ -278,6 +325,7 @@ export function useLiveTeacher({
       const s = await teacherApi<LiveSession>("session");
       setTeacherName(s.teacherName);
       if (s.subjects?.length) subjectsRef.current = s.subjects;
+      catalogRef.current = s.catalog ?? [];
 
       // Play-context must be created from a user gesture (this call is).
       ensurePlayCtx();
@@ -294,46 +342,8 @@ export function useLiveTeacher({
         setNotice("Microphone is blocked, so you can type your questions and the teacher will answer by voice.");
       }
 
-      const { GoogleGenAI, Modality, Type } = await import("@google/genai");
+      const { GoogleGenAI, Modality } = await import("@google/genai");
       const ai = new GoogleGenAI({ apiKey: s.token, httpOptions: { apiVersion: s.apiVersion } });
-
-      const tools = [{
-        functionDeclarations: [
-          {
-            name: "select_subject",
-            description: "Select the subject the student wants to study. Call it as soon as the student names a subject.",
-            parameters: { type: Type.OBJECT, properties: { subject: { type: Type.STRING, description: "The exact subject name from the list of subjects you can teach." } }, required: ["subject"] },
-          },
-          {
-            name: "search_notes",
-            description: "Search the study notes of this subject. Call this before teaching or answering any subject question.",
-            parameters: { type: Type.OBJECT, properties: { query: { type: Type.STRING, description: "The topic or question to look up, in English." } }, required: ["query"] },
-          },
-          {
-            name: "present_slide",
-            description: "Show a slide on the student's board while you explain.",
-            parameters: {
-              type: Type.OBJECT,
-              properties: { title: { type: Type.STRING }, bullets: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 to 5 short bullet points" } },
-              required: ["title", "bullets"],
-            },
-          },
-          {
-            name: "show_quiz",
-            description: "Show ONE multiple-choice question on the board to check the student's understanding.",
-            parameters: {
-              type: Type.OBJECT,
-              properties: {
-                question: { type: Type.STRING },
-                options: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Exactly 4 options" },
-                correct_index: { type: Type.INTEGER, description: "0-based index of the correct option" },
-                explanation: { type: Type.STRING, description: "One-sentence explanation of the answer" },
-              },
-              required: ["question", "options", "correct_index", "explanation"],
-            },
-          },
-        ],
-      }];
 
       const session = await ai.live.connect({
         model: s.model,
@@ -344,7 +354,8 @@ export function useLiveTeacher({
           inputAudioTranscription: {},
           outputAudioTranscription: {},
           contextWindowCompression: { slidingWindow: {} },
-          tools,
+          // The tools were locked into the token by the server; this is the same list.
+          tools: s.tools as any,
         },
         callbacks: {
           onopen: () => { setStatusBoth("live"); },

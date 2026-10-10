@@ -20,7 +20,9 @@ export function Syllabus({
     <Accordion type="single" collapsible className="w-full">
       {chapters.map((c) => (
         <AccordionItem key={c.id} value={c.id} className="border-b">
-          <AccordionTrigger className="py-2.5 text-left text-sm hover:no-underline">{c.title}</AccordionTrigger>
+          <AccordionTrigger className="py-2.5 text-left text-sm hover:no-underline">
+            <span><span className="mr-1.5 font-semibold text-emerald-700">{c.number}.</span>{c.title}</span>
+          </AccordionTrigger>
           <AccordionContent className="pb-2">
             <ul className="space-y-0.5">
               {c.topics.map((t) => (
@@ -32,7 +34,7 @@ export function Syllabus({
                     title="Teach me this lesson"
                   >
                     <GraduationCap className="h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-primary" />
-                    <span className="flex-1">{t.title}</span>
+                    <span className="flex-1"><span className="mr-1.5 text-xs text-muted-foreground">{t.label}</span>{t.title}</span>
                   </button>
                 </li>
               ))}

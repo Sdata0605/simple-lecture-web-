@@ -1,8 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TeacherSubject { id: string; name: string; topics: number }
-export interface OutlineTopic { id: string; title: string }
-export interface OutlineChapter { id: string; title: string; topics: OutlineTopic[] }
+export interface OutlineTopic { id: string; label: string; title: string }
+export interface OutlineChapter { id: string; number: number; title: string; topics: OutlineTopic[] }
+/** A subject with its whole numbered syllabus (sent with the voice session). */
+export interface CatalogSubject { id: string; name: string; chapters: OutlineChapter[] }
 
 export interface TeacherReference {
   id: string;
@@ -38,6 +40,9 @@ export interface LiveSession {
   teacherName: string;
   systemInstruction: string;
   subjects: TeacherSubject[];
+  catalog: CatalogSubject[];
+  /** Tool declarations locked into the token; the live connection must reuse them as-is. */
+  tools: unknown[];
 }
 
 export class TeacherApiError extends Error {

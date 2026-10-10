@@ -39,7 +39,7 @@ const DEFAULT_CONFIG: TeacherConfig = {
   enabled: false,
   google_api_key: "",
   live_model: "gemini-3.8-live",
-  chat_model: "gemini-flash-latest",
+  chat_model: "gemini-3.1-flash-lite",
   voice_name: "Kore",
   teacher_name: "AI Teacher",
 };
@@ -52,7 +52,8 @@ async function loadConfig(): Promise<TeacherConfig> {
     enabled: !!v.enabled,
     google_api_key: clean(v.google_api_key, ""),
     live_model: clean(v.live_model, DEFAULT_CONFIG.live_model),
-    chat_model: clean(v.chat_model, DEFAULT_CONFIG.chat_model),
+    // "gemini-flash-latest" was the first default and is a slow thinking model (8-45 s): treat it as "not chosen".
+    chat_model: v.chat_model === "gemini-flash-latest" ? DEFAULT_CONFIG.chat_model : clean(v.chat_model, DEFAULT_CONFIG.chat_model),
     voice_name: clean(v.voice_name, DEFAULT_CONFIG.voice_name),
     teacher_name: clean(v.teacher_name, DEFAULT_CONFIG.teacher_name),
   };
@@ -214,23 +215,30 @@ async function retrieve(subjectId: string, query: string, topicId?: string) {
 }
 
 // ---------------------------------------------------------------- prompts
-function voicePrompt(cfg: TeacherConfig, subjects: string[]) {
-  const list = subjects.length ? subjects.join(", ") : "none yet";
+function voicePrompt(cfg: TeacherConfig, catalog: CatSubject[]) {
+  const list = catalog.length ? catalog.map((s) => s.name).join(", ") : "none yet";
   return `You are ${cfg.teacher_name}, a warm, patient one-to-one school teacher on a live voice call with a student.
 
 SUBJECTS YOU CAN TEACH: ${list}.
 
+YOU KNOW THE FULL SYLLABUS (below). Topic numbers are written <chapter>.<topic>, so "chapter 31 topic 1" means topic 31.1.
+Never ask the student for a topic's name or details that you can find in the syllabus.
+
+${catalogText(catalog)}
+
 START OF THE CALL
 - First greet the student in one short sentence and ask: "How can I help you today? Which subject would you like to study?" Then wait for the answer.
-- As soon as the student names a subject (or asks something that clearly belongs to one), call the tool select_subject with that subject's exact name from the list above. If they ask for a subject that is not in the list, say which subjects you can teach and ask them to pick one.
-- Do not teach or answer subject questions until a subject is selected. If the student asks a question first, ask which subject it is for, then call select_subject and answer it.
-- After a subject is selected, ask what they would like to learn (a lesson or a question), unless they already told you.
+- When the student names a subject, call select_subject with that subject's exact name. If it is not in the list, say which subjects you can teach and ask them to pick one.
+- If the student asks for a specific lesson (by chapter and topic number, or by a name you can find in the syllabus) call start_lesson straight away with the subject name, chapter_number and topic_number. This also selects the subject. If the same chapter number exists in more than one subject and they did not say which, ask which subject.
+- If they name only a chapter, start with its first topic and mention how many topics the chapter has.
+- Do not teach other subject content until a subject is selected. If they ask a general question first, ask which subject it is for, then call select_subject and answer it.
+- After a subject is selected, ask what they would like to learn, unless they already told you.
 - If the student wants to change subject, ask which one and call select_subject again.
 
 HOW TO TEACH
 - Speak naturally in short turns (2 to 4 sentences), then pause so the student can respond. Never read out symbols, markdown, URLs or tool names.
 - Reply in the language the student speaks (English, Hindi or Kannada). Default to simple English.
-- Before explaining anything or answering a subject question, ALWAYS call the tool search_notes with the student's topic or question, and teach ONLY from the notes it returns. If the notes do not cover it, say so honestly and suggest a related topic.
+- start_lesson returns the notes for the whole topic: teach it section by section from those notes, one part at a time. For follow-up questions or other topics call search_notes. Teach ONLY from the notes you receive; if they do not cover something, say so honestly and suggest a related topic.
 - While explaining, call present_slide to put a short title and 3 to 5 bullet points on the student's board.
 - After you finish explaining an idea, check understanding by calling show_quiz with ONE multiple-choice question (4 options, exactly one correct) based on the notes, then wait. The system will tell you which option the student chose; react kindly, explain why, and move on.
 - Encourage the student. Correct mistakes gently. Keep the lesson interactive: ask what they want to learn next when a topic is done.
@@ -249,41 +257,114 @@ RULES
 }
 
 // ---------------------------------------------------------------- Gemini helpers
+/**
+ * Fast answers matter for a tutor: thinking is switched off (it adds 4-8 s), each attempt has a
+ * 20 s limit, and an overloaded/slow/retired model falls through to the next one.
+ */
 async function geminiGenerate(cfg: TeacherConfig, system: string, contents: any[]) {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.chat_model)}:generateContent`, {
-    method: "POST",
-    headers: { "x-goog-api-key": cfg.google_api_key, "Content-Type": "application/json" },
-    body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { temperature: 0.3, maxOutputTokens: 2048 } }),
-  });
-  const body = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    console.error("[ai-teacher] generateContent failed", r.status, JSON.stringify(body).slice(0, 400));
-    const e: any = new Error("AI request failed");
-    e.status = r.status;
-    throw e;
+  const chain = [...new Set([cfg.chat_model, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"])];
+  let lastStatus = 0;
+  for (const model of chain) {
+    for (const noThinking of [true, false]) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+          method: "POST",
+          signal: AbortSignal.timeout(20_000),
+          headers: { "x-goog-api-key": cfg.google_api_key, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents,
+            generationConfig: { temperature: 0.3, maxOutputTokens: 2048, ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}) },
+          }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (r.ok) {
+          const text = (body.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("").trim();
+          if (text) return text;
+          break; // empty reply: try the next model
+        }
+        lastStatus = r.status;
+        console.error(`[ai-teacher] generateContent ${model} failed`, r.status, JSON.stringify(body).slice(0, 300));
+        if (r.status === 400 && noThinking) continue; // this model may not accept thinkingConfig: retry it without
+        break; // 404 / 429 / 5xx: next model
+      } catch (e) {
+        console.error(`[ai-teacher] generateContent ${model} error`, String((e as any)?.message ?? e));
+        break; // timeout / network: next model
+      }
+    }
   }
-  const text = (body.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("").trim();
-  if (!text) throw new Error("Empty AI response");
-  return text;
+  const e: any = new Error("AI request failed");
+  e.status = lastStatus;
+  throw e;
 }
+
+/**
+ * The tools the voice teacher can use. They MUST be locked into the ephemeral token: a Live session
+ * made with a token ignores tools the browser adds itself (tested), so the browser reuses this list.
+ */
+const LIVE_TOOLS = [{
+  functionDeclarations: [
+    {
+      name: "select_subject",
+      description: "Select the subject the student wants to study. Call it as soon as the student names a subject.",
+      parameters: { type: "OBJECT", properties: { subject: { type: "STRING", description: "The exact subject name from the list of subjects you can teach." } }, required: ["subject"] },
+    },
+    {
+      name: "start_lesson",
+      description: "Open a lesson from the syllabus by chapter and topic number and get its full notes. Use it when the student asks for a chapter/topic by number or by a name found in the syllabus. This also selects the subject.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          subject: { type: "STRING", description: "Exact subject name from the syllabus." },
+          chapter_number: { type: "INTEGER", description: "The chapter number, e.g. 31." },
+          topic_number: { type: "INTEGER", description: "The topic number within the chapter, e.g. 1 for topic 31.1. Omit to start with the first topic." },
+        },
+        required: ["subject", "chapter_number"],
+      },
+    },
+    {
+      name: "search_notes",
+      description: "Search the study notes of the selected subject. Call this before answering any follow-up question or teaching a topic that was not opened with start_lesson.",
+      parameters: { type: "OBJECT", properties: { query: { type: "STRING", description: "The topic or question to look up, in English." } }, required: ["query"] },
+    },
+    {
+      name: "present_slide",
+      description: "Show a slide on the student's board while you explain.",
+      parameters: {
+        type: "OBJECT",
+        properties: { title: { type: "STRING" }, bullets: { type: "ARRAY", items: { type: "STRING" }, description: "3 to 5 short bullet points" } },
+        required: ["title", "bullets"],
+      },
+    },
+    {
+      name: "show_quiz",
+      description: "Show ONE multiple-choice question on the board to check the student's understanding.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          question: { type: "STRING" },
+          options: { type: "ARRAY", items: { type: "STRING" }, description: "Exactly 4 options" },
+          correct_index: { type: "INTEGER", description: "0-based index of the correct option" },
+          explanation: { type: "STRING", description: "One-sentence explanation of the answer" },
+        },
+        required: ["question", "options", "correct_index", "explanation"],
+      },
+    },
+  ],
+}];
 
 async function mintLiveToken(cfg: TeacherConfig, apiKey: string, systemInstruction: string) {
   const now = Date.now();
   const expireTime = new Date(now + 20 * 60_000).toISOString();
   const newSessionExpireTime = new Date(now + 90_000).toISOString();
+  const core = {
+    responseModalities: ["AUDIO"],
+    systemInstruction,
+    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: cfg.voice_name } } },
+  };
   const attempts: { level: string; versions: string[]; constraints: any }[] = [
-    {
-      level: "locked",
-      versions: ["v1alpha", "v1beta"],
-      constraints: {
-        model: cfg.live_model,
-        config: {
-          responseModalities: ["AUDIO"],
-          systemInstruction,
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: cfg.voice_name } } },
-        },
-      },
-    },
+    { level: "locked+tools", versions: ["v1alpha", "v1beta"], constraints: { model: cfg.live_model, config: { ...core, tools: LIVE_TOOLS } } },
+    { level: "locked", versions: ["v1alpha", "v1beta"], constraints: { model: cfg.live_model, config: core } },
     { level: "model-only", versions: ["v1alpha", "v1beta"], constraints: { model: cfg.live_model, config: { responseModalities: ["AUDIO"] } } },
   ];
   let lastErr: unknown = null;
@@ -327,22 +408,88 @@ async function handleSubjects() {
   return json({ subjects: await listSubjects() });
 }
 
-async function handleOutline(subjectId: string) {
-  const [{ data: cards }, { data: chapters }, { data: topics }] = await Promise.all([
-    sb.from("topic_routing_cards").select("topic_id").eq("subject_id", subjectId),
-    sb.from("subject_chapters").select("id, title, chapter_number").eq("subject_id", subjectId).order("chapter_number"),
-    sb.from("subject_topics").select("id, title, topic_number, chapter_id"),
+// ---------------------------------------------------------------- syllabus catalog
+interface CatTopic { id: string; label: string; title: string }
+interface CatChapter { id: string; number: number; title: string; topics: CatTopic[] }
+interface CatSubject { id: string; name: string; chapters: CatChapter[] }
+
+const cleanTitle = (s: string) => String(s ?? "").replace(/^[\s:–—-]+/, "").replace(/\s+/g, " ").trim();
+/** "31.2" < "31.10"; falls back to plain text compare. */
+const naturalCompare = (a: string, b: string) => {
+  const pa = String(a).split(".").map((x) => parseInt(x, 10));
+  const pb = String(b).split(".").map((x) => parseInt(x, 10));
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i], y = pb[i];
+    if (Number.isNaN(x) || Number.isNaN(y) || x === undefined || y === undefined) return String(a).localeCompare(String(b));
+    if (x !== y) return (x ?? -1) - (y ?? -1);
+  }
+  return 0;
+};
+
+let catalogCache: { at: number; data: CatSubject[] } | null = null;
+/** Every indexed subject with its numbered chapters and topics (cached for 10 minutes). */
+async function loadCatalog(): Promise<CatSubject[]> {
+  if (catalogCache && Date.now() - catalogCache.at < 600_000) return catalogCache.data;
+  const subjects = await listSubjects();
+  if (!subjects.length) return [];
+  const [{ data: cards }, { data: chapters }] = await Promise.all([
+    sb.from("topic_routing_cards").select("topic_id"),
+    sb.from("subject_chapters").select("id, title, chapter_number, subject_id").in("subject_id", subjects.map((s) => s.id)),
   ]);
   const have = new Set((cards ?? []).map((c) => c.topic_id));
-  const chIds = new Set((chapters ?? []).map((c) => c.id));
-  const byChapter = new Map<string, any[]>();
-  for (const t of (topics ?? []).filter((t) => have.has(t.id) && chIds.has(t.chapter_id)).sort((a, b) => a.topic_number - b.topic_number)) {
-    (byChapter.get(t.chapter_id) ?? byChapter.set(t.chapter_id, []).get(t.chapter_id)!).push({ id: t.id, title: t.title });
+  const { data: topics } = await sb.from("subject_topics").select("id, title, topic_number, chapter_id").in("chapter_id", (chapters ?? []).map((c) => c.id));
+  const byChapter = new Map<string, CatTopic[]>();
+  for (const t of (topics ?? []).filter((t) => have.has(t.id)).sort((a, b) => naturalCompare(a.topic_number, b.topic_number))) {
+    (byChapter.get(t.chapter_id) ?? byChapter.set(t.chapter_id, []).get(t.chapter_id)!).push({ id: t.id, label: String(t.topic_number), title: cleanTitle(t.title) });
   }
-  const outline = (chapters ?? [])
-    .map((c) => ({ id: c.id, title: c.title, topics: byChapter.get(c.id) ?? [] }))
-    .filter((c) => c.topics.length);
-  return json({ chapters: outline });
+  const data: CatSubject[] = subjects.map((s) => ({
+    id: s.id,
+    name: s.name,
+    chapters: (chapters ?? [])
+      .filter((c) => c.subject_id === s.id)
+      .sort((a, b) => a.chapter_number - b.chapter_number)
+      .map((c) => ({ id: c.id, number: c.chapter_number, title: cleanTitle(c.title), topics: byChapter.get(c.id) ?? [] }))
+      .filter((c) => c.topics.length),
+  }));
+  catalogCache = { at: Date.now(), data };
+  return data;
+}
+
+/** Plain-text syllabus for the teacher's instructions. */
+function catalogText(catalog: CatSubject[]): string {
+  return catalog
+    .map((s) =>
+      `== Subject: ${s.name} ==\n` +
+      s.chapters.map((c) => `Chapter ${c.number}: ${c.title}\n` + c.topics.map((t) => `  ${t.label} ${t.title}`).join("\n")).join("\n"),
+    )
+    .join("\n\n");
+}
+
+/** "chapter 31 topic 1" / "31 chapter and 1 topic" -> that lesson (chapter only -> its first topic). */
+function parseLessonRef(text: string): { chapter: number; topic?: number } | null {
+  const ch = text.match(/\bchapter\s*(?:no\.?|number|#)?\s*(\d{1,3})\b/i) || text.match(/\b(\d{1,3})(?:st|nd|rd|th)?\s*chapter\b/i);
+  if (!ch) return null;
+  const tp = text.match(/\b(?:topic|lesson|section)\s*(?:no\.?|number|#)?\s*(\d{1,3})\b/i) || text.match(/\b(\d{1,3})(?:st|nd|rd|th)?\s*(?:topic|lesson|section)\b/i);
+  return { chapter: parseInt(ch[1], 10), topic: tp ? parseInt(tp[1], 10) : undefined };
+}
+
+function findLesson(subject: CatSubject, chapterNo: number, topicNo?: number) {
+  const chapter = subject.chapters.find((c) => c.number === chapterNo);
+  if (!chapter) return null;
+  const topic = topicNo === undefined
+    ? chapter.topics[0]
+    : chapter.topics.find((t) => t.label === `${chapterNo}.${topicNo}`) ?? chapter.topics.find((t) => parseInt(t.label.split(".").pop() ?? "", 10) === topicNo);
+  return topic ? { chapter, topic } : null;
+}
+
+async function handleOutline(subjectId: string) {
+  const subject = (await loadCatalog()).find((s) => s.id === subjectId);
+  return json({
+    chapters: (subject?.chapters ?? []).map((c) => ({
+      id: c.id, number: c.number, title: c.title,
+      topics: c.topics.map((t) => ({ id: t.id, label: t.label, title: t.title })),
+    })),
+  });
 }
 
 async function handleSession(ip: string) {
@@ -350,14 +497,15 @@ async function handleSession(ip: string) {
   if (!cfg.enabled) return json({ error: "AI Teacher is switched off. An admin can turn it on in Admin > Settings > AI Teacher 1-to-1." }, 503);
   if (!cfg.google_api_key) return json({ error: "AI Teacher has no API key yet. An admin can add one in Admin > Settings > AI Teacher 1-to-1." }, 503);
   if (!(await allow("session", ip))) return json({ error: "Too many voice sessions. Please try again later." }, 429);
-  const subjects = await listSubjects();
-  const systemInstruction = voicePrompt(cfg, subjects.map((s) => s.name));
+  const catalog = await loadCatalog();
+  const subjects = catalog.map((s) => ({ id: s.id, name: s.name, topics: s.chapters.reduce((n, c) => n + c.topics.length, 0) }));
+  const systemInstruction = voicePrompt(cfg, catalog);
   try {
     const t = await mintLiveToken(cfg, cfg.google_api_key, systemInstruction);
     return json({
       token: t.token, apiVersion: t.apiVersion, lockLevel: t.lockLevel, expireTime: t.expireTime,
       model: cfg.live_model, voiceName: cfg.voice_name, teacherName: cfg.teacher_name,
-      systemInstruction, subjects,
+      systemInstruction, subjects, catalog, tools: LIVE_TOOLS,
     });
   } catch (e) {
     return json({ error: "Voice teacher is temporarily unavailable. Please use chat mode or try again soon." }, 503);
@@ -374,7 +522,34 @@ async function handleChat(body: any, ip: string) {
   if (!subject) return json({ error: "Unknown subject" }, 400);
   if (!(await allow("chat", ip, subjectId))) return json({ error: "Too many questions. Please try again in a while." }, 429);
 
-  const r = await retrieve(subjectId, question, topicId);
+  // "chapter 31 topic 1" (or a lesson tapped in the list) -> teach that exact topic from its full notes.
+  const subjCatalog = (await loadCatalog()).find((x) => x.id === subjectId);
+  let lessonTopicId: string | undefined = topicId;
+  let lessonNote = "";
+  const ref = lessonTopicId ? null : parseLessonRef(question);
+  if (ref && subjCatalog) {
+    const hit = findLesson(subjCatalog, ref.chapter, ref.topic);
+    if (hit) lessonTopicId = hit.topic.id;
+    else {
+      const first = subjCatalog.chapters[0]?.number;
+      const last = subjCatalog.chapters[subjCatalog.chapters.length - 1]?.number;
+      lessonNote = `(Chapter ${ref.chapter}${ref.topic ? ` topic ${ref.topic}` : ""} does not exist in ${subject.name}. It has chapters ${first}-${last}.)\n\n`;
+    }
+  }
+  if (lessonTopicId && subjCatalog) {
+    for (const c of subjCatalog.chapters) {
+      const t = c.topics.find((x) => x.id === lessonTopicId);
+      if (t) {
+        lessonNote =
+          `LESSON REQUESTED: Chapter ${c.number}: ${c.title}, topic ${t.label} ${t.title}.\n` +
+          `All topics in this chapter: ${c.topics.map((x) => `${x.label} ${x.title}`).join("; ")}.\n` +
+          `The NOTES below are this topic's full notes; teach it clearly, part by part.\n\n`;
+        break;
+      }
+    }
+  }
+
+  const r = await retrieve(subjectId, question, lessonTopicId);
   const notes = r.references
     .map((x, i) => `[${i + 1}] ${x.chapter_title ?? ""} > ${x.topic_title ?? ""} > ${x.heading_path}\n${x.content}`)
     .join("\n\n---\n\n");
@@ -382,8 +557,8 @@ async function handleChat(body: any, ip: string) {
     .filter((m: any) => m && typeof m.content === "string")
     .map((m: any) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: String(m.content).slice(0, 2000) }] }));
   const userTurn = r.found
-    ? `NOTES:\n${notes}\n\nSTUDENT: ${question}`
-    : `NOTES: (nothing relevant was found in the study material)\n\nSTUDENT: ${question}`;
+    ? `${lessonNote}NOTES:\n${notes}\n\nSTUDENT: ${question}`
+    : `${lessonNote}NOTES: (nothing relevant was found in the study material)\n\nSTUDENT: ${question}`;
   try {
     const answer = await geminiGenerate(cfg, chatPrompt(cfg, subject.name), [...history, { role: "user", parts: [{ text: userTurn }] }]);
     return json({ answer, found: r.found, references: r.references, topics: r.topics, documents: r.documents, questions: r.questions });
@@ -419,7 +594,7 @@ async function handleTest(req: Request, body: any) {
   let token_check: any = { ok: false, skipped: true };
   if (liveModel.ok || liveModel.status === 404) {
     try {
-      const t = await mintLiveToken(cfg, cfg.google_api_key, voicePrompt(cfg, ["Test"]));
+      const t = await mintLiveToken(cfg, cfg.google_api_key, voicePrompt(cfg, []));
       token_check = { ok: true, lockLevel: t.lockLevel, apiVersion: t.apiVersion };
     } catch (e) {
       token_check = { ok: false, message: String((e as any)?.cause?.message ?? (e as any)?.message ?? e).slice(0, 200) };

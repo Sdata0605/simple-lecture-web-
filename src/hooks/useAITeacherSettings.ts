@@ -17,7 +17,7 @@ export const DEFAULT_AI_TEACHER_SETTINGS: AITeacherSettings = {
   enabled: false,
   google_api_key: "",
   live_model: "gemini-3.8-live",
-  chat_model: "gemini-flash-latest",
+  chat_model: "gemini-3.1-flash-lite",
   voice_name: "Kore",
   teacher_name: "AI Teacher",
 };
