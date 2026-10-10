@@ -2,7 +2,6 @@ import { useState } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { Markdown } from "./Markdown";
 import { cn } from "@/lib/utils";
-import type { BankQuestion } from "@/lib/aiTeacherApi";
 
 export interface QuizItem {
   id: string;
@@ -10,12 +9,6 @@ export interface QuizItem {
   options: string[];
   correctIndex: number;
   explanation?: string | null;
-}
-
-export function bankToQuiz(q: BankQuestion): QuizItem | null {
-  const idx = q.options.findIndex((o) => o.key.toUpperCase() === q.correct.toUpperCase());
-  if (idx < 0 || q.options.length < 2) return null;
-  return { id: q.id, question: q.text, options: q.options.map((o) => o.text), correctIndex: idx, explanation: q.explanation };
 }
 
 const LETTERS = "ABCDEFGH";

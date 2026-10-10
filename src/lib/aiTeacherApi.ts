@@ -52,17 +52,26 @@ export class TeacherApiError extends Error {
 
 /** Calls the public `ai-teacher` edge function. No login needed. */
 export async function teacherApi<T>(action: string, body: Record<string, unknown> = {}): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("ai-teacher", { body: { action, ...body } });
-  if (error) {
-    let message = "Something went wrong. Please try again.";
+  // One quiet retry for connection problems (the request never reached the function, or a gateway
+  // hiccuped without a JSON answer). Real answers from the function are never retried.
+  for (let attempt = 1; ; attempt++) {
+    const { data, error } = await supabase.functions.invoke("ai-teacher", { body: { action, ...body } });
+    if (!error) {
+      if (data?.error) throw new TeacherApiError(String(data.error));
+      return data as T;
+    }
+    let message = "";
     let status: number | undefined;
     const res = (error as any).context as Response | undefined;
-    if (res) {
+    if (res && typeof res.json === "function") {
       status = res.status;
-      try { const j = await res.json(); if (j?.error) message = j.error; } catch { /* keep default */ }
+      try { const j = await res.json(); if (j?.error) message = String(j.error); } catch { /* not JSON */ }
     }
-    throw new TeacherApiError(message, status);
+    if (message) throw new TeacherApiError(message, status);   // an answer from the function itself
+    if (attempt < 2) { await new Promise((r) => setTimeout(r, 800)); continue; }
+    throw new TeacherApiError(
+      status ? "The teacher is not responding right now. Please try again." : "Connection problem. Please check your internet and try again.",
+      status,
+    );
   }
-  if (data?.error) throw new TeacherApiError(String(data.error));
-  return data as T;
 }

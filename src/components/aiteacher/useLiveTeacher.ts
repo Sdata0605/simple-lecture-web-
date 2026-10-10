@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   teacherApi,
-  type BankQuestion,
   type CatalogSubject,
   type LiveSession,
   type RetrievalResult,
-  type TeacherDocument,
-  type TeacherReference,
   type TeacherSubject,
 } from "@/lib/aiTeacherApi";
 import { matchSubjectByName } from "@/lib/aiTeacherSubjects";
@@ -14,10 +11,11 @@ import type { QuizItem } from "./QuizCard";
 
 export type LiveStatus = "idle" | "connecting" | "live" | "ended" | "error";
 
-export interface TranscriptMessage { id: number; role: "user" | "teacher"; text: string; done: boolean }
-export type BoardItem =
-  | { kind: "slide"; id: string; title: string; bullets: string[] }
-  | { kind: "quiz"; id: string; quiz: QuizItem };
+/** Everything the student sees is one conversation: spoken text, plus slide and quiz cards inline. */
+export type TranscriptItem =
+  | { kind: "text"; id: number; role: "user" | "teacher"; text: string; done: boolean }
+  | { kind: "slide"; id: number; title: string; bullets: string[] }
+  | { kind: "quiz"; id: number; quiz: QuizItem };
 
 /** 16 kHz mono PCM16 capture worklet (inlined so no extra build config is needed). */
 const WORKLET_SRC = `
@@ -91,11 +89,7 @@ export function useLiveTeacher({
   const [muted, setMuted] = useState(false);
   const [micAvailable, setMicAvailable] = useState(true);
   const [teacherName, setTeacherName] = useState("AI Teacher");
-  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
-  const [board, setBoard] = useState<BoardItem[]>([]);
-  const [references, setReferences] = useState<TeacherReference[]>([]);
-  const [documents, setDocuments] = useState<TeacherDocument[]>([]);
-  const [practice, setPractice] = useState<BankQuestion[]>([]);
+  const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
 
   const sessionRef = useRef<any>(null);
   const mutedRef = useRef(false);
@@ -119,21 +113,28 @@ export function useLiveTeacher({
   const setStatusBoth = (s: LiveStatus) => { statusRef.current = s; setStatus(s); };
 
   // ---------------------------------------------------------------- transcript
+  const closeAll = (items: TranscriptItem[]): TranscriptItem[] =>
+    items.map((m) => (m.kind === "text" && !m.done ? { ...m, done: true } : m));
+
   const appendTranscript = useCallback((role: "user" | "teacher", text: string) => {
     if (!text) return;
     setTranscript((prev) => {
       const last = prev[prev.length - 1];
-      if (last && last.role === role && !last.done) {
+      if (last && last.kind === "text" && last.role === role && !last.done) {
         return [...prev.slice(0, -1), { ...last, text: last.text + text }];
       }
-      // a new speaker closes any open bubble of the other speaker
-      const closed = prev.map((m) => (m.done ? m : { ...m, done: true }));
-      return [...closed, { id: msgIdRef.current++, role, text: text.trimStart(), done: false }];
+      // a new speaker (or a card) closes any open bubble
+      return [...closeAll(prev), { kind: "text", id: msgIdRef.current++, role, text: text.trimStart(), done: false }];
     });
   }, []);
 
   const closeOpenBubbles = useCallback(() => {
-    setTranscript((prev) => (prev.some((m) => !m.done) ? prev.map((m) => (m.done ? m : { ...m, done: true })) : prev));
+    setTranscript((prev) => (prev.some((m) => m.kind === "text" && !m.done) ? closeAll(prev) : prev));
+  }, []);
+
+  /** Slides and quiz questions appear inside the conversation itself. */
+  const pushCard = useCallback((card: { kind: "slide"; title: string; bullets: string[] } | { kind: "quiz"; quiz: QuizItem }) => {
+    setTranscript((prev) => [...closeAll(prev), { ...card, id: msgIdRef.current++ } as TranscriptItem]);
   }, []);
 
   // ---------------------------------------------------------------- playback
@@ -171,12 +172,6 @@ export function useLiveTeacher({
   }, []);
 
   // ---------------------------------------------------------------- tools
-  const applyRetrieval = useCallback((r: RetrievalResult) => {
-    setReferences(r.references);
-    setDocuments(r.documents);
-    setPractice(r.questions);
-  }, []);
-
   const handleToolCalls = useCallback(async (calls: any[]) => {
     const responses: any[] = [];
     for (const fc of calls) {
@@ -189,7 +184,6 @@ export function useLiveTeacher({
             continue;
           }
           const r = await teacherApi<RetrievalResult>("search", { subjectId: sub.id, query: String(args.query ?? "") });
-          applyRetrieval(r);
           responses.push({
             id: fc.id, name: fc.name,
             response: {
@@ -205,7 +199,6 @@ export function useLiveTeacher({
           const list = subjectsRef.current;
           const m = matchSubjectByName(String(args.subject ?? ""), list);
           if (m) {
-            if (subjectRef.current?.id !== m.id) { setReferences([]); setDocuments([]); setPractice([]); }
             subjectRef.current = m;
             onSubjectRef.current(m);
             responses.push({ id: fc.id, name: fc.name, response: { status: "selected", subject: m.name, instruction: "Subject selected. Now ask what they would like to learn, or answer their question using search_notes." } });
@@ -238,11 +231,9 @@ export function useLiveTeacher({
             responses.push({ id: fc.id, name: fc.name, response: { status: "topic_not_found", topics_in_chapter: chapter.topics.map((t) => `${t.label} ${t.title}`), instruction: "Tell the student which topics this chapter has and ask which one." } });
           } else {
             const ts: TeacherSubject = { id: subj.id, name: subj.name, topics: subj.chapters.reduce((n, c) => n + c.topics.length, 0) };
-            if (subjectRef.current?.id !== ts.id) { setReferences([]); setDocuments([]); setPractice([]); }
             subjectRef.current = ts;
             onSubjectRef.current(ts);
             const r = await teacherApi<RetrievalResult>("search", { subjectId: subj.id, topicId: topic.id });
-            applyRetrieval(r);
             responses.push({
               id: fc.id, name: fc.name,
               response: {
@@ -259,7 +250,7 @@ export function useLiveTeacher({
           }
         } else if (fc.name === "present_slide") {
           const bullets = (Array.isArray(args.bullets) ? args.bullets : []).map(String).slice(0, 7);
-          setBoard((b) => [...b, { kind: "slide", id: `s${Date.now()}`, title: String(args.title ?? ""), bullets }]);
+          pushCard({ kind: "slide", title: String(args.title ?? ""), bullets });
           responses.push({ id: fc.id, name: fc.name, response: { status: "shown" } });
         } else if (fc.name === "show_quiz") {
           const options = (Array.isArray(args.options) ? args.options : []).map(String).slice(0, 6);
@@ -268,7 +259,7 @@ export function useLiveTeacher({
             responses.push({ id: fc.id, name: fc.name, response: { status: "error", message: "Provide 2-6 options and a valid correct_index." } });
           } else {
             const quiz: QuizItem = { id: `q${Date.now()}`, question: String(args.question ?? ""), options, correctIndex, explanation: args.explanation ? String(args.explanation) : null };
-            setBoard((b) => [...b, { kind: "quiz", id: quiz.id, quiz }]);
+            pushCard({ kind: "quiz", quiz });
             responses.push({ id: fc.id, name: fc.name, response: { status: "shown", note: "Wait for the student's answer; the system will tell you their choice." } });
           }
         } else {
@@ -279,7 +270,7 @@ export function useLiveTeacher({
       }
     }
     try { sessionRef.current?.sendToolResponse({ functionResponses: responses }); } catch { /* session closed */ }
-  }, [applyRetrieval]);
+  }, [pushCard]);
 
   // ---------------------------------------------------------------- teardown
   const cleanup = useCallback(() => {
@@ -311,7 +302,7 @@ export function useLiveTeacher({
     if (!sessionRef.current || statusRef.current !== "live") { pendingTextRef.current = t; return; }
     if (!opts?.silent) {
       closeOpenBubbles();
-      setTranscript((prev) => [...prev, { id: msgIdRef.current++, role: "user", text: t, done: true }]);
+      setTranscript((prev) => [...closeAll(prev), { kind: "text", id: msgIdRef.current++, role: "user", text: t, done: true }]);
     }
     stopPlayback(); // typing barges in on the teacher
     sessionRef.current.sendRealtimeInput({ text: t });
@@ -422,7 +413,7 @@ export function useLiveTeacher({
     if (mutedRef.current) { try { sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true }); } catch { /* ignore */ } }
   }, []);
 
-  /** The student picked an option on a board quiz or a practice question. */
+  /** The student picked an option on a quiz card in the conversation. */
   const reportQuizAnswer = useCallback((quiz: QuizItem, optionIndex: number) => {
     const correct = optionIndex === quiz.correctIndex;
     sendText(
@@ -431,21 +422,14 @@ export function useLiveTeacher({
     );
   }, [sendText]);
 
-  /** Preload the lesson's notes into the side panel; the teacher fetches them itself via search_notes. */
-  const preloadTopic = useCallback(async (topicId: string) => {
-    const sub = subjectRef.current;
-    if (!sub) return;
-    try { applyRetrieval(await teacherApi<RetrievalResult>("search", { subjectId: sub.id, topicId })); } catch { /* panel stays as is */ }
-  }, [applyRetrieval]);
-
   const reset = useCallback(() => {
-    setTranscript([]); setBoard([]); setReferences([]); setDocuments([]); setPractice([]);
+    setTranscript([]);
     setError(null); setNotice(null); setStatusBoth("idle");
   }, []);
 
   return {
     status, error, notice, speaking, micLevel, muted, micAvailable, teacherName,
-    transcript, board, references, documents, practice,
-    connect, disconnect, toggleMute, sendText, reportQuizAnswer, preloadTopic, reset,
+    transcript,
+    connect, disconnect, toggleMute, sendText, reportQuizAnswer, reset,
   };
 }
