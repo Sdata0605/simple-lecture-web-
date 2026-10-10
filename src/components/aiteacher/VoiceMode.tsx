@@ -8,7 +8,7 @@ import type { useLiveTeacher } from "./useLiveTeacher";
 
 type Live = ReturnType<typeof useLiveTeacher>;
 
-export function VoiceMode({ live, subjectName }: { live: Live; subjectName: string }) {
+export function VoiceMode({ live, subjectName }: { live: Live; subjectName: string | null }) {
   const [text, setText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const { status } = live;
@@ -33,7 +33,7 @@ export function VoiceMode({ live, subjectName }: { live: Live; subjectName: stri
     : status === "live" ? (live.speaking ? `${live.teacherName} is speaking…` : live.muted ? "Your microphone is muted" : live.micAvailable ? "Listening… go ahead and speak" : "Type your question below")
     : status === "ended" ? "Class ended"
     : status === "error" ? "Could not connect"
-    : "Press Start class and just talk, or type a question";
+    : "Press Start class. Your teacher will greet you and ask which subject you want to study";
 
   const ring = live.speaking ? 12 : Math.round(live.micLevel * 22);
 
@@ -53,7 +53,7 @@ export function VoiceMode({ live, subjectName }: { live: Live; subjectName: stri
           </div>
           <div className="text-center">
             <p className="font-semibold">{live.teacherName}</p>
-            <p className="text-xs text-muted-foreground">{subjectName} · 1-to-1 voice class</p>
+            <p className="text-xs text-muted-foreground">{subjectName ? `${subjectName} · 1-to-1 voice class` : "1-to-1 voice class · your teacher will ask what you want to study"}</p>
             <p className="mt-1 flex items-center justify-center gap-1.5 text-sm" aria-live="polite">
               {status === "connecting" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {statusText}
@@ -101,7 +101,7 @@ export function VoiceMode({ live, subjectName }: { live: Live; subjectName: stri
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={inCall ? "Type a question to your teacher…" : "Type a question to start class…"}
+            placeholder={inCall ? "Type to your teacher…" : "Type a question to start class…"}
             aria-label="Type a question"
             maxLength={500}
           />

@@ -214,8 +214,18 @@ async function retrieve(subjectId: string, query: string, topicId?: string) {
 }
 
 // ---------------------------------------------------------------- prompts
-function voicePrompt(cfg: TeacherConfig, subject: string) {
-  return `You are ${cfg.teacher_name}, a warm, patient one-to-one school teacher teaching the subject "${subject}" to a student over a live voice call.
+function voicePrompt(cfg: TeacherConfig, subjects: string[]) {
+  const list = subjects.length ? subjects.join(", ") : "none yet";
+  return `You are ${cfg.teacher_name}, a warm, patient one-to-one school teacher on a live voice call with a student.
+
+SUBJECTS YOU CAN TEACH: ${list}.
+
+START OF THE CALL
+- First greet the student in one short sentence and ask: "How can I help you today? Which subject would you like to study?" Then wait for the answer.
+- As soon as the student names a subject (or asks something that clearly belongs to one), call the tool select_subject with that subject's exact name from the list above. If they ask for a subject that is not in the list, say which subjects you can teach and ask them to pick one.
+- Do not teach or answer subject questions until a subject is selected. If the student asks a question first, ask which subject it is for, then call select_subject and answer it.
+- After a subject is selected, ask what they would like to learn (a lesson or a question), unless they already told you.
+- If the student wants to change subject, ask which one and call select_subject again.
 
 HOW TO TEACH
 - Speak naturally in short turns (2 to 4 sentences), then pause so the student can respond. Never read out symbols, markdown, URLs or tool names.
@@ -224,7 +234,7 @@ HOW TO TEACH
 - While explaining, call present_slide to put a short title and 3 to 5 bullet points on the student's board.
 - After you finish explaining an idea, check understanding by calling show_quiz with ONE multiple-choice question (4 options, exactly one correct) based on the notes, then wait. The system will tell you which option the student chose; react kindly, explain why, and move on.
 - Encourage the student. Correct mistakes gently. Keep the lesson interactive: ask what they want to learn next when a topic is done.
-- If the student says hello, greet them briefly in one sentence and ask what they want to learn today.`;
+- Keep every spoken turn short; the student can interrupt you at any time.`;
 }
 
 function chatPrompt(cfg: TeacherConfig, subject: string) {
@@ -302,14 +312,19 @@ async function getSubject(subjectId: string) {
   return data as { id: string; name: string } | null;
 }
 
-async function handleSubjects() {
+/** Subjects that have an index, with how many topics each has. */
+async function listSubjects() {
   const { data } = await sb.from("topic_routing_cards").select("subject_id");
   const counts = new Map<string, number>();
   for (const r of data ?? []) counts.set(r.subject_id, (counts.get(r.subject_id) ?? 0) + 1);
   const ids = [...counts.keys()];
-  if (!ids.length) return json({ subjects: [] });
+  if (!ids.length) return [] as { id: string; name: string; topics: number }[];
   const { data: subs } = await sb.from("popular_subjects").select("id, name").in("id", ids).order("name");
-  return json({ subjects: (subs ?? []).map((s) => ({ id: s.id, name: s.name, topics: counts.get(s.id) ?? 0 })) });
+  return (subs ?? []).map((s) => ({ id: s.id, name: String(s.name).trim(), topics: counts.get(s.id) ?? 0 }));
+}
+
+async function handleSubjects() {
+  return json({ subjects: await listSubjects() });
 }
 
 async function handleOutline(subjectId: string) {
@@ -330,19 +345,19 @@ async function handleOutline(subjectId: string) {
   return json({ chapters: outline });
 }
 
-async function handleSession(subjectId: string, ip: string) {
+async function handleSession(ip: string) {
   const cfg = await loadConfig();
-  if (!cfg.enabled || !cfg.google_api_key) return json({ error: "AI Teacher voice is not available right now." }, 503);
-  const subject = await getSubject(subjectId);
-  if (!subject) return json({ error: "Unknown subject" }, 400);
-  if (!(await allow("session", ip, subjectId))) return json({ error: "Too many voice sessions. Please try again later." }, 429);
-  const systemInstruction = voicePrompt(cfg, subject.name);
+  if (!cfg.enabled) return json({ error: "AI Teacher is switched off. An admin can turn it on in Admin > Settings > AI Teacher 1-to-1." }, 503);
+  if (!cfg.google_api_key) return json({ error: "AI Teacher has no API key yet. An admin can add one in Admin > Settings > AI Teacher 1-to-1." }, 503);
+  if (!(await allow("session", ip))) return json({ error: "Too many voice sessions. Please try again later." }, 429);
+  const subjects = await listSubjects();
+  const systemInstruction = voicePrompt(cfg, subjects.map((s) => s.name));
   try {
     const t = await mintLiveToken(cfg, cfg.google_api_key, systemInstruction);
     return json({
       token: t.token, apiVersion: t.apiVersion, lockLevel: t.lockLevel, expireTime: t.expireTime,
       model: cfg.live_model, voiceName: cfg.voice_name, teacherName: cfg.teacher_name,
-      systemInstruction, subject,
+      systemInstruction, subjects,
     });
   } catch (e) {
     return json({ error: "Voice teacher is temporarily unavailable. Please use chat mode or try again soon." }, 503);
@@ -354,7 +369,7 @@ async function handleChat(body: any, ip: string) {
   if (!subjectId || !question || typeof question !== "string") return json({ error: "subjectId and question are required" }, 400);
   if (question.length > 1500) return json({ error: "Question is too long" }, 400);
   const cfg = await loadConfig();
-  if (!cfg.enabled || !cfg.google_api_key) return json({ error: "AI Teacher is not available right now." }, 503);
+  if (!cfg.enabled || !cfg.google_api_key) return json({ error: "AI Teacher is switched off or has no API key. An admin can fix this in Admin > Settings > AI Teacher 1-to-1." }, 503);
   const subject = await getSubject(subjectId);
   if (!subject) return json({ error: "Unknown subject" }, 400);
   if (!(await allow("chat", ip, subjectId))) return json({ error: "Too many questions. Please try again in a while." }, 429);
@@ -404,7 +419,7 @@ async function handleTest(req: Request, body: any) {
   let token_check: any = { ok: false, skipped: true };
   if (liveModel.ok || liveModel.status === 404) {
     try {
-      const t = await mintLiveToken(cfg, cfg.google_api_key, voicePrompt(cfg, "Test"));
+      const t = await mintLiveToken(cfg, cfg.google_api_key, voicePrompt(cfg, ["Test"]));
       token_check = { ok: true, lockLevel: t.lockLevel, apiVersion: t.apiVersion };
     } catch (e) {
       token_check = { ok: false, message: String((e as any)?.cause?.message ?? (e as any)?.message ?? e).slice(0, 200) };
@@ -421,14 +436,14 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "");
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const needSubject = ["outline", "session", "search", "chat"].includes(action);
+    const needSubject = ["outline", "search", "chat"].includes(action);
     if (needSubject && !uuid.test(String(body.subjectId || ""))) return json({ error: "Valid subjectId required" }, 400);
     if (body.topicId && !uuid.test(String(body.topicId))) return json({ error: "Invalid topicId" }, 400);
 
     switch (action) {
       case "subjects": return await handleSubjects();
       case "outline": return await handleOutline(body.subjectId);
-      case "session": return await handleSession(body.subjectId, await ipHash(req));
+      case "session": return await handleSession(await ipHash(req));
       case "chat": return await handleChat(body, await ipHash(req));
       case "search": {
         const query = String(body.query || "").slice(0, 500).trim();

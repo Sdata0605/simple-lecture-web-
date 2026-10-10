@@ -37,7 +37,7 @@ export interface LiveSession {
   voiceName: string;
   teacherName: string;
   systemInstruction: string;
-  subject: { id: string; name: string };
+  subjects: TeacherSubject[];
 }
 
 export class TeacherApiError extends Error {

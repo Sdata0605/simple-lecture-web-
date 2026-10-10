@@ -70,6 +70,13 @@ export function AITeacherSettingsCard() {
               <Switch checked={local.enabled} onCheckedChange={(enabled) => set({ enabled })} />
             </div>
 
+            {!local.enabled && local.google_api_key.trim() && (
+              <p role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                The key is entered but AI Teacher 1-to-1 is switched <strong>off</strong>, so the public page will say it is not available.
+                Turn on "Enable AI Teacher 1-to-1" and click Save.
+              </p>
+            )}
+
             <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm">
               <span className="font-mono break-all">{pageUrl}</span>
               <Button type="button" variant="outline" size="sm" onClick={copyUrl}><Copy className="h-3.5 w-3.5 mr-1" />Copy</Button>

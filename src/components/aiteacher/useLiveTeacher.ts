@@ -6,7 +6,9 @@ import {
   type RetrievalResult,
   type TeacherDocument,
   type TeacherReference,
+  type TeacherSubject,
 } from "@/lib/aiTeacherApi";
+import { matchSubjectByName } from "@/lib/aiTeacherSubjects";
 import type { QuizItem } from "./QuizCard";
 
 export type LiveStatus = "idle" | "connecting" | "live" | "ended" | "error";
@@ -67,11 +69,19 @@ const pcm16Base64ToFloat32 = (b64: string) => {
   return out;
 };
 
-const GREETING = "Hello! I have just joined the class. Greet me briefly and ask what I want to learn today.";
+const GREETING = "Hello! I have just joined the class. Greet me and ask which subject I want to study.";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-export function useLiveTeacher(subject: { id: string; name: string } | null) {
+export function useLiveTeacher({
+  subject,
+  subjects,
+  onSubject,
+}: {
+  subject: TeacherSubject | null;
+  subjects: TeacherSubject[];
+  onSubject: (s: TeacherSubject) => void;
+}) {
   const [status, setStatus] = useState<LiveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -98,6 +108,10 @@ export function useLiveTeacher(subject: { id: string; name: string } | null) {
   const msgIdRef = useRef(1);
   const subjectRef = useRef(subject);
   subjectRef.current = subject;
+  const subjectsRef = useRef(subjects);
+  subjectsRef.current = subjects;
+  const onSubjectRef = useRef(onSubject);
+  onSubjectRef.current = onSubject;
   const pendingTextRef = useRef<string | null>(null);
 
   const setStatusBoth = (s: LiveStatus) => { statusRef.current = s; setStatus(s); };
@@ -168,7 +182,10 @@ export function useLiveTeacher(subject: { id: string; name: string } | null) {
       try {
         if (fc.name === "search_notes") {
           const sub = subjectRef.current;
-          if (!sub) throw new Error("no subject");
+          if (!sub) {
+            responses.push({ id: fc.id, name: fc.name, response: { found: false, instruction: "No subject is selected yet. Ask the student which subject they want to study, then call select_subject." } });
+            continue;
+          }
           const r = await teacherApi<RetrievalResult>("search", { subjectId: sub.id, query: String(args.query ?? "") });
           applyRetrieval(r);
           responses.push({
@@ -182,6 +199,17 @@ export function useLiveTeacher(subject: { id: string; name: string } | null) {
               instruction: r.found ? "Teach only from these notes." : "Nothing relevant found. Tell the student it is not in their notes.",
             },
           });
+        } else if (fc.name === "select_subject") {
+          const list = subjectsRef.current;
+          const m = matchSubjectByName(String(args.subject ?? ""), list);
+          if (m) {
+            if (subjectRef.current?.id !== m.id) { setReferences([]); setDocuments([]); setPractice([]); }
+            subjectRef.current = m;
+            onSubjectRef.current(m);
+            responses.push({ id: fc.id, name: fc.name, response: { status: "selected", subject: m.name, instruction: "Subject selected. Now ask what they would like to learn, or answer their question using search_notes." } });
+          } else {
+            responses.push({ id: fc.id, name: fc.name, response: { status: "unknown_subject", available: list.map((x) => x.name), instruction: "Tell the student which subjects are available and ask them to choose one." } });
+          }
         } else if (fc.name === "present_slide") {
           const bullets = (Array.isArray(args.bullets) ? args.bullets : []).map(String).slice(0, 7);
           setBoard((b) => [...b, { kind: "slide", id: `s${Date.now()}`, title: String(args.title ?? ""), bullets }]);
@@ -243,13 +271,13 @@ export function useLiveTeacher(subject: { id: string; name: string } | null) {
   }, [closeOpenBubbles, stopPlayback]);
 
   const connect = useCallback(async (firstMessage?: string) => {
-    const sub = subjectRef.current;
-    if (!sub || statusRef.current === "connecting" || statusRef.current === "live") return;
+    if (statusRef.current === "connecting" || statusRef.current === "live") return;
     setError(null); setNotice(null); setStatusBoth("connecting");
     if (firstMessage) pendingTextRef.current = firstMessage;
     try {
-      const s = await teacherApi<LiveSession>("session", { subjectId: sub.id });
+      const s = await teacherApi<LiveSession>("session");
       setTeacherName(s.teacherName);
+      if (s.subjects?.length) subjectsRef.current = s.subjects;
 
       // Play-context must be created from a user gesture (this call is).
       ensurePlayCtx();
@@ -271,6 +299,11 @@ export function useLiveTeacher(subject: { id: string; name: string } | null) {
 
       const tools = [{
         functionDeclarations: [
+          {
+            name: "select_subject",
+            description: "Select the subject the student wants to study. Call it as soon as the student names a subject.",
+            parameters: { type: Type.OBJECT, properties: { subject: { type: Type.STRING, description: "The exact subject name from the list of subjects you can teach." } }, required: ["subject"] },
+          },
           {
             name: "search_notes",
             description: "Search the study notes of this subject. Call this before teaching or answering any subject question.",

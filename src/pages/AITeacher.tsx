@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { GraduationCap, ListTree, MessageSquareText, Mic } from "lucide-react";
+import { GraduationCap, ListTree, MessageSquareText, Mic, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { teacherApi, type OutlineChapter, type TeacherSubject } from "@/lib/aiTeacherApi";
 import { Syllabus, type PickedTopic } from "@/components/aiteacher/Syllabus";
@@ -14,7 +13,8 @@ import { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
 type Mode = "voice" | "chat";
 
 export default function AITeacher() {
-  const [subjectId, setSubjectId] = useState<string | null>(null);
+  // No subject is picked up front: the teacher asks, and the student answers by voice or text.
+  const [subject, setSubject] = useState<TeacherSubject | null>(null);
   const [mode, setMode] = useState<Mode>("voice");
   const [showSyllabus, setShowSyllabus] = useState(false);
   const [chatRequest, setChatRequest] = useState<ChatRequest | null>(null);
@@ -26,28 +26,22 @@ export default function AITeacher() {
     queryFn: async () => (await teacherApi<{ subjects: TeacherSubject[] }>("subjects")).subjects,
     staleTime: 5 * 60_000,
   });
-
-  useEffect(() => {
-    if (!subjectId && subjectsQ.data?.length) setSubjectId(subjectsQ.data[0].id);
-  }, [subjectId, subjectsQ.data]);
-
-  const subject = useMemo(() => subjectsQ.data?.find((s) => s.id === subjectId) ?? null, [subjectsQ.data, subjectId]);
+  const subjects = useMemo(() => subjectsQ.data ?? [], [subjectsQ.data]);
 
   const outlineQ = useQuery({
-    queryKey: ["ai-teacher", "outline", subjectId],
-    enabled: !!subjectId,
-    queryFn: async () => (await teacherApi<{ chapters: OutlineChapter[] }>("outline", { subjectId })).chapters,
+    queryKey: ["ai-teacher", "outline", subject?.id],
+    enabled: !!subject,
+    queryFn: async () => (await teacherApi<{ chapters: OutlineChapter[] }>("outline", { subjectId: subject!.id })).chapters,
     staleTime: 10 * 60_000,
   });
 
-  const live = useLiveTeacher(subject ? { id: subject.id, name: subject.name } : null);
-  const { disconnect, reset, status } = live;
+  const live = useLiveTeacher({ subject, subjects, onSubject: setSubject });
+  const { disconnect, status } = live;
 
-  const changeSubject = (id: string) => {
-    disconnect();
-    reset();
-    setChatRequest(null);
-    setSubjectId(id);
+  const clearSubject = () => {
+    setSubject(null);
+    setShowSyllabus(false);
+    if (status === "live") live.sendText("I want to change the subject. Please ask me which subject I want to study.", { silent: true });
   };
 
   const changeMode = (m: Mode) => {
@@ -96,30 +90,34 @@ export default function AITeacher() {
               <ModeButton m="voice" icon={Mic} label="Voice Teacher" />
               <ModeButton m="chat" icon={MessageSquareText} label="Chat" />
             </div>
-            {subjectsQ.data && subjectsQ.data.length > 0 && (
-              <Select value={subjectId ?? undefined} onValueChange={changeSubject}>
-                <SelectTrigger className="w-[180px]" aria-label="Subject"><SelectValue placeholder="Subject" /></SelectTrigger>
-                <SelectContent className="bg-background">
-                  {subjectsQ.data.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            {subject && (
+              <span className="flex items-center gap-1 rounded-full border bg-emerald-50 py-1 pl-3 pr-1 text-sm text-emerald-900">
+                {subject.name}
+                <button type="button" onClick={clearSubject} className="rounded-full p-1 hover:bg-emerald-100" aria-label="Change subject" title="Change subject">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
             )}
-            <Button variant="outline" size="sm" className="gap-2 lg:hidden" onClick={() => setShowSyllabus((v) => !v)} aria-expanded={showSyllabus}>
-              <ListTree className="h-4 w-4" />Lessons
-            </Button>
+            {subject && (
+              <Button variant="outline" size="sm" className="gap-2 lg:hidden" onClick={() => setShowSyllabus((v) => !v)} aria-expanded={showSyllabus}>
+                <ListTree className="h-4 w-4" />Lessons
+              </Button>
+            )}
           </div>
         </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-7xl flex-1 gap-4 px-4 py-4 lg:h-[calc(100vh-65px)]">
-        <aside className={cn("w-full shrink-0 lg:block lg:w-72", showSyllabus ? "block" : "hidden", "lg:overflow-auto")}>
-          <div className="rounded-2xl border bg-card p-3 shadow-sm">
-            <h2 className="mb-2 flex items-center gap-2 px-1 text-sm font-semibold"><ListTree className="h-4 w-4" />Lessons — tap to learn</h2>
-            <Syllabus chapters={outlineQ.data} loading={outlineQ.isLoading} onPick={pickTopic} />
-          </div>
-        </aside>
+        {subject && (
+          <aside className={cn("w-full shrink-0 lg:block lg:w-72 lg:overflow-auto", showSyllabus ? "block" : "hidden")}>
+            <div className="rounded-2xl border bg-card p-3 shadow-sm">
+              <h2 className="mb-2 flex items-center gap-2 px-1 text-sm font-semibold"><ListTree className="h-4 w-4" />{subject.name} lessons — tap to learn</h2>
+              <Syllabus chapters={outlineQ.data} loading={outlineQ.isLoading} onPick={pickTopic} />
+            </div>
+          </aside>
+        )}
 
-        <div className={cn("flex min-w-0 flex-1 flex-col", showSyllabus && "hidden lg:flex")}>
+        <div className={cn("flex min-w-0 flex-1 flex-col", subject && showSyllabus && "hidden lg:flex")}>
           {subjectsQ.isLoading ? (
             <p className="p-10 text-center text-muted-foreground">Loading your teacher…</p>
           ) : subjectsQ.isError ? (
@@ -127,12 +125,18 @@ export default function AITeacher() {
               <p className="mb-3 text-destructive">The AI Teacher could not be reached right now.</p>
               <Button variant="outline" onClick={() => subjectsQ.refetch()}>Try again</Button>
             </div>
-          ) : !subject ? (
+          ) : subjects.length === 0 ? (
             <p className="p-10 text-center text-muted-foreground">No subjects are available yet. Please check back soon.</p>
-          ) : mode === "voice" ? (
-            <VoiceMode live={live} subjectName={subject.name} />
           ) : (
-            <ChatMode key={subject.id} subjectId={subject.id} subjectName={subject.name} outline={outlineQ.data} request={chatRequest} />
+            <>
+              {/* Both modes stay mounted so switching tabs does not lose the conversation. */}
+              <div className={cn("min-h-0 flex-1 flex-col", mode === "voice" ? "flex" : "hidden")}>
+                <VoiceMode live={live} subjectName={subject?.name ?? null} />
+              </div>
+              <div className={cn("min-h-0 flex-1 flex-col", mode === "chat" ? "flex" : "hidden")}>
+                <ChatMode subjects={subjects} subject={subject} onSubject={setSubject} request={chatRequest} />
+              </div>
+            </>
           )}
         </div>
       </main>
