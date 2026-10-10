@@ -16,6 +16,7 @@ import { useHeroVideoSettings, useUpdateHeroVideoSettings, HeroVideoSettings, DE
 import { Skeleton } from "@/components/ui/skeleton";
 import { Brain, Sparkles, CreditCard, Eye, EyeOff, Video, Loader2, CheckCircle2, Copy, ExternalLink, Cloud, Download, Wifi, Key, Play } from "lucide-react";
 import { VideoSourceConfigCard } from "@/components/admin/settings/VideoSourceConfigCard";
+import { AITeacherSettingsCard } from "@/components/admin/AITeacherSettingsCard";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Settings() {
@@ -847,6 +848,8 @@ export default function Settings() {
           )}
         </CardContent>
       </Card>
+
+      <AITeacherSettingsCard />
 
       <Card>
         <CardHeader>

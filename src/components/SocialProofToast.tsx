@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -33,6 +34,7 @@ const maskName = (name: string): string => {
 
 export const SocialProofToast = () => {
   const isMobile = useIsMobile();
+  const { pathname } = useLocation();
   const [visible, setVisible] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -123,6 +125,8 @@ export const SocialProofToast = () => {
     return () => { clearTimeout(initial); clearInterval(interval); };
   }, [dismissed, hasEnrollment, enrollmentLoading, showNext]);
 
+  // The AI Teacher page is a focused learning screen: no marketing popups over it.
+  if (pathname.startsWith('/aiteacher')) return null;
   if (dismissed || hasEnrollment || enrollmentLoading) return null;
 
   const len = displayData.length;

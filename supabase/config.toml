@@ -357,3 +357,6 @@ verify_jwt = false
 
 [functions.v4-player-proxy]
 verify_jwt = false
+
+[functions.ai-teacher]
+verify_jwt = false
