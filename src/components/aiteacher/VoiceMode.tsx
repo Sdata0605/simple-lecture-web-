@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { QuizCard } from "./QuizCard";
+import { BigQuestionCard, DocumentCard, UnderstandCard, VisualCard } from "./Cards";
 import type { useLiveTeacher } from "./useLiveTeacher";
 
 type Live = ReturnType<typeof useLiveTeacher>;
@@ -95,6 +96,38 @@ export function VoiceMode({ live, subjectName }: { live: Live; subjectName: stri
                 <div key={m.id} className="flex gap-2.5">
                   <Avatar teacher />
                   <div className="min-w-0 max-w-[92%] flex-1"><QuizCard quiz={m.quiz} onAnswer={(i) => live.reportQuizAnswer(m.quiz, i)} /></div>
+                </div>
+              );
+            }
+            if (m.kind === "visual") {
+              return (
+                <div key={m.id} className="flex gap-2.5">
+                  <Avatar teacher />
+                  <div className="min-w-0 max-w-[94%] flex-1"><VisualCard visual={m.visual} /></div>
+                </div>
+              );
+            }
+            if (m.kind === "understand") {
+              return (
+                <div key={m.id} className="flex gap-2.5">
+                  <Avatar teacher />
+                  <div className="min-w-0 max-w-[94%] flex-1"><UnderstandCard topic={m.topic} onChoose={live.reportUnderstanding} /></div>
+                </div>
+              );
+            }
+            if (m.kind === "bigq") {
+              return (
+                <div key={m.id} className="flex gap-2.5">
+                  <Avatar teacher />
+                  <div className="min-w-0 max-w-[94%] flex-1"><BigQuestionCard question={m.question} hint={m.hint} onSubmit={live.answerBigQuestion} /></div>
+                </div>
+              );
+            }
+            if (m.kind === "document") {
+              return (
+                <div key={m.id} className="flex gap-2.5">
+                  <Avatar teacher />
+                  <div className="min-w-0 max-w-[94%] flex-1"><DocumentCard format={m.format} doc={m.doc} /></div>
                 </div>
               );
             }

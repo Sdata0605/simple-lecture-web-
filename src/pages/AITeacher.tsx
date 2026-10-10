@@ -1,15 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { GraduationCap, MessageSquareText, Mic, X } from "lucide-react";
+import { GraduationCap, MessageSquareText, Mic, Settings as SettingsIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { teacherApi, type TeacherSubject } from "@/lib/aiTeacherApi";
 import { VoiceMode } from "@/components/aiteacher/VoiceMode";
 import { ChatMode } from "@/components/aiteacher/ChatMode";
 import { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
+import { usePrefs } from "@/lib/aiTeacherPrefs";
 
 type Mode = "voice" | "chat";
+
+/**
+ * Defined at module level on purpose: a component created inside the page would be a new type on
+ * every render (the mic level updates the page ~10x a second during a call), so the button would be
+ * unmounted between mouse-down and mouse-up and the click would never fire.
+ */
+function ModeButton({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: typeof Mic; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none",
+        active ? "bg-emerald-700 text-white shadow" : "text-muted-foreground hover:bg-accent",
+      )}
+    >
+      <Icon className="h-4 w-4" />{label}
+    </button>
+  );
+}
 
 /**
  * Tracks the visible area of the screen. On phones the on-screen keyboard shrinks it; sizing the
@@ -42,6 +64,7 @@ export default function AITeacher() {
   const [subject, setSubject] = useState<TeacherSubject | null>(null);
   const [mode, setMode] = useState<Mode>("voice");
   const viewport = useVisualViewport();
+  const [prefs] = usePrefs();
 
   useEffect(() => { document.title = "AI Teacher 1-to-1 | SimpleLecture"; }, []);
 
@@ -66,7 +89,7 @@ export default function AITeacher() {
   });
   const subjects = useMemo(() => subjectsQ.data ?? [], [subjectsQ.data]);
 
-  const live = useLiveTeacher({ subject, subjects, onSubject: setSubject });
+  const live = useLiveTeacher({ subject, subjects, onSubject: setSubject, prefs });
   const { disconnect, status } = live;
 
   const clearSubject = () => {
@@ -80,44 +103,35 @@ export default function AITeacher() {
     setMode(m);
   };
 
-  const ModeButton = ({ m, icon: Icon, label }: { m: Mode; icon: typeof Mic; label: string }) => (
-    <button
-      type="button"
-      onClick={() => changeMode(m)}
-      aria-pressed={mode === m}
-      className={cn(
-        "flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none",
-        mode === m ? "bg-emerald-700 text-white shadow" : "text-muted-foreground hover:bg-accent",
-      )}
-    >
-      <Icon className="h-4 w-4" />{label}
-    </button>
-  );
-
   return (
     <div
       className="fixed inset-x-0 flex flex-col bg-gradient-to-b from-emerald-50/70 via-background to-background"
       style={{ top: viewport.top, height: viewport.height }}
     >
       <header className="shrink-0 border-b bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 sm:px-4">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2 sm:px-4">
           <Link to="/" className="flex items-center gap-2 font-semibold text-emerald-800">
             <GraduationCap className="h-6 w-6" /><span>SimpleLecture</span>
           </Link>
           <span className="hidden text-sm text-muted-foreground sm:inline">AI Teacher · 1-to-1</span>
 
-          {subject && (
-            <span className="ml-auto flex items-center gap-1 rounded-full border bg-emerald-50 py-0.5 pl-3 pr-1 text-sm text-emerald-900 sm:order-last sm:ml-0">
-              {subject.name}
-              <button type="button" onClick={clearSubject} className="rounded-full p-1 hover:bg-emerald-100" aria-label="Change subject" title="Change subject">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </span>
-          )}
+          <div className="ml-auto flex items-center gap-2 sm:order-3">
+            {subject && (
+              <span className="flex items-center gap-1 rounded-full border bg-emerald-50 py-0.5 pl-3 pr-1 text-sm text-emerald-900">
+                {subject.name}
+                <button type="button" onClick={clearSubject} className="rounded-full p-1 hover:bg-emerald-100" aria-label="Change subject" title="Change subject">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            )}
+            <Link to="/aiteacher/settings" className="rounded-full border p-2 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Settings" title="Settings: your API key, voice and teacher style">
+              <SettingsIcon className="h-4 w-4" />
+            </Link>
+          </div>
 
-          <div className="flex w-full rounded-full border bg-muted/50 p-1 sm:ml-auto sm:w-auto" role="group" aria-label="Mode">
-            <ModeButton m="voice" icon={Mic} label="Voice Teacher" />
-            <ModeButton m="chat" icon={MessageSquareText} label="Chat" />
+          <div className="flex w-full rounded-full border bg-muted/50 p-1 sm:order-2 sm:ml-2 sm:w-auto" role="group" aria-label="Mode">
+            <ModeButton active={mode === "voice"} onClick={() => changeMode("voice")} icon={Mic} label="Voice Teacher" />
+            <ModeButton active={mode === "chat"} onClick={() => changeMode("chat")} icon={MessageSquareText} label="Chat" />
           </div>
         </div>
       </header>
@@ -139,7 +153,7 @@ export default function AITeacher() {
               <VoiceMode live={live} subjectName={subject?.name ?? null} />
             </div>
             <div className={cn("min-h-0 flex-1 flex-col", mode === "chat" ? "flex" : "hidden")}>
-              <ChatMode subjects={subjects} subject={subject} onSubject={setSubject} request={null} />
+              <ChatMode subjects={subjects} subject={subject} onSubject={setSubject} />
             </div>
           </>
         )}

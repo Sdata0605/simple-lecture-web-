@@ -30,11 +30,27 @@ export interface RetrievalResult {
   documents: TeacherDocument[];
   questions: BankQuestion[];
 }
-export interface ChatResult extends RetrievalResult { answer: string }
+export interface QuizData { question: string; options: string[]; correct_index: number; explanation: string | null }
+export interface BigQuestionData { question: string; model_answer: string }
+/** What the chat endpoint returns (answer, or a quiz / big question depending on the mode). */
+export interface ChatResult {
+  found: boolean;
+  topics: { topic_id: string; chapter_title: string | null; topic_title: string | null; summary: string | null }[];
+  answer?: string;
+  quiz?: QuizData;
+  bigq?: BigQuestionData;
+}
+/** With the student's own key the server only prepares the request; the browser calls Gemini. */
+export interface PreparedChat extends Omit<ChatResult, "answer" | "quiz" | "bigq"> {
+  mode: string;
+  prepare: { system: string; contents: unknown[]; json: boolean; models: string[] };
+}
 export interface LiveSession {
-  token: string;
+  /** Absent when the student uses their own API key. */
+  token?: string;
+  byok?: boolean;
   apiVersion: string;
-  lockLevel: string;
+  lockLevel?: string;
   model: string;
   voiceName: string;
   teacherName: string;

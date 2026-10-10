@@ -7,7 +7,10 @@ import {
   type TeacherSubject,
 } from "@/lib/aiTeacherApi";
 import { matchSubjectByName } from "@/lib/aiTeacherSubjects";
+import { personaPayload, type TeacherPrefs } from "@/lib/aiTeacherPrefs";
+import type { DocData } from "@/lib/aiTeacherExport";
 import type { QuizItem } from "./QuizCard";
+import type { VisualData } from "./Cards";
 
 export type LiveStatus = "idle" | "connecting" | "live" | "ended" | "error";
 
@@ -15,7 +18,14 @@ export type LiveStatus = "idle" | "connecting" | "live" | "ended" | "error";
 export type TranscriptItem =
   | { kind: "text"; id: number; role: "user" | "teacher"; text: string; done: boolean }
   | { kind: "slide"; id: number; title: string; bullets: string[] }
-  | { kind: "quiz"; id: number; quiz: QuizItem };
+  | { kind: "quiz"; id: number; quiz: QuizItem }
+  | { kind: "visual"; id: number; visual: VisualData }
+  | { kind: "bigq"; id: number; question: string; hint?: string }
+  | { kind: "understand"; id: number; topic?: string }
+  | { kind: "document"; id: number; format: "pdf" | "word" | "both"; doc: DocData };
+
+type DistOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+type CardInput = DistOmit<Exclude<TranscriptItem, { kind: "text" }>, "id">;
 
 /** 16 kHz mono PCM16 capture worklet (inlined so no extra build config is needed). */
 const WORKLET_SRC = `
@@ -76,10 +86,12 @@ export function useLiveTeacher({
   subject,
   subjects,
   onSubject,
+  prefs,
 }: {
   subject: TeacherSubject | null;
   subjects: TeacherSubject[];
   onSubject: (s: TeacherSubject) => void;
+  prefs: TeacherPrefs;
 }) {
   const [status, setStatus] = useState<LiveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +100,7 @@ export function useLiveTeacher({
   const [micLevel, setMicLevel] = useState(0);
   const [muted, setMuted] = useState(false);
   const [micAvailable, setMicAvailable] = useState(true);
-  const [teacherName, setTeacherName] = useState("AI Teacher");
+  const [teacherName, setTeacherName] = useState(prefs.teacherName.trim() || "AI Teacher");
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
 
   const sessionRef = useRef<any>(null);
@@ -109,6 +121,8 @@ export function useLiveTeacher({
   const onSubjectRef = useRef(onSubject);
   onSubjectRef.current = onSubject;
   const pendingTextRef = useRef<string | null>(null);
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
 
   const setStatusBoth = (s: LiveStatus) => { statusRef.current = s; setStatus(s); };
 
@@ -133,7 +147,7 @@ export function useLiveTeacher({
   }, []);
 
   /** Slides and quiz questions appear inside the conversation itself. */
-  const pushCard = useCallback((card: { kind: "slide"; title: string; bullets: string[] } | { kind: "quiz"; quiz: QuizItem }) => {
+  const pushCard = useCallback((card: CardInput) => {
     setTranscript((prev) => [...closeAll(prev), { ...card, id: msgIdRef.current++ } as TranscriptItem]);
   }, []);
 
@@ -262,6 +276,49 @@ export function useLiveTeacher({
             pushCard({ kind: "quiz", quiz });
             responses.push({ id: fc.id, name: fc.name, response: { status: "shown", note: "Wait for the student's answer; the system will tell you their choice." } });
           }
+        } else if (fc.name === "show_visual") {
+          const kinds = ["scene", "timeline", "steps", "compare", "keyterms"];
+          const items = (Array.isArray(args.items) ? args.items : []).slice(0, 8).map((i: any) => ({
+            emoji: String(i?.emoji ?? "").slice(0, 8),
+            title: String(i?.title ?? "").slice(0, 60),
+            text: i?.text ? String(i.text).slice(0, 160) : undefined,
+            group: i?.group ? String(i.group).slice(0, 40) : undefined,
+          })).filter((i: any) => i.title);
+          if (!kinds.includes(args.kind) || items.length < 2) {
+            responses.push({ id: fc.id, name: fc.name, response: { status: "error", message: "Use a valid kind and at least 2 items." } });
+          } else {
+            pushCard({ kind: "visual", visual: { kind: args.kind, title: String(args.title ?? "").slice(0, 100), items, caption: args.caption ? String(args.caption).slice(0, 200) : undefined } });
+            responses.push({ id: fc.id, name: fc.name, response: { status: "shown", note: "The visual is on the student's screen. Describe it in a few words." } });
+          }
+        } else if (fc.name === "ask_big_question") {
+          const q = String(args.question ?? "").slice(0, 500);
+          if (!q) {
+            responses.push({ id: fc.id, name: fc.name, response: { status: "error", message: "A question is required." } });
+          } else {
+            pushCard({ kind: "bigq", question: q, hint: args.hint ? String(args.hint).slice(0, 200) : undefined });
+            responses.push({ id: fc.id, name: fc.name, response: { status: "shown", note: "Ask the question aloud, then wait for the student's spoken or typed answer. Judge it against your model answer." } });
+          }
+        } else if (fc.name === "check_understanding") {
+          pushCard({ kind: "understand", topic: args.topic ? String(args.topic).slice(0, 80) : undefined });
+          responses.push({ id: fc.id, name: fc.name, response: { status: "shown", note: "Ask them aloud if they understood, then wait for their tap or answer." } });
+        } else if (fc.name === "create_document") {
+          const strs = (v: unknown, n: number) => (Array.isArray(v) ? v : []).slice(0, n).map((x) => String(x).slice(0, 400));
+          const sections = (Array.isArray(args.sections) ? args.sections : []).slice(0, 8)
+            .map((s: any) => ({ heading: String(s?.heading ?? "").slice(0, 100), points: strs(s?.points, 12) }))
+            .filter((s: any) => s.heading);
+          const mcqs = (Array.isArray(args.mcqs) ? args.mcqs : []).slice(0, 8)
+            .map((q: any) => ({ question: String(q?.question ?? "").slice(0, 400), options: strs(q?.options, 6), correct_index: Number(q?.correct_index), explanation: q?.explanation ? String(q.explanation).slice(0, 300) : undefined }))
+            .filter((q: any) => q.question && q.options.length >= 2 && Number.isInteger(q.correct_index) && q.correct_index >= 0 && q.correct_index < q.options.length);
+          const big = (Array.isArray(args.big_questions) ? args.big_questions : []).slice(0, 4)
+            .map((q: any) => ({ question: String(q?.question ?? "").slice(0, 500), answer: String(q?.answer ?? "").slice(0, 1000) }))
+            .filter((q: any) => q.question);
+          if (!sections.length) {
+            responses.push({ id: fc.id, name: fc.name, response: { status: "error", message: "Provide at least one section with a heading." } });
+          } else {
+            const format = ["pdf", "word", "both"].includes(args.format) ? args.format : "both";
+            pushCard({ kind: "document", format, doc: { title: String(args.title ?? "Study notes").slice(0, 120), sections, mcqs, big_questions: big } });
+            responses.push({ id: fc.id, name: fc.name, response: { status: "created", note: "The notes are ready on the student's screen. Tell them they can download them from the card." } });
+          }
         } else {
           responses.push({ id: fc.id, name: fc.name, response: { status: "error", message: "unknown tool" } });
         }
@@ -313,7 +370,8 @@ export function useLiveTeacher({
     setError(null); setNotice(null); setStatusBoth("connecting");
     if (firstMessage) pendingTextRef.current = firstMessage;
     try {
-      const s = await teacherApi<LiveSession>("session");
+      const own = prefsRef.current.apiKey.trim();
+      const s = await teacherApi<LiveSession>("session", { persona: personaPayload(prefsRef.current), byok: !!own });
       setTeacherName(s.teacherName);
       if (s.subjects?.length) subjectsRef.current = s.subjects;
       catalogRef.current = s.catalog ?? [];
@@ -334,7 +392,10 @@ export function useLiveTeacher({
       }
 
       const { GoogleGenAI, Modality } = await import("@google/genai");
-      const ai = new GoogleGenAI({ apiKey: s.token, httpOptions: { apiVersion: s.apiVersion } });
+      // With the student's own key the browser connects straight to Google; otherwise with the one-use token.
+      const ai = s.byok && own
+        ? new GoogleGenAI({ apiKey: own })
+        : new GoogleGenAI({ apiKey: s.token, httpOptions: { apiVersion: s.apiVersion } });
 
       const session = await ai.live.connect({
         model: s.model,
@@ -392,7 +453,8 @@ export function useLiveTeacher({
         const node = new AudioWorkletNode(ctx, "pcm-capture");
         workletRef.current = node;
         node.port.onmessage = (ev) => {
-          setMicLevel((prev) => prev * 0.6 + Math.min(1, ev.data.rms * 6) * 0.4);
+          // Only re-render when the level visibly changes (this state lives in the page component).
+          setMicLevel((prev) => { const next = prev * 0.6 + Math.min(1, ev.data.rms * 6) * 0.4; return Math.abs(next - prev) < 0.08 ? prev : Math.round(next * 10) / 10; });
           if (mutedRef.current || !sessionRef.current || statusRef.current !== "live") return;
           try {
             sessionRef.current.sendRealtimeInput({ audio: { data: b64FromBuffer(ev.data.pcm), mimeType: "audio/pcm;rate=16000" } });
@@ -422,6 +484,20 @@ export function useLiveTeacher({
     );
   }, [sendText]);
 
+  /** The student's typed answer to a big question card. */
+  const answerBigQuestion = useCallback((answer: string) => {
+    sendText(`[Big question answer] ${answer}`, { silent: true });
+  }, [sendText]);
+
+  /** The student tapped Got it / Somewhat / Confused on an understanding card. */
+  const reportUnderstanding = useCallback((choice: "got_it" | "somewhat" | "confused") => {
+    const text =
+      choice === "got_it" ? "[Understanding check] I feel: Got it. Please praise me briefly and continue."
+      : choice === "somewhat" ? "[Understanding check] I feel: Somewhat. Please clarify the tricky part and give one more example."
+      : "[Understanding check] I feel: Confused. Please explain again more simply with a new real-life example and a new visual.";
+    sendText(text, { silent: true });
+  }, [sendText]);
+
   const reset = useCallback(() => {
     setTranscript([]);
     setError(null); setNotice(null); setStatusBoth("idle");
@@ -430,6 +506,6 @@ export function useLiveTeacher({
   return {
     status, error, notice, speaking, micLevel, muted, micAvailable, teacherName,
     transcript,
-    connect, disconnect, toggleMute, sendText, reportQuizAnswer, reset,
+    connect, disconnect, toggleMute, sendText, reportQuizAnswer, answerBigQuestion, reportUnderstanding, reset,
   };
 }
