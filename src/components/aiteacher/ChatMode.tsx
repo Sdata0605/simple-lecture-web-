@@ -96,7 +96,7 @@ export function ChatMode({
         local: true,
         content: pending
           ? `Got it, ${named.name}! Let me answer your question.`
-          : `Great, ${named.name}! What would you like to learn? Ask me any question, or say "teach me …". You can also pick a lesson from the list.`,
+          : `Great, ${named.name}! What would you like to learn? Ask me any question, or say "teach me chapter 3 topic 1".`,
         chips: pending ? undefined : [
           { label: "What are the main chapters?", text: `What are the main chapters in ${named.name} and what are they about?` },
           { label: "Ask me a quick question", text: `Ask me one question from ${named.name} to test myself.` },
