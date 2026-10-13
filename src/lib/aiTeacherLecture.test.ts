@@ -251,8 +251,25 @@ describe("nextStepNudge: the lesson keeps going without the student saying go ah
     expect(n).toMatchObject({ cardId: 1 });
   });
 
+  it("tells the teacher to explain a step it showed in silence, instead of going on", () => {
+    const silent = nextStepNudge({ ...idle, transcript: [say("user", "solve it"), slide(1, "Step 1 · The problem")] });
+    expect(silent?.text).toContain("did not explain it aloud");
+    expect(silent?.text).not.toContain("Go on to the next step");
+    // a greeting before the student's question does not count as explaining the step
+    const greeted = nextStepNudge({ ...idle, transcript: [say("teacher", "Namaste! What is your doubt?"), say("user", "solve it"), slide(1, "Step 1 · The problem")] });
+    expect(greeted?.text).toContain("did not explain it aloud");
+    // a silent second step is caught too, even though step 1 was explained
+    const second = nextStepNudge({ ...idle, transcript: [say("user", "solve it"), slide(1, "Step 1 · The problem"), say("teacher", "We have an equation to solve."), slide(2, "Step 2 · Subtract 3")] });
+    expect(second).toMatchObject({ cardId: 2, text: expect.stringContaining("did not explain it aloud") });
+  });
+
+  it("goes on once the teacher has explained the step after showing it", () => {
+    const n = nextStepNudge({ ...idle, transcript: [say("user", "solve it"), slide(1, "Step 1 · The problem"), say("teacher", "We have an equation to solve.")] });
+    expect(n?.text).toContain("Go on to the next step");
+  });
+
   it("asks for the question to solve after the Answer step", () => {
-    const n = nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), slide(2, "Step 2 · Answer")] });
+    const n = nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), say("teacher", "Here is the idea."), slide(2, "Step 2 · Answer"), say("teacher", "So that is why.")] });
     expect(n).toMatchObject({ cardId: 2, text: expect.stringContaining("question to solve") });
   });
 
@@ -296,6 +313,9 @@ describe("nextStepNudge: the lesson keeps going without the student saying go ah
     const opening = buildLectureOpening({ trigger: "mid", subjectName: "Science", context: null });
     expect(opening).toContain("never wait for me");
     expect(opening).toContain("keep going until the Answer step");
+    // and to explain each step aloud, properly, first
+    expect(opening).toContain("Explain every step aloud properly");
+    expect(opening).toContain("Never show a step without explaining it aloud");
   });
 });
 

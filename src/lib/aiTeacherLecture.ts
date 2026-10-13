@@ -84,10 +84,10 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
     "When I ask a question, call search_notes first, then explain it from the very basics up to the answer, linking it to what the lecture was saying when that helps.",
   );
   rules.push(
-    "Explain it as steps on my screen. For every step call show_visual (with emojis) or present_slide, and start its title with 'Step 1 · ', 'Step 2 · ' and so on, followed by 2 to 4 words (for example 'Step 2 · Build up'). Use these steps: The basics (what I already know, in plain words), Build up (one new idea at a time), Everyday example (a comparison from daily life), Answer (the answer, stated clearly). Say each step in 2 to 3 short spoken sentences, then go straight on to the next step yourself: never wait for me, and never ask whether to continue, unless I interrupt. When I say nothing, I want you to keep going until the Answer step.",
+    "Explain it as steps on my screen. For every step call show_visual (with emojis) or present_slide, and start its title with 'Step 1 · ', 'Step 2 · ' and so on, followed by 2 to 4 words (for example 'Step 2 · Build up'). Use these steps: The basics (what I already know, in plain words), Build up (one new idea at a time), Everyday example (a comparison from daily life), Answer (the answer, stated clearly). Explain every step aloud properly before the next one: 3 to 5 clear sentences in simple words, saying what we are doing, how, and why, like teaching a beginner. Never show a step without explaining it aloud, and do not call the next step's tool until you have finished saying the current step. Then go straight on to the next step yourself: never wait for me, and never ask whether to continue, unless I interrupt. When I say nothing, keep going until the Answer step.",
   );
   rules.push(
-    "MATHS: if my question is a maths problem or an equation, or I ask you to solve something, solve it step by step in front of me instead of using visuals. Use present_slide for every step, titled 'Step 1 · The problem', then 'Step 2 · ' and a short description of the move (for example 'Step 3 · Subtract 3 from both sides'). Write each line of working as LaTeX in its own bullet, wrapped in $$ and $$ (for example $$2x + 3 = 11$$). Step 1 states what is given and what to find. Do exactly one move per step, showing the equation after it, and add a bullet starting with 'Why:' that gives the reason in plain words (for example 'Why: subtract 3 from both sides to get x alone'). The last step is titled 'Step N · Answer': show the result boxed, like $$\\boxed{x = 4}$$, then check it by putting it back into the original equation. As you say each step aloud, read the equations the way a teacher does (say 'two x plus three equals eleven'), never the LaTeX symbols. After the answer, give me a similar problem to solve (show_quiz or ask_big_question), written in LaTeX too.",
+    "MATHS: if my question is a maths problem or an equation, or I ask you to solve something, solve it step by step in front of me instead of using visuals. Use present_slide for every step, titled 'Step 1 · The problem', then 'Step 2 · ' and a short description of the move (for example 'Step 3 · Subtract 3 from both sides'). Write each line of working as LaTeX in its own bullet, wrapped in $$ and $$ (for example $$2x + 3 = 11$$). Step 1 states what is given and what to find. Do exactly one move per step, showing the equation after it, and add a bullet starting with 'Why:' that gives the reason in plain words (for example 'Why: subtract 3 from both sides to get x alone'). The last step is titled 'Step N · Answer': show the result boxed, like $$\\boxed{x = 4}$$, then check it by putting it back into the original equation. As you say each step aloud, read the equations the way a teacher does (say 'two x plus three equals eleven'), never the LaTeX symbols, and then explain what you did and why in plain words. After the answer, give me a similar problem to solve (show_quiz or ask_big_question), written in LaTeX too.",
   );
   rules.push(
     "After the answer give me one question to solve (show_quiz or ask_big_question). Start again from Step 1 for each new question. If I say I do not understand, explain it again more simply with a new example and a new visual (or, for a maths problem, solve it again slower, one small move per step). Make notes only if I ask.",
@@ -313,7 +313,10 @@ export interface Nudge {
   text: string;
 }
 
-const CONTINUE_STEP = "[Continue] Go straight on to the next step now. Do not wait for me and do not ask.";
+const CONTINUE_STEP =
+  "[Continue] Go on to the next step now. Explain it aloud properly, in 3 to 5 clear sentences, before you show the one after it. Do not wait for me and do not ask.";
+const EXPLAIN_FIRST =
+  "[Continue] You showed that step but did not explain it aloud. Explain it now, properly, in 3 to 5 clear sentences (what we do, how, and why), and then go on to the next step. Do not wait for me and do not ask.";
 const CONTINUE_TO_QUESTION = "[Continue] Now give me one question to solve about this. Do not wait for me and do not ask.";
 
 /**
@@ -349,6 +352,11 @@ export function nextStepNudge(input: {
   if (at < 0) return null;
   const studentSpoke = transcript.slice(at + 1).some((item) => item.kind === "text" && item.role === "user" && meaningful(item.text));
   if (studentSpoke) return null; // the student is in charge
+
+  // Did the teacher explain this step? Only words after its card count: speech before a card could just as
+  // well belong to the step before it, and a step shown in silence is the thing to catch.
+  const explained = transcript.slice(at + 1).some((item) => item.kind === "text" && item.role === "teacher" && meaningful(item.text));
+  if (!explained) return { cardId: last.id, text: EXPLAIN_FIRST };
 
   return { cardId: last.id, text: last.role === "answer" ? CONTINUE_TO_QUESTION : CONTINUE_STEP };
 }
