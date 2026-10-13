@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery, type QueryClie
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useEffect, useRef } from 'react';
+import { indexJobAfterPublish, removeJobIndexAfterUnpublish } from '@/lib/aiTeacherIndex';
 
 interface VideoJobFilters {
   subjectId?: string;
@@ -429,6 +430,8 @@ export const usePublishVideoToStudents = () => {
       queryClient.invalidateQueries({ queryKey: ['subject-chapters-learning'] });
       queryClient.invalidateQueries({ queryKey: ['chapter-topics'] });
       toast.success(`Video published to ${data.type}! Students can now access it.`);
+      // Let the AI Teacher learn this lecture's markdown (runs in the background; never blocks publishing).
+      indexJobAfterPublish(data.jobId);
     },
     onError: (error) => {
       toast.error('Failed to publish video');
@@ -456,6 +459,7 @@ export const useUnpublishVideo = () => {
       queryClient.invalidateQueries({ queryKey: ['video-generation-jobs-paginated'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['published-ai-lectures'] });
       toast.success('Video unpublished from students');
+      removeJobIndexAfterUnpublish(jobId);
     },
     onError: (error) => {
       toast.error('Failed to unpublish video');

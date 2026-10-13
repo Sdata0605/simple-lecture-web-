@@ -18,6 +18,7 @@ import { useServerIpSlots } from "@/hooks/useServerIpSlots";
 import { useSubjectChapters, useChapterTopics } from "@/hooks/useSubjectChaptersTopics";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { indexSubjectAfterBulkPublish } from "@/lib/aiTeacherIndex";
 import { format } from "date-fns";
 import { DocumentImageViewer } from "./DocumentImageViewer";
 import { VideoJobsDialog } from "./VideoJobsDialog";
@@ -279,6 +280,9 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '2
 
     toast.success(`Published ${success} video${success !== 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}`);
     setIsPublishing(false);
+
+    // Let the AI Teacher learn the newly published lectures (background; publishing is already done).
+    if (success > 0 && subjectId) void indexSubjectAfterBulkPublish(subjectId);
   }, [unpublishedJobs, subjectId, queryClient]);
 
   // Handle Update All Published - insert server-side run

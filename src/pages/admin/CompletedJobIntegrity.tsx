@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { RefreshCw, ExternalLink, AlertTriangle, ShieldAlert, Loader2, Copy, Cloud } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { removeJobIndexAfterUnpublish } from "@/lib/aiTeacherIndex";
 import { getCdnMediaUrl } from "@/components/learning/player/utils/mediaResolver";
 
 const CDN_BASE = "https://server1.simplelecture.com/video";
@@ -305,6 +306,8 @@ export default function CompletedJobIntegrity() {
         .eq("id", r.job_id);
       if (e) throw e;
       toast({ title: "Marked as failed", description: r.external_job_id ?? r.job_id });
+      // It is no longer published, so the AI Teacher must stop teaching from it.
+      removeJobIndexAfterUnpublish(r.job_id);
       qc.invalidateQueries({ queryKey: ["completed-job-integrity"] });
     } catch (e: any) {
       toast({ title: "Update failed", description: e.message, variant: "destructive" });

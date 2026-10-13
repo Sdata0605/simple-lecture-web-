@@ -360,3 +360,6 @@ verify_jwt = false
 
 [functions.ai-teacher]
 verify_jwt = false
+
+[functions.ai-teacher-index]
+verify_jwt = false

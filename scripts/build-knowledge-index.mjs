@@ -1,32 +1,55 @@
 #!/usr/bin/env node
 /**
- * Build the knowledge index (knowledge_chunks + topic_routing_cards) for one subject.
+ * Build the knowledge index (knowledge_chunks + topic_routing_cards) so the AI Teacher can teach a subject.
+ * The AI Teacher only offers subjects that have routing cards, so every subject must be indexed once.
+ * New publishes are indexed automatically by the ai-teacher-index edge function; this script is for backfills.
  *
- * Usage:
- *   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/build-knowledge-index.mjs \
- *       --subject "Social Science" [--limit 3] [--skip-cards] [--skip-chunks]
+ * Usage (Node >= 22.18; the token needs database read + write permission):
+ *   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/build-knowledge-index.mjs --all --dry-run
+ *   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/build-knowledge-index.mjs --all
+ *   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/build-knowledge-index.mjs --course "SSLC"
+ *   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/build-knowledge-index.mjs --subject "Science" --subject "Maths" [--limit 3]
+ *
+ *   --subject NAME   a subject (case-insensitive, repeatable)
+ *   --course TEXT    every subject linked to a course whose name contains TEXT (repeatable)
+ *   --all            every subject that has at least one published lecture
+ *   --dry-run        only report what would be indexed (no embeddings, no writes, no paid calls)
+ *   --force          re-embed documents even when their indexed content is identical
+ *   --limit N        at most N documents per subject
+ *   --skip-cards / --skip-chunks
  *
  * - Source: published video_generation_jobs -> ai_assistant_documents.full_content markdown
- *   (content_markdown | markdown), heading-based chunks.
+ *   (content_markdown | markdown), heading-based chunks (shared with the edge function).
  * - Embeddings + routing cards use the OpenRouter key stored in ai_settings
  *   ('ai_api_config'); the key is read into memory only and never printed or written.
- * - Re-runnable: chunks for a document are deleted and re-inserted; cards are upserted.
+ * - Re-runnable: unchanged documents are skipped; changed ones have their chunks deleted and re-inserted;
+ *   cards are upserted.
  */
 
+import {
+  EMBED_DIMS,
+  chunkEmbedText,
+  chunkMarkdown,
+  cardEmbedText,
+  embedTexts,
+  makeRoutingCard,
+  vecLiteral,
+} from "../supabase/functions/_shared/knowledgeIndex.ts";
+
 const REF = "oxwhqvsoelqqsblmqkxx";
-const EMBED_MODEL = "openai/text-embedding-3-small";
-const EMBED_DIMS = 768;
-const CARD_MODEL = "google/gemini-2.5-flash";
-const TARGET_MAX = 1400; // chars per chunk (soft max)
-const MERGE_BELOW = 250; // sections shorter than this are merged with the following one
 
 const args = process.argv.slice(2);
-const arg = (n, d) => { const i = args.indexOf("--" + n); return i === -1 ? d : (args[i + 1]?.startsWith("--") || args[i + 1] === undefined ? true : args[i + 1]); };
-const SUBJECT = arg("subject");
-const LIMIT = arg("limit") ? Number(arg("limit")) : Infinity;
-const SKIP_CARDS = !!arg("skip-cards");
-const SKIP_CHUNKS = !!arg("skip-chunks");
-if (!SUBJECT || SUBJECT === true) { console.error("--subject is required"); process.exit(1); }
+const flag = (n) => args.includes("--" + n);
+const values = (n) => args.flatMap((a, i) => (a === "--" + n && args[i + 1] && !args[i + 1].startsWith("--") ? [args[i + 1]] : []));
+const SUBJECTS = values("subject");
+const COURSES = values("course");
+const ALL = flag("all");
+const DRY = flag("dry-run");
+const FORCE = flag("force");
+const LIMIT = values("limit")[0] ? Number(values("limit")[0]) : Infinity;
+const SKIP_CARDS = flag("skip-cards");
+const SKIP_CHUNKS = flag("skip-chunks");
+if (!ALL && !SUBJECTS.length && !COURSES.length) { console.error("Choose what to index: --all, --course TEXT or --subject NAME (add --dry-run to preview)"); process.exit(1); }
 if (!process.env.SUPABASE_ACCESS_TOKEN) { console.error("SUPABASE_ACCESS_TOKEN is required"); process.exit(1); }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -47,88 +70,7 @@ async function sql(query) {
   throw new Error("SQL failed after retries");
 }
 
-// ---------- chunking ----------
-function cleanText(s) {
-  return s
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ") // image tags (incl. base64)
-    .replace(/<img[^>]*>/gi, " ")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function splitSections(md) {
-  const lines = md.split("\n");
-  const stack = []; // [{level,title}]
-  const sections = [];
-  let cur = { path: "", headLine: "", body: [] };
-  const flush = () => {
-    const body = cleanText(cur.body.join("\n"));
-    if (body.length > 0 || cur.headLine) sections.push({ path: cur.path, headLine: cur.headLine, body });
-  };
-  for (const line of lines) {
-    const m = line.match(/^(#{1,6})\s+(.*\S)\s*$/);
-    if (m) {
-      flush();
-      const level = m[1].length;
-      while (stack.length && stack[stack.length - 1].level >= level) stack.pop();
-      stack.push({ level, title: m[2].trim() });
-      cur = { path: stack.map((s) => s.title).join(" > "), headLine: line.trim(), body: [] };
-    } else cur.body.push(line);
-  }
-  flush();
-  return sections;
-}
-
-function splitLong(text, max) {
-  if (text.length <= max) return [text];
-  const paras = text.split(/\n\s*\n/);
-  const out = [];
-  let buf = "";
-  const push = () => { if (buf.trim()) out.push(buf.trim()); buf = ""; };
-  for (const p of paras) {
-    if (p.length > max) {
-      push();
-      // hard split on sentence-ish boundaries
-      let rest = p;
-      while (rest.length > max) {
-        let cut = rest.lastIndexOf(". ", max);
-        if (cut < max * 0.5) cut = rest.lastIndexOf(" ", max);
-        if (cut < 1) cut = max;
-        out.push(rest.slice(0, cut + 1).trim());
-        rest = rest.slice(cut + 1);
-      }
-      buf = rest;
-    } else if ((buf + "\n\n" + p).length > max) { push(); buf = p; }
-    else buf = buf ? buf + "\n\n" + p : p;
-  }
-  push();
-  return out;
-}
-
-function chunkMarkdown(md) {
-  const sections = splitSections(md);
-  const chunks = [];
-  let pending = null; // merged small sections
-  const emit = (path, text) => {
-    for (const piece of splitLong(text, TARGET_MAX)) if (piece.replace(/\s/g, "").length >= 30) chunks.push({ path, text: piece });
-  };
-  for (const s of sections) {
-    const text = s.headLine && s.body ? `${s.headLine}\n${s.body}` : s.headLine || s.body;
-    if (!text.trim()) continue;
-    if (pending) {
-      const combined = pending.text + "\n\n" + text;
-      if (combined.length <= TARGET_MAX) { pending = { path: pending.path, text: combined, small: combined.length < MERGE_BELOW }; if (!pending.small) { emit(pending.path, pending.text); pending = null; } continue; }
-      emit(pending.path, pending.text); pending = null;
-    }
-    if (text.length < MERGE_BELOW) pending = { path: s.path, text, small: true };
-    else emit(s.path, text);
-  }
-  if (pending) emit(pending.path, pending.text);
-  return chunks;
-}
-
-// ---------- OpenRouter ----------
+// ---------- OpenRouter key (read into memory only) ----------
 let ORKEY;
 async function getKey() {
   if (ORKEY) return ORKEY;
@@ -137,49 +79,33 @@ async function getKey() {
   return (ORKEY = row.k);
 }
 
-function l2(v) { const n = Math.sqrt(v.reduce((a, x) => a + x * x, 0)) || 1; return v.map((x) => x / n); }
-
-async function embed(texts) {
-  const key = await getKey();
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    const r = await fetch("https://openrouter.ai/api/v1/embeddings", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: EMBED_MODEL, input: texts, dimensions: EMBED_DIMS }),
-    });
-    if (r.ok) { const j = await r.json(); return j.data.sort((a, b) => a.index - b.index).map((d) => l2(d.embedding)); }
-    if (r.status === 429 || r.status >= 500) { await sleep(2000 * attempt); continue; }
-    throw new Error(`embed ${r.status}: ${(await r.text()).slice(0, 300)}`);
-  }
-  throw new Error("embed failed after retries");
+// ---------- which subjects ----------
+const PUBLISHED_DOC = `exists (select 1 from ai_assistant_documents d join video_generation_jobs v on v.document_id = d.id
+  where d.subject_id = s.id and v.is_published = true and v.status = 'completed')`;
+const conds = [];
+if (!ALL) {
+  const parts = [];
+  if (SUBJECTS.length) parts.push(`lower(trim(s.name)) in (${SUBJECTS.map((n) => lit(n.trim().toLowerCase())).join(",")})`);
+  if (COURSES.length) parts.push(`exists (select 1 from course_subjects cs join courses c on c.id = cs.course_id where cs.subject_id = s.id and (${COURSES.map((c) => `c.name ilike ${lit("%" + c + "%")}`).join(" or ")}))`);
+  conds.push(`(${parts.join(" or ")})`);
 }
-
-async function chat(prompt) {
-  const key = await getKey();
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: CARD_MODEL, temperature: 0.2, response_format: { type: "json_object" }, messages: [{ role: "user", content: prompt }] }),
-    });
-    if (r.ok) { const j = await r.json(); return j.choices?.[0]?.message?.content || ""; }
-    if (r.status === 429 || r.status >= 500) { await sleep(2000 * attempt); continue; }
-    throw new Error(`chat ${r.status}: ${(await r.text()).slice(0, 300)}`);
-  }
-  throw new Error("chat failed after retries");
-}
-
-const vecLit = (v) => `'[${v.map((x) => +x.toFixed(6)).join(",")}]'::vector`;
-
-// ---------- main ----------
-const [subj] = await sql(`select id, name from popular_subjects where name = ${lit(SUBJECT)}`);
-if (!subj) throw new Error(`Subject not found: ${SUBJECT}`);
+const subjects = await sql(`
+  select s.id, trim(s.name) as name,
+         (select string_agg(distinct c.name, '; ') from course_subjects cs join courses c on c.id = cs.course_id where cs.subject_id = s.id) as courses,
+         ${PUBLISHED_DOC} as has_published
+  from popular_subjects s
+  ${conds.length ? "where " + conds.join(" and ") : ""}
+  order by s.name`);
+for (const n of SUBJECTS) if (!subjects.some((s) => s.name.toLowerCase() === n.trim().toLowerCase())) console.warn(`  ! subject not found: ${n}`);
+if (!subjects.length) { console.error("No matching subjects."); process.exit(1); }
 
 // One published job per document (latest), with markdown pulled server-side.
-const docs = await sql(`
+const docsFor = (subjectId) => sql(`
   select d.id as document_id, d.chapter_id, d.topic_id, j.job_id,
          c.title as chapter_title, t.title as topic_title,
-         coalesce(nullif(d.full_content->>'content_markdown',''), d.full_content->>'markdown') as md
+         coalesce(nullif(d.full_content->>'content_markdown',''), d.full_content->>'markdown') as md,
+         (select count(*)::int from knowledge_chunks k where k.document_id = d.id and k.chunk_index = 0) as indexed,
+         (select count(*)::int from topic_routing_cards r where r.topic_id = d.topic_id) as has_card
   from ai_assistant_documents d
   join lateral (
     select v.id as job_id from video_generation_jobs v
@@ -188,62 +114,88 @@ const docs = await sql(`
   ) j on true
   left join subject_chapters c on c.id = d.chapter_id
   left join subject_topics   t on t.id = d.topic_id
-  where d.subject_id = ${lit(subj.id)}
+  where d.subject_id = ${lit(subjectId)}
   order by c.chapter_number nulls last, t.topic_number nulls last, d.id
 `);
-const work = docs.filter((d) => d.md && d.md.trim()).slice(0, LIMIT);
-console.log(`Subject ${subj.name}: ${docs.length} published docs, processing ${work.length}`);
 
-let totalChunks = 0, totalChars = 0;
-if (!SKIP_CHUNKS) {
+const unpublishedWithMd = (subjectId) => sql(`
+  select count(*)::int as n from ai_assistant_documents d
+  where d.subject_id = ${lit(subjectId)}
+    and coalesce(nullif(d.full_content->>'content_markdown',''), d.full_content->>'markdown') is not null
+    and not exists (select 1 from video_generation_jobs v where v.document_id = d.id and v.is_published = true and v.status = 'completed')`);
+
+// ---------- dry run ----------
+if (DRY) {
+  console.log("Dry run: nothing is written and no paid API is called.\n");
+  let pendingTotal = 0;
+  for (const s of subjects) {
+    const docs = (await docsFor(s.id)).filter((d) => d.md && d.md.trim());
+    const pending = docs.filter((d) => !d.indexed || (d.topic_id && !d.has_card));
+    const [{ n: unpublished }] = await unpublishedWithMd(s.id);
+    pendingTotal += pending.length;
+    console.log(`${s.name.padEnd(34)} published=${String(docs.length).padStart(3)}  indexed=${String(docs.length - pending.length).padStart(3)}  pending=${String(pending.length).padStart(3)}  unpublished-with-markdown=${unpublished}  [${s.courses ?? "no course"}]`);
+  }
+  console.log(`\nPending documents: ${pendingTotal}. Unpublished lectures are never indexed; publishing them indexes them automatically.`);
+  process.exit(0);
+}
+
+// ---------- index ----------
+const arr = (a) => `array[${a.map(lit).join(",")}]::text[]`;
+let grand = { docs: 0, unchanged: 0, chunks: 0, cards: 0, failed: 0 };
+
+for (const subj of subjects) {
+  const docs = await docsFor(subj.id);
+  const work = docs.filter((d) => d.md && d.md.trim()).slice(0, LIMIT);
+  console.log(`\nSubject ${subj.name}: ${docs.length} published docs, processing ${work.length}`);
+  if (!work.length) continue;
+
   for (let i = 0; i < work.length; i++) {
     const d = work[i];
-    const chunks = chunkMarkdown(d.md);
-    if (!chunks.length) { console.log(`  [${i + 1}/${work.length}] ${d.topic_title}: 0 chunks (skipped)`); continue; }
-    const vectors = [];
-    for (let b = 0; b < chunks.length; b += 64) {
-      const batch = chunks.slice(b, b + 64).map((c) => `${c.path}\n${c.text}`.slice(0, 6000));
-      vectors.push(...(await embed(batch)));
-    }
-    // replace this document's chunks atomically
-    const values = chunks.map((c, idx) =>
-      `(${lit(subj.id)}, ${d.chapter_id ? lit(d.chapter_id) : "null"}, ${d.topic_id ? lit(d.topic_id) : "null"}, ${lit(d.document_id)}, ${lit(d.job_id)}, ${idx}, ${lit(c.path)}, ${lit(c.text)}, ${Math.ceil(c.text.length / 4)}, ${vecLit(vectors[idx])})`
-    );
-    for (let s = 0; s < values.length; s += 25) {
-      const part = values.slice(s, s + 25);
-      const del = s === 0 ? `delete from knowledge_chunks where document_id = ${lit(d.document_id)};` : "";
-      await sql(`${del} insert into knowledge_chunks (subject_id, chapter_id, topic_id, document_id, job_id, chunk_index, heading_path, content, token_estimate, embedding) values ${part.join(",")};`);
-    }
-    totalChunks += chunks.length; totalChars += chunks.reduce((a, c) => a + c.text.length, 0);
-    console.log(`  [${i + 1}/${work.length}] ${d.chapter_title ?? "?"} > ${d.topic_title ?? "?"}: ${chunks.length} chunks`);
-  }
-  console.log(`Chunks written: ${totalChunks} (avg ${Math.round(totalChars / Math.max(1, totalChunks))} chars)`);
-}
-
-if (!SKIP_CARDS) {
-  let n = 0;
-  for (const d of work) {
-    if (!d.topic_id) continue;
-    n++;
-    const excerpt = d.md.replace(/!\[[^\]]*\]\([^)]*\)/g, " ").slice(0, 7000);
-    let card;
+    const label = `[${i + 1}/${work.length}] ${d.chapter_title ?? "?"} > ${d.topic_title ?? "?"}`;
     try {
-      const raw = await chat(
-        `You are indexing study notes for a student Q&A search system.\nSubject: ${subj.name}\nChapter: ${d.chapter_title}\nTopic: ${d.topic_title}\n\nNOTES (may be truncated):\n${excerpt}\n\nReturn ONLY JSON: {"summary": "2 plain sentences on what this topic covers", "keywords": ["8-15 key terms, names, dates from the notes"], "sample_questions": ["6-10 questions a student might ask that these notes answer, in simple English"]}`
-      );
-      card = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
-    } catch (e) { console.log(`  card failed for ${d.topic_title}: ${e.message}`); continue; }
-    const keywords = (card.keywords || []).map(String).slice(0, 20);
-    const qs = (card.sample_questions || []).map(String).slice(0, 12);
-    const summary = String(card.summary || "").slice(0, 600);
-    const [vec] = await embed([`${d.chapter_title} > ${d.topic_title}\n${summary}\n${keywords.join(", ")}\n${qs.join("\n")}`]);
-    const arr = (a) => `array[${a.map(lit).join(",")}]::text[]`;
-    await sql(`insert into topic_routing_cards (topic_id, subject_id, chapter_id, chapter_title, topic_title, summary, keywords, sample_questions, embedding, updated_at)
-      values (${lit(d.topic_id)}, ${lit(subj.id)}, ${d.chapter_id ? lit(d.chapter_id) : "null"}, ${lit(d.chapter_title)}, ${lit(d.topic_title)}, ${lit(summary)}, ${arr(keywords)}, ${arr(qs)}, ${vecLit(vec)}, now())
-      on conflict (topic_id) do update set summary = excluded.summary, keywords = excluded.keywords, sample_questions = excluded.sample_questions,
-        chapter_title = excluded.chapter_title, topic_title = excluded.topic_title, embedding = excluded.embedding, updated_at = now();`);
-    console.log(`  card ${n}: ${d.topic_title}`);
+      const chunks = chunkMarkdown(d.md);
+      if (!chunks.length) { console.log(`  ${label}: 0 chunks (skipped)`); continue; }
+
+      // Same content already indexed -> no paid calls (unless --force).
+      let unchanged = false;
+      if (!FORCE && d.indexed) {
+        const existing = await sql(`select heading_path, content from knowledge_chunks where document_id = ${lit(d.document_id)} order by chunk_index`);
+        unchanged = existing.length === chunks.length && existing.every((e, k) => e.heading_path === chunks[k].path && e.content === chunks[k].text);
+      }
+
+      if (!SKIP_CHUNKS && !unchanged) {
+        const vectors = await embedTexts(await getKey(), chunks.map(chunkEmbedText));
+        // replace this document's chunks
+        const values = chunks.map((c, idx) =>
+          `(${lit(subj.id)}, ${d.chapter_id ? lit(d.chapter_id) : "null"}, ${d.topic_id ? lit(d.topic_id) : "null"}, ${lit(d.document_id)}, ${lit(d.job_id)}, ${idx}, ${lit(c.path)}, ${lit(c.text)}, ${Math.ceil(c.text.length / 4)}, '${vecLiteral(vectors[idx])}'::vector)`
+        );
+        for (let s = 0; s < values.length; s += 25) {
+          const part = values.slice(s, s + 25);
+          const del = s === 0 ? `delete from knowledge_chunks where document_id = ${lit(d.document_id)};` : "";
+          await sql(`${del} insert into knowledge_chunks (subject_id, chapter_id, topic_id, document_id, job_id, chunk_index, heading_path, content, token_estimate, embedding) values ${part.join(",")};`);
+        }
+        grand.chunks += chunks.length;
+      }
+      if (unchanged) grand.unchanged++; else if (!SKIP_CHUNKS) grand.docs++;
+
+      let cardNote = "";
+      if (!SKIP_CARDS && d.topic_id && (!unchanged || !d.has_card)) {
+        const key = await getKey();
+        const card = await makeRoutingCard(key, { subject: subj.name, chapter: d.chapter_title, topic: d.topic_title, markdown: d.md });
+        const [vec] = await embedTexts(key, [cardEmbedText(d.chapter_title, d.topic_title, card)]);
+        await sql(`insert into topic_routing_cards (topic_id, subject_id, chapter_id, chapter_title, topic_title, summary, keywords, sample_questions, embedding, updated_at)
+          values (${lit(d.topic_id)}, ${lit(subj.id)}, ${d.chapter_id ? lit(d.chapter_id) : "null"}, ${lit(d.chapter_title)}, ${lit(d.topic_title)}, ${lit(card.summary)}, ${arr(card.keywords)}, ${arr(card.sample_questions)}, '${vecLiteral(vec)}'::vector, now())
+          on conflict (topic_id) do update set summary = excluded.summary, keywords = excluded.keywords, sample_questions = excluded.sample_questions,
+            chapter_title = excluded.chapter_title, topic_title = excluded.topic_title, embedding = excluded.embedding, updated_at = now();`);
+        grand.cards++;
+        cardNote = " + card";
+      }
+      console.log(`  ${label}: ${unchanged ? "unchanged" : chunks.length + " chunks"}${cardNote}`);
+    } catch (e) {
+      grand.failed++;
+      console.log(`  ${label}: FAILED - ${String(e.message).slice(0, 200)}`);
+    }
   }
-  console.log(`Routing cards written: ${n}`);
 }
-console.log("Done.");
+console.log(`\nDone. documents indexed=${grand.docs} unchanged=${grand.unchanged} chunks written=${grand.chunks} cards=${grand.cards} failed=${grand.failed} (embedding dims ${EMBED_DIMS})`);
+if (grand.failed) process.exitCode = 1;
