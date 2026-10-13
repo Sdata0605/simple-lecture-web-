@@ -387,3 +387,17 @@
   outline: 2px solid var(--aa-ink);
   outline-offset: 2px;
 }
+
+/* With cards on screen the orb and captions give up room to them. */
+.aa-center.has-cards .aa-caption {
+  max-height: 12vh;
+}
+
+.aa-center.has-cards .aa-transcript {
+  max-height: 12vh;
+}
+
+/* Only the card stack shrinks (it scrolls); the orb and the words never get squeezed. */
+.aa-center.has-cards .aa-text {
+  flex-shrink: 0;
+}

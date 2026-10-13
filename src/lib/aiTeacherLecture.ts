@@ -73,14 +73,18 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
 
   const rules: string[] = [`My subject is already chosen (${subjectName}), so never ask which subject I want.`];
   if (trigger === "end") {
-    rules.push("Say in one short sentence that the lecture is over and ask if I have any doubts.");
+    rules.push(
+      "Say in one short sentence that the lecture is over and ask if I have any doubts. Offer a quick 3-question quiz on this lecture (one show_quiz question at a time).",
+    );
   } else {
     rules.push("Greet me in one short sentence and ask what I am unsure about.");
   }
   rules.push(
-    "When I ask, call search_notes first, then answer in a few clear sentences, linking it to what the lecture was saying when that helps. Then ask if it is clear.",
+    "When I ask, call search_notes first, then answer in a few clear sentences, linking it to what the lecture was saying when that helps.",
   );
-  rules.push("This is a voice-only conversation: just talk, and do not use slides, quizzes, visuals, notes documents or any other on-screen tool.");
+  rules.push(
+    "Teach the way you normally do on a live class: show a visual with emojis when it helps me understand (show_visual), give me a question to solve (show_quiz or ask_big_question), check my understanding, and make notes if I ask. Keep each spoken turn short.",
+  );
   rules.push("If I want to continue the lecture, say a short goodbye and tell me to close this screen.");
   if (lang && replyInLectureLanguage) rules.push(`Talk to me in ${lang} unless I speak English.`);
   lines.push(`Instructions for this short session: ${rules.join(" ")}`);
@@ -130,8 +134,8 @@ export interface LectureView {
   teacherCaption: string | null;
   /** What the student is saying right now (`live`) or just asked. */
   studentLine: { text: string; live: boolean } | null;
-  /** Latest quiz / visual / slide the teacher put on screen. */
-  card: LectureCard | null;
+  /** Quizzes, emoji visuals, slides, questions and notes the teacher put on screen, oldest first. */
+  cards: LectureCard[];
   /** Tapping the orb: mute/unmute the mic, restart the call, or nothing yet. */
   orbAction: "mute" | "restart" | "none";
   orbLabel: string;
@@ -145,7 +149,7 @@ const HEARING_LEVEL = 0.2;
 export function deriveLectureView(live: LectureLive): LectureView {
   const { status, speaking, muted, micAvailable, micLevel, teacherName, transcript } = live;
   const lastText = [...transcript].reverse().find((m) => m.kind === "text");
-  const card = ([...transcript].reverse().find((m) => m.kind !== "text") as LectureCard | undefined) ?? null;
+  const cards = transcript.filter((m): m is LectureCard => m.kind !== "text");
   const teacherCaption = lastText && lastText.role === "teacher" ? lastText.text : null;
   const studentLine = lastText && lastText.role === "user" ? { text: lastText.text, live: !lastText.done } : null;
   const inCall = status === "live";
@@ -176,7 +180,7 @@ export function deriveLectureView(live: LectureLive): LectureView {
     statusTone: hearing ? "hearing" : "normal",
     teacherCaption,
     studentLine,
-    card,
+    cards,
     orbAction,
     orbLabel,
     canType: inCall || status === "ended" || status === "error",

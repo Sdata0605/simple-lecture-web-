@@ -36,16 +36,16 @@ describe("buildLectureOpening", () => {
     const t = buildLectureOpening({ trigger: "mid", subjectName: "Maths", context: null });
     expect(t).toContain("never ask which subject");
     expect(t).toContain("close this screen");
-    expect(t).toContain("voice-only conversation");
+    expect(t).not.toContain("voice-only");
     expect(t).toContain("a Maths lecture");
     expect(t).not.toContain("paused at");
   });
 
-  it("asks about doubts, without a quiz, when the lecture has finished", () => {
+  it("asks about doubts and offers a quick quiz when the lecture has finished", () => {
     const t = buildLectureOpening({ trigger: "end", subjectName: "Science", topicTitle: "Light", context: ctx });
     expect(t).toContain("I just finished watching");
     expect(t).toContain("ask if I have any doubts");
-    expect(t).not.toContain("show_quiz");
+    expect(t).toContain("3-question quiz");
     expect(t).not.toContain("Key points on my screen"); // the screen context is only for a mid-lecture pause
   });
 
@@ -146,10 +146,16 @@ describe("deriveLectureView: what the orb screen shows", () => {
     expect(deriveLectureView({ ...base, status: "ended" })).toMatchObject({ orbMode: "idle", orbAction: "restart", status: "Class ended. Tap the orb to start again" });
   });
 
-  it("surfaces the latest quiz or visual card", () => {
+  it("keeps the teaching tools: questions to solve, emoji visuals and understanding checks", () => {
+    const mid = buildLectureOpening({ trigger: "mid", subjectName: "Science", context: null });
+    for (const tool of ["show_visual", "show_quiz", "ask_big_question", "check my understanding"]) expect(mid).toContain(tool);
+  });
+
+  it("surfaces every card the teacher put on screen, in order", () => {
     const quiz: TranscriptItem = { kind: "quiz", id: 9, quiz: { id: "q1", question: "2+2?", options: ["3", "4"], correctIndex: 1, explanation: null } };
-    const v = deriveLectureView({ ...base, transcript: [say("teacher", "Try this."), quiz, say("teacher", "Take your time.")] });
-    expect(v.card).toBe(quiz);
-    expect(deriveLectureView(base).card).toBeNull();
+    const visual: TranscriptItem = { kind: "visual", id: 8, visual: { kind: "scene", title: "Tax burden", items: [{ emoji: "🌾", title: "Peasants" }, { emoji: "👑", title: "Nobles" }] } };
+    const v = deriveLectureView({ ...base, transcript: [visual, say("teacher", "Try this."), quiz, say("teacher", "Take your time.")] });
+    expect(v.cards).toEqual([visual, quiz]);
+    expect(deriveLectureView(base).cards).toEqual([]);
   });
 });

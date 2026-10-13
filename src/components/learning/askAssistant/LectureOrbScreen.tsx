@@ -1,9 +1,10 @@
 // The orb screen of the lecture player's Ask AI: a big orb that listens and speaks, live captions, and
 // the quiz / visual cards the teacher puts on screen. Everything the student hears is the live AI Teacher's
-// own voice; this component only shows what `deriveLectureView` says is happening. It renders as the
-// middle and bottom rows of the `.aa-overlay` grid.
-import { useState, type FormEvent } from "react";
-import { Keyboard, Mic, MicOff, Send, X } from "lucide-react";
+// own voice; this component only shows what `deriveLectureView` says is happening: the teacher's tools
+// (emoji visuals, quizzes, questions to solve, understanding checks, slides, notes) appear as a stack of cards
+// under the orb. It renders as the middle and bottom rows of the `.aa-overlay` grid.
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Keyboard, Mic, MicOff, Send } from "lucide-react";
 import type { LectureCard, LectureView } from "@/lib/aiTeacherLecture";
 import type { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
 import { QuizCard } from "@/components/aiteacher/QuizCard";
@@ -23,10 +24,16 @@ export interface LectureOrbScreenProps {
   onSend: (text: string) => void;
 }
 
+const MAX_CARDS = 5;
+
 export function LectureOrbScreen({ view, live, getLevel, onOrbClick, onSend }: LectureOrbScreenProps) {
   const [typed, setTyped] = useState("");
-  const [dismissedCard, setDismissedCard] = useState<number | null>(null);
-  const card = view.card && view.card.id !== dismissedCard ? view.card : null;
+  // The last few cards stay on screen so a visual is still there when the quiz about it arrives.
+  const cards = view.cards.slice(-MAX_CARDS);
+  const stackRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    stackRef.current?.scrollTo({ top: stackRef.current.scrollHeight, behavior: "smooth" });
+  }, [view.cards.length]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -41,13 +48,13 @@ export function LectureOrbScreen({ view, live, getLevel, onOrbClick, onSend }: L
 
   return (
     <>
-      <main className="aa-center">
+      <main className={`aa-center${cards.length ? " has-cards" : ""}`}>
         <div className="aa-orb-wrap">
           <VoiceOrb
             mode={view.orbMode}
             getLevel={getLevel}
-            // Smaller when a card needs the room.
-            size={card ? 120 : 200}
+            // Smaller when cards need the room.
+            size={cards.length ? 110 : 200}
             onClick={view.orbAction === "none" ? undefined : onOrbClick}
             ariaLabel={view.orbLabel}
           />
@@ -66,17 +73,17 @@ export function LectureOrbScreen({ view, live, getLevel, onOrbClick, onSend }: L
           {view.teacherCaption && <p className="aa-caption">{view.teacherCaption}</p>}
         </div>
 
-        {card && (
-          <div className="relative max-h-[34vh] w-[min(640px,100%)] overflow-y-auto rounded-2xl bg-background p-2.5 text-left text-foreground shadow-xl">
-            <button
-              type="button"
-              onClick={() => setDismissedCard(card.id)}
-              aria-label="Close this card"
-              className="absolute right-1.5 top-1.5 z-10 rounded-full p-1 text-muted-foreground hover:bg-muted"
-            >
-              <X size={14} />
-            </button>
-            <CardBody card={card} live={live} />
+        {cards.length > 0 && (
+          <div
+            ref={stackRef}
+            className="min-h-0 w-[min(640px,100%)] shrink space-y-2.5 overflow-y-auto overscroll-contain rounded-2xl text-left text-foreground"
+            aria-label="From your teacher"
+          >
+            {cards.map((card) => (
+              <div key={card.id} className="rounded-2xl bg-background p-2.5 shadow-xl">
+                <CardBody card={card} live={live} />
+              </div>
+            ))}
           </div>
         )}
       </main>
