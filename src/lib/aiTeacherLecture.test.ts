@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   LECTURE_CONTEXT_TAG,
   buildLectureOpening,
+  QUICK_REQUESTS,
   deriveLectureView,
+  deriveLesson,
   formatClock,
   visibleStudentText,
   withFirstQuestion,
@@ -64,7 +66,7 @@ describe("buildLectureOpening", () => {
       subjectName: "Science",
       context: { ...ctx, narration: "word ".repeat(2000), keyPoints: Array.from({ length: 30 }, (_, i) => `point ${i}`) },
     });
-    expect(t.length).toBeLessThan(2600);
+    expect(t.length).toBeLessThan(3200); // the narration is cut to 1200 characters, not passed through whole
     expect(t).toContain("point 7");
     expect(t).not.toContain("point 8");
   });
@@ -156,16 +158,81 @@ describe("deriveLectureView: what the orb screen shows", () => {
     expect(deriveLectureView({ ...base, status: "ended" })).toMatchObject({ orbMode: "idle", orbAction: "restart", status: "Class ended. Tap the orb to start again" });
   });
 
-  it("keeps the teaching tools: questions to solve, emoji visuals and understanding checks", () => {
+  it("asks for an explanation from the very basics, as numbered steps ending in a question to solve", () => {
     const mid = buildLectureOpening({ trigger: "mid", subjectName: "Science", context: null });
-    for (const tool of ["show_visual", "show_quiz", "ask_big_question", "check my understanding"]) expect(mid).toContain(tool);
+    for (const tool of ["show_visual", "present_slide", "show_quiz", "ask_big_question"]) expect(mid).toContain(tool);
+  });
+});
+
+const slide = (id: number, title: string): TranscriptItem => ({ kind: "slide", id, title, bullets: ["a", "b"] });
+const visualCard = (id: number, title: string): TranscriptItem => ({ kind: "visual", id, visual: { kind: "steps", title, items: [{ emoji: "🌱", title: "Seed" }, { emoji: "🌿", title: "Plant" }] } });
+const quizCard = (id: number): TranscriptItem => ({ kind: "quiz", id, quiz: { id: "q", question: "2+2?", options: ["3", "4"], correctIndex: 1, explanation: null } });
+
+describe("deriveLesson: the board the student sees", () => {
+  it("is empty before the teacher shows anything", () => {
+    expect(deriveLesson([say("user", "why do plants need sunlight?")])).toEqual({ question: null, cards: [], explainCount: 0, hasTurn: false });
   });
 
-  it("surfaces every card the teacher put on screen, in order", () => {
-    const quiz: TranscriptItem = { kind: "quiz", id: 9, quiz: { id: "q1", question: "2+2?", options: ["3", "4"], correctIndex: 1, explanation: null } };
-    const visual: TranscriptItem = { kind: "visual", id: 8, visual: { kind: "scene", title: "Tax burden", items: [{ emoji: "🌾", title: "Peasants" }, { emoji: "👑", title: "Nobles" }] } };
-    const v = deriveLectureView({ ...base, transcript: [visual, say("teacher", "Try this."), quiz, say("teacher", "Take your time.")] });
-    expect(v.cards).toEqual([visual, quiz]);
-    expect(deriveLectureView(base).cards).toEqual([]);
+  it("numbers the steps in order, names them from the title, and remembers what was asked", () => {
+    const lesson = deriveLesson([
+      say("teacher", "Hello"),
+      say("user", "why do plants need sunlight?"),
+      visualCard(1, "Step 1 · The basics"),
+      say("teacher", "Plants need food.", false),
+      slide(2, "Step 2 - Build up"),
+      visualCard(3, "Step 3: Everyday example"),
+      slide(4, "Step 4 · Answer"),
+      quizCard(5),
+    ]);
+    expect(lesson.question).toBe("why do plants need sunlight?");
+    expect(lesson.cards.map((c) => [c.step, c.label, c.role])).toEqual([
+      [1, "The basics", "explain"],
+      [2, "Build up", "explain"],
+      [3, "Everyday example", "explain"],
+      [4, "Answer", "answer"],
+      [null, "Your turn", "turn"],
+    ]);
+    expect(lesson).toMatchObject({ explainCount: 4, hasTurn: true });
+  });
+
+  it("starts a fresh board when the teacher begins again at Step 1 for a new question", () => {
+    const lesson = deriveLesson([
+      say("user", "why do plants need sunlight?"),
+      slide(1, "Step 1 · The basics"),
+      slide(2, "Step 2 · Build up"),
+      quizCard(3),
+      say("user", "what is photosynthesis?"),
+      slide(4, "Step 1 · The basics"),
+    ]);
+    expect(lesson.question).toBe("what is photosynthesis?");
+    expect(lesson.cards.map((c) => c.id)).toEqual([4]);
+    expect(lesson.hasTurn).toBe(false);
+  });
+
+  it("keeps the board when the student answers a question by voice", () => {
+    const lesson = deriveLesson([say("user", "why?"), slide(1, "Step 1 · The basics"), quizCard(2), say("user", "four")]);
+    expect(lesson.cards).toHaveLength(2);
+    expect(lesson.question).toBe("why?");
+  });
+
+  it("still works when the teacher forgets the Step prefix, and ignores the hidden context message", () => {
+    const opening = buildLectureOpening({ trigger: "mid", subjectName: "Science", context: null });
+    const lesson = deriveLesson([say("user", opening), slide(1, "Light and plants"), visualCard(2, "How it works")]);
+    expect(lesson.question).toBeNull();
+    expect(lesson.cards.map((c) => [c.step, c.label])).toEqual([[1, "Light and plants"], [2, "How it works"]]);
+  });
+
+  it("keeps notes and understanding checks on the board without counting them as steps", () => {
+    const doc: TranscriptItem = { kind: "document", id: 9, format: "pdf", doc: { title: "Notes", sections: [], mcqs: [], big_questions: [] } };
+    const lesson = deriveLesson([slide(1, "Step 1 · The basics"), { kind: "understand", id: 2 }, doc]);
+    expect(lesson.cards.map((c) => [c.step, c.role])).toEqual([[1, "explain"], [null, "turn"], [null, "notes"]]);
+    expect(lesson.explainCount).toBe(1);
+  });
+});
+
+describe("quick requests", () => {
+  it("are one-tap requests that ask for a simpler explanation, an example, or a repeat", () => {
+    expect(QUICK_REQUESTS.map((q) => q.label)).toEqual(["Explain simpler", "Give an example", "Repeat that"]);
+    expect(QUICK_REQUESTS[0].prompt).toContain("very basics");
   });
 });

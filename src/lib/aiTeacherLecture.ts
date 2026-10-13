@@ -80,10 +80,13 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
     rules.push("Greet me in one short sentence and ask what I am unsure about.");
   }
   rules.push(
-    "When I ask, call search_notes first, then answer in a few clear sentences, linking it to what the lecture was saying when that helps.",
+    "When I ask a question, call search_notes first, then explain it from the very basics up to the answer, linking it to what the lecture was saying when that helps.",
   );
   rules.push(
-    "Teach the way you normally do on a live class: show a visual with emojis when it helps me understand (show_visual), give me a question to solve (show_quiz or ask_big_question), check my understanding, and make notes if I ask. Keep each spoken turn short.",
+    "Explain it as steps on my screen. For every step call show_visual (with emojis) or present_slide, and start its title with 'Step 1 · ', 'Step 2 · ' and so on, followed by 2 to 4 words (for example 'Step 2 · Build up'). Use these steps: The basics (what I already know, in plain words), Build up (one new idea at a time), Everyday example (a comparison from daily life), Answer (the answer, stated clearly). Say each step in 2 to 3 short spoken sentences and move to the next step yourself unless I interrupt.",
+  );
+  rules.push(
+    "After the answer give me one question to solve (show_quiz or ask_big_question). Start again from Step 1 for each new question. If I say I do not understand, explain it again more simply with a new example and a new visual. Make notes only if I ask.",
   );
   rules.push("If I want to continue the lecture, say a short goodbye and tell me to close this screen.");
   if (lang && replyInLectureLanguage) rules.push(`Talk to me in ${lang} unless I speak English.`);
@@ -134,13 +137,13 @@ export interface LectureView {
   teacherCaption: string | null;
   /** What the student is saying right now (`live`) or just asked. */
   studentLine: { text: string; live: boolean } | null;
-  /** Quizzes, emoji visuals, slides, questions and notes the teacher put on screen, oldest first. */
-  cards: LectureCard[];
   /** Tapping the orb: interrupt the teacher while it speaks, otherwise mute/unmute the mic, restart the call, or nothing yet. */
   orbAction: "interrupt" | "mute" | "restart" | "none";
   orbLabel: string;
   /** The text box works only once the call is live, or when a new call can be started with it. */
   canType: boolean;
+  /** The call is live: the quick buttons and the teacher's tools can be used. */
+  inCall: boolean;
 }
 
 /** Mic level above which we say the student is being heard. */
@@ -149,7 +152,6 @@ const HEARING_LEVEL = 0.2;
 export function deriveLectureView(live: LectureLive): LectureView {
   const { status, speaking, muted, micAvailable, micLevel, teacherName, transcript } = live;
   const lastText = [...transcript].reverse().find((m) => m.kind === "text");
-  const cards = transcript.filter((m): m is LectureCard => m.kind !== "text");
   const teacherCaption = lastText && lastText.role === "teacher" ? lastText.text : null;
   const studentLine = lastText && lastText.role === "user" ? { text: lastText.text, live: !lastText.done } : null;
   const inCall = status === "live";
@@ -194,9 +196,95 @@ export function deriveLectureView(live: LectureLive): LectureView {
     statusTone: hearing ? "hearing" : "normal",
     teacherCaption,
     studentLine,
-    cards,
     orbAction,
     orbLabel,
     canType: inCall || status === "ended" || status === "error",
+    inCall,
   };
 }
+
+// ---------------------------------------------------------------- lesson board
+
+export type LessonRole = "explain" | "answer" | "turn" | "notes";
+
+export interface LessonCard {
+  id: number;
+  card: LectureCard;
+  /** 1-based position among the explanation steps; null for questions and notes. */
+  step: number | null;
+  /** Short name shown on the board: "The basics", "Your turn"... */
+  label: string;
+  role: LessonRole;
+}
+
+export interface Lesson {
+  /** What the student asked that this lesson answers. */
+  question: string | null;
+  cards: LessonCard[];
+  explainCount: number;
+  hasTurn: boolean;
+}
+
+const STEP_TITLE = /^\s*step\s*(\d+)\s*[·:.)\-–—]*\s*(.*)$/i;
+const ANSWER_LABEL = /^(the\s+)?answer\b/i;
+
+function cardTitle(card: LectureCard): string {
+  return card.kind === "slide" ? card.title : card.kind === "visual" ? card.visual.title : "";
+}
+
+/** The current lesson: the cards since the teacher last started again at "Step 1", numbered in order. */
+export function deriveLesson(transcript: TranscriptItem[]): Lesson {
+  let pendingQuestion: string | null = null;
+  let question: string | null = null;
+  let cards: LessonCard[] = [];
+  let explainCount = 0;
+
+  for (const item of transcript) {
+    if (item.kind === "text") {
+      if (item.role === "user" && item.done) {
+        const text = visibleStudentText(item.text);
+        if (text) pendingQuestion = text;
+      }
+      continue;
+    }
+    const explains = item.kind === "slide" || item.kind === "visual";
+    const parsed = explains ? STEP_TITLE.exec(cardTitle(item)) : null;
+    // The teacher numbering from "Step 1" again means a new question: start a fresh board.
+    if (explains && parsed && Number(parsed[1]) === 1 && explainCount > 0) {
+      cards = [];
+      explainCount = 0;
+    }
+    if (cards.length === 0) question = pendingQuestion;
+
+    if (explains) {
+      explainCount += 1;
+      const label = (parsed ? parsed[2] : cardTitle(item)).trim() || `Step ${explainCount}`;
+      cards.push({ id: item.id, card: item, step: explainCount, label, role: ANSWER_LABEL.test(label) ? "answer" : "explain" });
+    } else if (item.kind === "document") {
+      cards.push({ id: item.id, card: item, step: null, label: "Notes", role: "notes" });
+    } else {
+      const label = item.kind === "quiz" ? "Your turn" : item.kind === "bigq" ? "Big question" : "Check-in";
+      cards.push({ id: item.id, card: item, step: null, label, role: "turn" });
+    }
+  }
+  return { question, cards, explainCount, hasTurn: cards.some((c) => c.role === "turn") };
+}
+
+/** One-tap requests under the orb; sent to the teacher without showing up as a question. */
+export const QUICK_REQUESTS = [
+  {
+    id: "simpler",
+    label: "Explain simpler",
+    prompt: "[Student request] I did not understand. Please explain it again more simply, from the very basics, with a new everyday example and a new visual.",
+  },
+  {
+    id: "example",
+    label: "Give an example",
+    prompt: "[Student request] Please give me one more real-life example of this, with a visual.",
+  },
+  {
+    id: "repeat",
+    label: "Repeat that",
+    prompt: "[Student request] Please repeat your last explanation slowly, step by step.",
+  },
+] as const;

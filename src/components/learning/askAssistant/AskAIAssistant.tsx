@@ -1,7 +1,8 @@
-// "Ask AI" inside the lecture player: a full-screen orb over the paused lecture. The student talks, by voice,
-// to the same live AI Teacher as /aiteacher (Gemini Live: the teacher's own voice, answers grounded in the
-// knowledge index, quiz/visual cards), and the teacher is told which lecture is paused and where. There are
-// no pre-recorded clips: every word the student hears is the teacher speaking.
+// "Ask AI" inside the lecture player: a full-screen lesson over the paused lecture. The student talks, by
+// voice, to the same live AI Teacher as /aiteacher (Gemini Live: the teacher's own voice, answers grounded in
+// the knowledge index), and the teacher is told which lecture is paused and where. It explains every question
+// from the basics as steps on a lesson board next to the orb. There are no pre-recorded clips: every word the
+// student hears is the teacher speaking.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Lock, Sparkles, X } from "lucide-react";
@@ -12,6 +13,7 @@ import type { TeacherSubject } from "@/lib/aiTeacherApi";
 import {
   buildLectureOpening,
   deriveLectureView,
+  deriveLesson,
   visibleStudentText,
   withFirstQuestion,
   type LectureAskContext,
@@ -136,6 +138,7 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
     teacherName: live.teacherName,
     transcript,
   });
+  const lesson = deriveLesson(transcript);
 
   // The orb is animated per frame from refs, so it never forces a re-render. The teacher's output has no
   // level meter, so while it speaks the orb follows a syllable-like envelope.
@@ -168,7 +171,22 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
     }
   };
 
-  return <LectureOrbScreen view={view} live={live} getLevel={getLevel} onOrbClick={onOrbClick} onSend={onSend} />;
+  // Quick buttons ("Explain simpler"...) are requests to the teacher, not questions: they stay off the board.
+  const onQuick = (prompt: string) => {
+    if (live.status === "live") live.sendText(prompt, { silent: true });
+  };
+
+  return (
+    <LectureOrbScreen
+      view={view}
+      lesson={lesson}
+      live={live}
+      getLevel={getLevel}
+      onOrbClick={onOrbClick}
+      onSend={onSend}
+      onQuick={onQuick}
+    />
+  );
 }
 
 function Gate({
@@ -183,20 +201,17 @@ function Gate({
   action?: { label: string; onClick: () => void };
 }) {
   return (
-    <>
-      <main className="aa-center">
-        <div className="aa-gate">
-          <span className="aa-mic-chip" aria-hidden="true">{icon}</span>
-          <h2>{title}</h2>
-          {text && <p>{text}</p>}
-          {action && (
-            <button type="button" className="aa-action" onClick={action.onClick}>
-              {action.label}
-            </button>
-          )}
-        </div>
-      </main>
-      <div />
-    </>
+    <main className="aa-center">
+      <div className="aa-gate">
+        <span className="aa-mic-chip" aria-hidden="true">{icon}</span>
+        <h2>{title}</h2>
+        {text && <p>{text}</p>}
+        {action && (
+          <button type="button" className="aa-action" onClick={action.onClick}>
+            {action.label}
+          </button>
+        )}
+      </div>
+    </main>
   );
 }

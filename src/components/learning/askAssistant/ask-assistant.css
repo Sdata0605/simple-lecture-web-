@@ -15,7 +15,7 @@
   /* Above V5Player (9999), same layer as the answer player it hands off to. */
   z-index: 10000;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   color: var(--aa-ink);
   /* Lets the paused lecture show through faintly — the assistant feels
      layered over the lesson rather than replacing it. */
@@ -386,18 +386,4 @@
 .aa-action:focus-visible {
   outline: 2px solid var(--aa-ink);
   outline-offset: 2px;
-}
-
-/* With cards on screen the orb and captions give up room to them. */
-.aa-center.has-cards .aa-caption {
-  max-height: 12vh;
-}
-
-.aa-center.has-cards .aa-transcript {
-  max-height: 12vh;
-}
-
-/* Only the card stack shrinks (it scrolls); the orb and the words never get squeezed. */
-.aa-center.has-cards .aa-text {
-  flex-shrink: 0;
 }
