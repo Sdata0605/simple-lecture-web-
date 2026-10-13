@@ -108,8 +108,10 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
     }),
   );
 
-  // `enrolledSubjects` scopes the teacher to this subject.
-  const live = useLiveTeacher({ subject, subjects, onSubject: noop, prefs, enrolledSubjects: subject.name });
+  // `enrolledSubjects` scopes the teacher to this subject. `echoGuard`: on speakers the mic would hear the
+  // teacher and cut it off, so the mic is closed while it talks and reopens by itself when it finishes;
+  // tapping the orb breaks in.
+  const live = useLiveTeacher({ subject, subjects, onSubject: noop, prefs, enrolledSubjects: subject.name, echoGuard: true });
 
   // Deferred a tick so a dev-time remount cancels it instead of opening two calls.
   const connectRef = useRef(live.connect);
@@ -149,7 +151,8 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
   }, []);
 
   const onOrbClick = () => {
-    if (view.orbAction === "mute") live.toggleMute();
+    if (view.orbAction === "interrupt") live.interrupt();
+    else if (view.orbAction === "mute") live.toggleMute();
     else if (view.orbAction === "restart") {
       live.reset();
       void live.connect(opening);

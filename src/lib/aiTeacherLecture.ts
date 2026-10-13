@@ -136,8 +136,8 @@ export interface LectureView {
   studentLine: { text: string; live: boolean } | null;
   /** Quizzes, emoji visuals, slides, questions and notes the teacher put on screen, oldest first. */
   cards: LectureCard[];
-  /** Tapping the orb: mute/unmute the mic, restart the call, or nothing yet. */
-  orbAction: "mute" | "restart" | "none";
+  /** Tapping the orb: interrupt the teacher while it speaks, otherwise mute/unmute the mic, restart the call, or nothing yet. */
+  orbAction: "interrupt" | "mute" | "restart" | "none";
   orbLabel: string;
   /** The text box works only once the call is live, or when a new call can be started with it. */
   canType: boolean;
@@ -164,15 +164,29 @@ export function deriveLectureView(live: LectureLive): LectureView {
   if (status === "connecting" || status === "idle") line = "Connecting to your teacher…";
   else if (status === "error") line = "Tap the orb to try again, or type below";
   else if (status === "ended") line = "Class ended. Tap the orb to start again";
-  else if (inCall && speaking) line = `${teacherName} is speaking`;
+  else if (inCall && speaking) line = `${teacherName} is speaking · tap the orb to interrupt`;
   else if (inCall && studentLine && !studentLine.live) line = "Thinking…";
   else if (inCall && !micAvailable) line = "Type your question below";
   else if (inCall && muted) line = "Microphone muted. Tap the orb to unmute";
   else if (inCall) line = hearing ? "Listening…" : "Go ahead, I'm listening";
 
-  const orbAction = inCall ? (micAvailable ? "mute" : "none") : status === "ended" || status === "error" ? "restart" : "none";
+  const orbAction: LectureView["orbAction"] = inCall
+    ? speaking
+      ? "interrupt"
+      : micAvailable
+        ? "mute"
+        : "none"
+    : status === "ended" || status === "error"
+      ? "restart"
+      : "none";
   const orbLabel =
-    orbAction === "mute" ? (muted ? "Unmute microphone" : "Mute microphone") : orbAction === "restart" ? "Start talking again" : "Connecting";
+    orbAction === "interrupt"
+      ? "Interrupt the teacher"
+      : orbAction === "mute"
+        ? muted ? "Unmute microphone" : "Mute microphone"
+        : orbAction === "restart"
+          ? "Start talking again"
+          : "Connecting";
 
   return {
     orbMode,

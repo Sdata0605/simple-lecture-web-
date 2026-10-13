@@ -121,9 +121,19 @@ describe("deriveLectureView: what the orb screen shows", () => {
   it("speaks with the teacher's own words as the caption", () => {
     const v = deriveLectureView({ ...base, speaking: true, transcript: [say("teacher", "Namaste! What is confusing you?", false)] });
     expect(v.orbMode).toBe("speaking");
-    expect(v.status).toBe("Asha is speaking");
+    expect(v.status).toBe("Asha is speaking · tap the orb to interrupt");
     expect(v.teacherCaption).toBe("Namaste! What is confusing you?");
     expect(v.studentLine).toBeNull();
+  });
+
+  it("lets the student tap the orb to interrupt the teacher, and mutes otherwise", () => {
+    const talking = deriveLectureView({ ...base, speaking: true });
+    expect(talking).toMatchObject({ orbAction: "interrupt", orbLabel: "Interrupt the teacher" });
+    // Interrupting works even when there is no microphone yet, and even if the mic is muted.
+    expect(deriveLectureView({ ...base, speaking: true, micAvailable: false }).orbAction).toBe("interrupt");
+    expect(deriveLectureView({ ...base, speaking: true, muted: true }).orbAction).toBe("interrupt");
+    // Once the teacher has finished, the same tap is the mute switch again.
+    expect(deriveLectureView({ ...base, speaking: false })).toMatchObject({ orbAction: "mute", orbLabel: "Mute microphone" });
   });
 
   it("shows the student's live words, then 'Thinking…' once they have finished asking", () => {
