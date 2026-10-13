@@ -14,12 +14,14 @@ import {
   buildLectureOpening,
   deriveLectureView,
   deriveLesson,
+  nextStepNudge,
   visibleStudentText,
   withFirstQuestion,
   type LectureAskContext,
 } from "@/lib/aiTeacherLecture";
 import { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
 import { LectureOrbScreen } from "./LectureOrbScreen";
+import { useAutoContinue } from "./useAutoContinue";
 import "./ask-assistant.css";
 
 export interface AskAIAssistantProps {
@@ -139,6 +141,12 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
     transcript,
   });
   const lesson = deriveLesson(transcript);
+
+  // Keep the lesson moving: once the teacher has finished a step and the student has said nothing, tell it
+  // (silently) to go on, so nobody has to say "go ahead". One nudge per step. Speaking, or any new sound from
+  // the teacher, changes the inputs and cancels a pending nudge.
+  const nudge = nextStepNudge({ inCall: live.status === "live", speaking: live.speaking, micLevel: live.micLevel, transcript });
+  useAutoContinue(nudge, (text) => live.sendText(text, { silent: true }));
 
   // The orb is animated per frame from refs, so it never forces a re-render. The teacher's output has no
   // level meter, so while it speaks the orb follows a syllable-like envelope.

@@ -5,6 +5,7 @@ import {
   QUICK_REQUESTS,
   deriveLectureView,
   deriveLesson,
+  nextStepNudge,
   formatClock,
   visibleStudentText,
   withFirstQuestion,
@@ -234,5 +235,54 @@ describe("quick requests", () => {
   it("are one-tap requests that ask for a simpler explanation, an example, or a repeat", () => {
     expect(QUICK_REQUESTS.map((q) => q.label)).toEqual(["Explain simpler", "Give an example", "Repeat that"]);
     expect(QUICK_REQUESTS[0].prompt).toContain("very basics");
+  });
+});
+
+describe("nextStepNudge: the lesson keeps going without the student saying go ahead", () => {
+  const idle = { inCall: true, speaking: false, micLevel: 0 };
+  const finished = (text: string) => say("teacher", text, true);
+
+  it("tells the teacher to go on once it has finished a step and the student said nothing", () => {
+    const n = nextStepNudge({ ...idle, transcript: [say("user", "why?"), slide(1, "Step 1 · The basics"), finished("Plants make food.")] });
+    expect(n).toEqual({ cardId: 1, text: expect.stringContaining("next step") });
+  });
+
+  it("asks for the question to solve after the Answer step", () => {
+    const n = nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), finished("a"), slide(2, "Step 2 · Answer"), finished("So that is why.")] });
+    expect(n).toMatchObject({ cardId: 2, text: expect.stringContaining("question to solve") });
+  });
+
+  it("waits while the teacher is still talking or has not finished its turn", () => {
+    const transcript = [slide(1, "Step 1 · The basics"), finished("Plants make food.")];
+    expect(nextStepNudge({ ...idle, speaking: true, transcript })).toBeNull();
+    // the card is up but the teacher has not said anything about it yet
+    expect(nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics")] })).toBeNull();
+    // its words are still open (the turn has not completed)
+    expect(nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), say("teacher", "Plants make", false)] })).toBeNull();
+  });
+
+  it("holds off while the student is speaking, and once they have said anything since the step", () => {
+    const transcript = [slide(1, "Step 1 · The basics"), finished("Plants make food.")];
+    expect(nextStepNudge({ ...idle, micLevel: 0.5, transcript })).toBeNull();
+    expect(nextStepNudge({ ...idle, transcript: [...transcript, say("user", "wait, what is food?")] })).toBeNull();
+  });
+
+  it("stops at the student's turn, with nothing to continue, or when the call is not live", () => {
+    const quizTranscript = [slide(1, "Step 1 · The basics"), finished("a"), quizCard(2), finished("Over to you.")];
+    expect(nextStepNudge({ ...idle, transcript: quizTranscript })).toBeNull();
+    expect(nextStepNudge({ ...idle, transcript: [finished("Hello!")] })).toBeNull();
+    expect(nextStepNudge({ ...idle, inCall: false, transcript: [slide(1, "Step 1 · The basics"), finished("x")] })).toBeNull();
+  });
+
+  it("does not run a lesson on forever", () => {
+    const long: TranscriptItem[] = [];
+    for (let i = 1; i <= 7; i++) long.push(slide(i, `Step ${i} · More`), finished("more"));
+    expect(nextStepNudge({ ...idle, transcript: long })).toBeNull();
+  });
+
+  it("is told, in the instructions, never to wait between steps", () => {
+    const opening = buildLectureOpening({ trigger: "mid", subjectName: "Science", context: null });
+    expect(opening).toContain("never wait for me");
+    expect(opening).toContain("keep going until the Answer step");
   });
 });

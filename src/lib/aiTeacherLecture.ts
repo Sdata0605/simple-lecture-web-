@@ -83,7 +83,7 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
     "When I ask a question, call search_notes first, then explain it from the very basics up to the answer, linking it to what the lecture was saying when that helps.",
   );
   rules.push(
-    "Explain it as steps on my screen. For every step call show_visual (with emojis) or present_slide, and start its title with 'Step 1 · ', 'Step 2 · ' and so on, followed by 2 to 4 words (for example 'Step 2 · Build up'). Use these steps: The basics (what I already know, in plain words), Build up (one new idea at a time), Everyday example (a comparison from daily life), Answer (the answer, stated clearly). Say each step in 2 to 3 short spoken sentences and move to the next step yourself unless I interrupt.",
+    "Explain it as steps on my screen. For every step call show_visual (with emojis) or present_slide, and start its title with 'Step 1 · ', 'Step 2 · ' and so on, followed by 2 to 4 words (for example 'Step 2 · Build up'). Use these steps: The basics (what I already know, in plain words), Build up (one new idea at a time), Everyday example (a comparison from daily life), Answer (the answer, stated clearly). Say each step in 2 to 3 short spoken sentences, then go straight on to the next step yourself: never wait for me, and never ask whether to continue, unless I interrupt. When I say nothing, I want you to keep going until the Answer step.",
   );
   rules.push(
     "After the answer give me one question to solve (show_quiz or ask_big_question). Start again from Step 1 for each new question. If I say I do not understand, explain it again more simply with a new example and a new visual. Make notes only if I ask.",
@@ -288,3 +288,49 @@ export const QUICK_REQUESTS = [
     prompt: "[Student request] Please repeat your last explanation slowly, step by step.",
   },
 ] as const;
+
+// ---------------------------------------------------------------- keep the lesson moving
+
+/** Quiet time after the teacher finishes a step before the screen tells it to go on. */
+export const AUTO_CONTINUE_MS = 900;
+/** Never push a lesson past this many explanation steps on its own. */
+const MAX_AUTO_STEPS = 6;
+
+export interface Nudge {
+  /** The step this nudge follows; one nudge per step. */
+  cardId: number;
+  text: string;
+}
+
+const CONTINUE_STEP = "[Continue] Go straight on to the next step now. Do not wait for me.";
+const CONTINUE_TO_QUESTION = "[Continue] Now give me one question to solve about this. Do not wait for me.";
+
+/**
+ * After the teacher has finished speaking a step and the student has said nothing, the lesson should go on by
+ * itself. Returns what to tell the teacher, or null when it should wait: the teacher is still talking or has
+ * not finished its turn, the student is speaking or has spoken since the step, the lesson is already at the
+ * student's turn, or nothing has been explained yet.
+ */
+export function nextStepNudge(input: {
+  inCall: boolean;
+  speaking: boolean;
+  micLevel: number;
+  transcript: TranscriptItem[];
+}): Nudge | null {
+  const { inCall, speaking, micLevel, transcript } = input;
+  if (!inCall || speaking || micLevel >= HEARING_LEVEL) return null;
+
+  const lesson = deriveLesson(transcript);
+  const last = lesson.cards[lesson.cards.length - 1];
+  if (!last || (last.role !== "explain" && last.role !== "answer") || lesson.explainCount > MAX_AUTO_STEPS) return null;
+
+  const at = transcript.findIndex((item) => item.kind !== "text" && item.id === last.id);
+  if (at < 0) return null;
+  const after = transcript.slice(at + 1);
+  if (after.some((item) => item.kind === "text" && item.role === "user")) return null; // the student is in charge
+  // The teacher must have said something about this step and finished its turn (its text is closed).
+  const said = after.filter((item) => item.kind === "text" && item.role === "teacher");
+  if (!said.length || said.some((item) => item.kind === "text" && !item.done)) return null;
+
+  return { cardId: last.id, text: last.role === "answer" ? CONTINUE_TO_QUESTION : CONTINUE_STEP };
+}
