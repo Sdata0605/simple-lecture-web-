@@ -1,9 +1,10 @@
 // The lesson board's cards, in the orb screen's dark theme: emoji visuals, recap slides, the question to
 // solve, the understanding check, written answers and study notes. Same behaviour as the AI Teacher page's
 // cards (aiteacher/Cards.tsx, QuizCard.tsx), which are styled for a light page and so are not reused here.
-import { Fragment, useState } from "react";
+import { Fragment, useState, type CSSProperties } from "react";
 import { CheckCircle2, Download, FileText, Send, XCircle } from "lucide-react";
 import type { LessonCard } from "@/lib/aiTeacherLecture";
+import { bulletKind, normalizeMathDelimiters, stripWhy, toInlineMathMarkdown, toMathMarkdown } from "@/lib/aiTeacherMath";
 import type { VisualData } from "@/components/aiteacher/Cards";
 import type { QuizItem } from "@/components/aiteacher/QuizCard";
 import { Markdown } from "@/components/aiteacher/Markdown";
@@ -16,13 +17,15 @@ export interface CardActions {
   answerBigQuestion: (answer: string) => void;
 }
 
-export function CardBody({ item, actions }: { item: LessonCard; actions: CardActions }) {
+export function CardBody({ item, actions, math = false }: { item: LessonCard; actions: CardActions; math?: boolean }) {
   const card = item.card;
   switch (card.kind) {
     case "visual":
       return <Visual visual={card.visual} />;
     case "slide":
-      return (
+      return math ? (
+        <Working bullets={card.bullets} />
+      ) : (
         <ul className="lb-bullets">
           {card.bullets.map((bullet, i) => (
             <li key={i}>{bullet}</li>
@@ -38,6 +41,43 @@ export function CardBody({ item, actions }: { item: LessonCard; actions: CardAct
     case "document":
       return <Notes format={card.format} doc={card.doc} />;
   }
+}
+
+// ---------------------------------------------------------------- maths working
+
+/**
+ * One step of a worked solution: equation lines typeset and written in one after another, the reason for the
+ * move ("Why: ...") as a note, and any other line as plain text. `--i` staggers the writing-in.
+ */
+function Working({ bullets }: { bullets: string[] }) {
+  return (
+    <div className="lb-work">
+      {bullets.map((bullet, i) => {
+        const style = { "--i": i } as CSSProperties;
+        const kind = bulletKind(bullet);
+        if (kind === "equation") {
+          return (
+            <div key={i} className="lb-eq" style={style}>
+              <Markdown>{toMathMarkdown(bullet)}</Markdown>
+            </div>
+          );
+        }
+        if (kind === "why") {
+          return (
+            <div key={i} className="lb-why" style={style}>
+              <span>Why</span>
+              <Markdown>{stripWhy(toMathMarkdown(bullet))}</Markdown>
+            </div>
+          );
+        }
+        return (
+          <div key={i} className="lb-line" style={style}>
+            <Markdown>{toMathMarkdown(bullet)}</Markdown>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------- visuals
@@ -152,7 +192,7 @@ function Quiz({ quiz, onAnswer }: { quiz: QuizItem; onAnswer: (optionIndex: numb
 
   return (
     <div>
-      <Markdown className="lb-question">{quiz.question}</Markdown>
+      <Markdown className="lb-question">{normalizeMathDelimiters(quiz.question)}</Markdown>
       <div className="lb-options" role="radiogroup" aria-label="Answer options">
         {quiz.options.map((option, i) => {
           const isCorrect = i === quiz.correctIndex;
@@ -171,7 +211,9 @@ function Quiz({ quiz, onAnswer }: { quiz: QuizItem; onAnswer: (optionIndex: numb
               }}
             >
               <span className="lb-letter">{LETTERS[i]}</span>
-              <span className="lb-opt__text">{option}</span>
+              <span className="lb-opt__text">
+                <Markdown>{toInlineMathMarkdown(option)}</Markdown>
+              </span>
               {answered && isCorrect && <CheckCircle2 size={16} aria-hidden="true" />}
               {answered && picked === i && !isCorrect && <XCircle size={16} aria-hidden="true" />}
             </button>
@@ -224,7 +266,7 @@ function BigQuestion({ question, hint, onSubmit }: { question: string; hint?: st
   const [sent, setSent] = useState<string | null>(null);
   return (
     <div>
-      <Markdown className="lb-question">{question}</Markdown>
+      <Markdown className="lb-question">{normalizeMathDelimiters(question)}</Markdown>
       {hint && <p className="lb-hint">Hint: {hint}</p>}
       {sent ? (
         <p className="lb-sent">

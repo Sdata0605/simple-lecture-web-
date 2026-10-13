@@ -842,3 +842,137 @@
 .aa-stage:not(.has-board) .aa-teacher .aa-composer {
   margin-top: 0;
 }
+
+/* ---------------------------------------------------------------- maths: a worked solution */
+
+/* Every step stays open like a notebook page; earlier steps dim a little so the latest one leads. */
+.lb-board--math .lb-step__head--static {
+  cursor: default;
+}
+
+.lb-board--math .lb-step.is-past {
+  opacity: 0.8;
+}
+
+.lb-board--math .lb-step.is-past:hover {
+  opacity: 1;
+}
+
+.lb-board--math .lb-step.is-current {
+  border-color: rgba(124, 224, 195, 0.45);
+  background: rgba(124, 224, 195, 0.06);
+}
+
+.lb-board--math .lb-step.is-past .lb-step__label {
+  color: var(--aa-ink);
+  font-weight: 600;
+}
+
+.lb-board--math .lb-step.is-past .lb-step__badge {
+  color: var(--aa-mint);
+  background: rgba(124, 224, 195, 0.14);
+}
+
+.lb-work {
+  display: grid;
+  gap: 10px;
+}
+
+/* An equation line: big, centered, written in left to right, one line after another. */
+.lb-eq {
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid rgba(124, 224, 195, 0.16);
+  border-radius: 14px;
+  color: var(--aa-ink);
+  background: rgba(7, 16, 15, 0.55);
+  text-align: center;
+  animation: lb-write 420ms ease both;
+  animation-delay: calc(var(--i, 0) * 340ms);
+}
+
+.lb-eq .katex-display {
+  margin: 0;
+}
+
+.lb-eq .katex {
+  font-size: 1.55em;
+}
+
+/* \boxed{...}: the answer. */
+.lb-eq .fbox {
+  padding: 0.18em 0.45em;
+  border: 2px solid var(--aa-mint) !important;
+  border-radius: 8px;
+  background: rgba(124, 224, 195, 0.12);
+}
+
+.lb-why {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 12px;
+  border-left: 3px solid var(--aa-gold);
+  border-radius: 0 10px 10px 0;
+  color: #f0dcae;
+  background: rgba(245, 198, 106, 0.08);
+  font-size: 14px;
+  line-height: 1.45;
+  animation: lb-write 420ms ease both;
+  animation-delay: calc(var(--i, 0) * 340ms);
+}
+
+.lb-why > span {
+  flex: none;
+  color: var(--aa-gold);
+  font: 700 10px/1 "Cascadia Mono", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.lb-line {
+  font-size: 15px;
+  line-height: 1.5;
+  animation: lb-write 420ms ease both;
+  animation-delay: calc(var(--i, 0) * 340ms);
+}
+
+.lb-line > div,
+.lb-why > div {
+  font-size: inherit;
+}
+
+.lb-eq > div {
+  font-size: 14px;
+}
+
+.lb-opt__text > div {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* The answer step stands out. */
+.lb-step--answer .lb-eq {
+  border-color: rgba(124, 224, 195, 0.45);
+}
+
+@keyframes lb-write {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lb-eq,
+  .lb-why,
+  .lb-line {
+    animation: none;
+  }
+}

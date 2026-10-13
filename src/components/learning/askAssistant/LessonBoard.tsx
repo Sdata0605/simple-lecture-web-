@@ -80,7 +80,7 @@ export function LessonBoard({ lesson, actions }: { lesson: Lesson; actions: Card
   };
 
   return (
-    <div ref={boardRef}>
+    <div ref={boardRef} className={lesson.math ? "lb-board--math" : undefined}>
       {question && (
         <p className="lb-ask">
           <span>You asked</span>
@@ -105,26 +105,36 @@ export function LessonBoard({ lesson, actions }: { lesson: Lesson; actions: Card
       </div>
 
       {cards.map((item, index) => {
-        const isOpen = openId === item.id;
+        // A maths solution stays open from start to finish: each line of working follows from the one above.
+        const isOpen = lesson.math || openId === item.id;
         const past = index < cards.length - 1;
+        const head = (
+          <>
+            <span className="lb-step__badge" aria-hidden="true">
+              {past && item.role !== "notes" && !lesson.math ? <Check size={15} /> : item.step ?? (item.role === "notes" ? "•" : "?")}
+            </span>
+            <span className="lb-step__label">
+              <i>{eyebrow(item)}</i>
+              {title(item)}
+            </span>
+          </>
+        );
         return (
           <section
             key={item.id}
             data-card={item.id}
-            className={`lb-step lb-step--${item.role}${isOpen ? " is-open" : ""}${past ? " is-past" : ""}`}
+            className={`lb-step lb-step--${item.role}${isOpen ? " is-open" : ""}${past ? " is-past" : " is-current"}`}
           >
-            <button type="button" className="lb-step__head" aria-expanded={isOpen} onClick={() => setOpenId(isOpen ? null : item.id)}>
-              <span className="lb-step__badge" aria-hidden="true">
-                {past && item.role !== "notes" ? <Check size={15} /> : item.step ?? (item.role === "notes" ? "•" : "?")}
-              </span>
-              <span className="lb-step__label">
-                <i>{eyebrow(item)}</i>
-                {title(item)}
-              </span>
-              <ChevronDown className="lb-step__chev" size={18} aria-hidden="true" />
-            </button>
+            {lesson.math ? (
+              <div className="lb-step__head lb-step__head--static">{head}</div>
+            ) : (
+              <button type="button" className="lb-step__head" aria-expanded={isOpen} onClick={() => setOpenId(isOpen ? null : item.id)}>
+                {head}
+                <ChevronDown className="lb-step__chev" size={18} aria-hidden="true" />
+              </button>
+            )}
             <div className="lb-step__body" hidden={!isOpen}>
-              <CardBody item={item} actions={actions} />
+              <CardBody item={item} actions={actions} math={lesson.math} />
             </div>
           </section>
         );

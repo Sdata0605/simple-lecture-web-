@@ -67,7 +67,7 @@ describe("buildLectureOpening", () => {
       subjectName: "Science",
       context: { ...ctx, narration: "word ".repeat(2000), keyPoints: Array.from({ length: 30 }, (_, i) => `point ${i}`) },
     });
-    expect(t.length).toBeLessThan(3200); // the narration is cut to 1200 characters, not passed through whole
+    expect(t.length).toBeLessThan(5000); // the narration is cut to 1200 characters, not passed through whole
     expect(t).toContain("point 7");
     expect(t).not.toContain("point 8");
   });
@@ -171,7 +171,7 @@ const quizCard = (id: number): TranscriptItem => ({ kind: "quiz", id, quiz: { id
 
 describe("deriveLesson: the board the student sees", () => {
   it("is empty before the teacher shows anything", () => {
-    expect(deriveLesson([say("user", "why do plants need sunlight?")])).toEqual({ question: null, cards: [], explainCount: 0, hasTurn: false });
+    expect(deriveLesson([say("user", "why do plants need sunlight?")])).toEqual({ question: null, cards: [], explainCount: 0, hasTurn: false, math: false });
   });
 
   it("numbers the steps in order, names them from the title, and remembers what was asked", () => {
@@ -276,7 +276,7 @@ describe("nextStepNudge: the lesson keeps going without the student saying go ah
 
   it("does not run a lesson on forever", () => {
     const long: TranscriptItem[] = [];
-    for (let i = 1; i <= 7; i++) long.push(slide(i, `Step ${i} · More`), finished("more"));
+    for (let i = 1; i <= 11; i++) long.push(slide(i, `Step ${i} · More`), finished("more"));
     expect(nextStepNudge({ ...idle, transcript: long })).toBeNull();
   });
 
@@ -284,5 +284,38 @@ describe("nextStepNudge: the lesson keeps going without the student saying go ah
     const opening = buildLectureOpening({ trigger: "mid", subjectName: "Science", context: null });
     expect(opening).toContain("never wait for me");
     expect(opening).toContain("keep going until the Answer step");
+  });
+});
+
+describe("maths: solving a problem step by step in front of the student", () => {
+  const mathSlide = (id: number, title: string, bullets: string[]): TranscriptItem => ({ kind: "slide", id, title, bullets });
+
+  it("marks a lesson as maths when the steps carry LaTeX, in any of the forms the model uses", () => {
+    expect(deriveLesson([mathSlide(1, "Step 1 · The problem", ["Find x", "$$2x + 3 = 11$$"])]).math).toBe(true);
+    expect(deriveLesson([mathSlide(1, "Step 2 · Divide", ["\\[ x = 4 \\]"])]).math).toBe(true);
+    expect(deriveLesson([mathSlide(1, "Step 2 · Divide", ["\\frac{8}{2} = 4"])]).math).toBe(true);
+  });
+
+  it("leaves theory lessons alone", () => {
+    expect(deriveLesson([slide(1, "Step 1 · The basics"), visualCard(2, "Step 2 · Build up")]).math).toBe(false);
+    expect(deriveLesson([]).math).toBe(false);
+  });
+
+  it("tells the teacher how to solve a problem: one move per step, LaTeX lines, a reason, a boxed and checked answer", () => {
+    const t = buildLectureOpening({ trigger: "mid", subjectName: "Maths", context: null });
+    for (const part of ["MATHS:", "present_slide", "Step 1 · The problem", "$$2x + 3 = 11$$", "Why:", "\\boxed{x = 4}", "one move per step", "two x plus three equals eleven", "similar problem"]) {
+      expect(t).toContain(part);
+    }
+  });
+
+  it("makes the quick buttons maths-aware", () => {
+    expect(QUICK_REQUESTS[0].prompt).toContain("maths problem");
+    expect(QUICK_REQUESTS[1].prompt).toContain("similar one step by step");
+  });
+
+  it("lets a long solution run on by itself", () => {
+    const steps: TranscriptItem[] = [];
+    for (let i = 1; i <= 8; i++) steps.push(mathSlide(i, "Step " + i + " · Move", ["$$x = " + i + "$$"]), say("teacher", "done", true));
+    expect(nextStepNudge({ inCall: true, speaking: false, micLevel: 0, transcript: steps })).not.toBeNull();
   });
 });

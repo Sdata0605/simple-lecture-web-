@@ -2,6 +2,7 @@
 // teacher is told which lecture is paused and where, so it can answer in context without asking which
 // subject the student wants.
 import type { TranscriptItem } from "@/components/aiteacher/useLiveTeacher";
+import { hasMath } from "./aiTeacherMath";
 
 /** Where the student was in the lecture when they tapped Ask AI. */
 export interface LectureAskContext {
@@ -86,7 +87,10 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
     "Explain it as steps on my screen. For every step call show_visual (with emojis) or present_slide, and start its title with 'Step 1 · ', 'Step 2 · ' and so on, followed by 2 to 4 words (for example 'Step 2 · Build up'). Use these steps: The basics (what I already know, in plain words), Build up (one new idea at a time), Everyday example (a comparison from daily life), Answer (the answer, stated clearly). Say each step in 2 to 3 short spoken sentences, then go straight on to the next step yourself: never wait for me, and never ask whether to continue, unless I interrupt. When I say nothing, I want you to keep going until the Answer step.",
   );
   rules.push(
-    "After the answer give me one question to solve (show_quiz or ask_big_question). Start again from Step 1 for each new question. If I say I do not understand, explain it again more simply with a new example and a new visual. Make notes only if I ask.",
+    "MATHS: if my question is a maths problem or an equation, or I ask you to solve something, solve it step by step in front of me instead of using visuals. Use present_slide for every step, titled 'Step 1 · The problem', then 'Step 2 · ' and a short description of the move (for example 'Step 3 · Subtract 3 from both sides'). Write each line of working as LaTeX in its own bullet, wrapped in $$ and $$ (for example $$2x + 3 = 11$$). Step 1 states what is given and what to find. Do exactly one move per step, showing the equation after it, and add a bullet starting with 'Why:' that gives the reason in plain words (for example 'Why: subtract 3 from both sides to get x alone'). The last step is titled 'Step N · Answer': show the result boxed, like $$\\boxed{x = 4}$$, then check it by putting it back into the original equation. As you say each step aloud, read the equations the way a teacher does (say 'two x plus three equals eleven'), never the LaTeX symbols. After the answer, give me a similar problem to solve (show_quiz or ask_big_question), written in LaTeX too.",
+  );
+  rules.push(
+    "After the answer give me one question to solve (show_quiz or ask_big_question). Start again from Step 1 for each new question. If I say I do not understand, explain it again more simply with a new example and a new visual (or, for a maths problem, solve it again slower, one small move per step). Make notes only if I ask.",
   );
   rules.push("If I want to continue the lecture, say a short goodbye and tell me to close this screen.");
   if (lang && replyInLectureLanguage) rules.push(`Talk to me in ${lang} unless I speak English.`);
@@ -223,6 +227,8 @@ export interface Lesson {
   cards: LessonCard[];
   explainCount: number;
   hasTurn: boolean;
+  /** A maths problem being solved step by step: the board shows every step open, like a worked solution. */
+  math: boolean;
 }
 
 const STEP_TITLE = /^\s*step\s*(\d+)\s*[·:.)\-–—]*\s*(.*)$/i;
@@ -267,7 +273,8 @@ export function deriveLesson(transcript: TranscriptItem[]): Lesson {
       cards.push({ id: item.id, card: item, step: null, label, role: "turn" });
     }
   }
-  return { question, cards, explainCount, hasTurn: cards.some((c) => c.role === "turn") };
+  const math = cards.some((c) => c.card.kind === "slide" && c.card.bullets.some(hasMath));
+  return { question, cards, explainCount, hasTurn: cards.some((c) => c.role === "turn"), math };
 }
 
 /** One-tap requests under the orb; sent to the teacher without showing up as a question. */
@@ -275,12 +282,12 @@ export const QUICK_REQUESTS = [
   {
     id: "simpler",
     label: "Explain simpler",
-    prompt: "[Student request] I did not understand. Please explain it again more simply, from the very basics, with a new everyday example and a new visual.",
+    prompt: "[Student request] I did not understand. Please explain it again more simply, from the very basics, with a new everyday example and a new visual. If it is a maths problem, solve it again more slowly, one small move per step.",
   },
   {
     id: "example",
     label: "Give an example",
-    prompt: "[Student request] Please give me one more real-life example of this, with a visual.",
+    prompt: "[Student request] Please give me one more example of this, with a visual. If it is a maths problem, solve a similar one step by step.",
   },
   {
     id: "repeat",
@@ -294,7 +301,7 @@ export const QUICK_REQUESTS = [
 /** Quiet time after the teacher finishes a step before the screen tells it to go on. */
 export const AUTO_CONTINUE_MS = 900;
 /** Never push a lesson past this many explanation steps on its own. */
-const MAX_AUTO_STEPS = 6;
+const MAX_AUTO_STEPS = 10; // a maths solution can take several moves
 
 export interface Nudge {
   /** The step this nudge follows; one nudge per step. */
