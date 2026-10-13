@@ -1,5 +1,6 @@
 import { SUPABASE_URL } from '@/lib/supabaseUrl';
 import type {
+  V5AskContext,
   V5Language,
   V5Presentation,
   V5Section,
@@ -156,6 +157,32 @@ export function getTimelinePosition(
     : 0;
 
   return { active, logicalTime, sectionProgress, visibleCount };
+}
+
+/** The section's spoken text, in order. */
+export function getSectionNarration(section: V5Section): string {
+  return (section.narration?.segments || [])
+    .map((segment) => (segment.text || '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** Snapshot of where the lecture is, for the AI teacher that answers the student's doubt. */
+export function buildAskContext(
+  timeline: V5TimelineSection[],
+  active: V5TimelineSection | null,
+  currentTime: number,
+  duration: number,
+): V5AskContext {
+  return {
+    currentTime: Number.isFinite(currentTime) ? currentTime : 0,
+    duration: Number.isFinite(duration) ? duration : 0,
+    sectionIndex: active ? active.sectionIndex + 1 : 0,
+    sectionCount: timeline.length,
+    sectionTitle: active?.section.title?.trim() || undefined,
+    keyPoints: active?.keyPoints ?? [],
+    narration: active ? getSectionNarration(active.section) : '',
+  };
 }
 
 export function formatV5Time(seconds: number): string {

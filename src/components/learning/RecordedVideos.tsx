@@ -14,7 +14,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EducationalVideoPlayerDialog } from "./player/EducationalVideoPlayerDialog";
 import { V4PlayerDialog } from "./V4PlayerDialog";
 import { V5PlayerDialog } from "./V5PlayerDialog";
+import type { V5AskContext } from "./v5";
 import { AskAIAssistant } from "./askAssistant/AskAIAssistant";
+import { teacherApi, type TeacherSubject } from "@/lib/aiTeacherApi";
 import { V4Notes } from "./v4/V4Notes";
 
 import { extractJobIdFromUrl } from "./player/utils/mediaResolver";
@@ -146,44 +148,27 @@ export const RecordedVideos = ({
   const markWatched = useMarkVideoWatched();
   const updateWatchTime = useUpdateVideoWatchTime();
 
-  // Athena's subject/topic IDs are a separate system from this app's own —
-  // resolved here (not baked into props) so the post-lecture "ask a
-  // question" prompt only appears once an admin has linked this subject
-  // (ImportSubjectToAthenaDialog / LinkAthenaSubjectDialog), and degrades to
-  // simply not showing the prompt otherwise rather than erroring.
-  const { data: athenaLink } = useQuery({
-    queryKey: ["athena-link", subjectId, topicId],
+  // "Ask AI" talks to the live AI Teacher, which can teach any subject whose lectures are indexed
+  // (see the AI Teacher knowledge index in Admin settings). Shared query key with the /aiteacher page.
+  // Until the list loads, or if it fails, the player simply has no Ask AI button.
+  const { data: teacherSubjects } = useQuery({
+    queryKey: ["ai-teacher", "subjects"],
     enabled: !!subjectId,
     staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const { data: subjectRow, error: subjectErr } = await supabase
-        .from("popular_subjects")
-        .select("athena_subject_id, name")
-        .eq("id", subjectId!)
-        .maybeSingle();
-      if (subjectErr) throw subjectErr;
-      if (!subjectRow?.athena_subject_id) return { athenaSubjectId: null, athenaTopicId: null, subjectName: subjectRow?.name };
-
-      let athenaTopicId: string | null = null;
-      if (topicId) {
-        const { data: topicRow } = await supabase
-          .from("subject_topics")
-          .select("athena_topic_id")
-          .eq("id", topicId)
-          .maybeSingle();
-        athenaTopicId = topicRow?.athena_topic_id ?? null;
-      }
-      return { athenaSubjectId: subjectRow.athena_subject_id, athenaTopicId, subjectName: subjectRow.name };
-    },
+    queryFn: async () => (await teacherApi<{ subjects: TeacherSubject[] }>("subjects")).subjects,
   });
-  // "mid" = student pressed Ask AI in the player, "end" = lecture finished.
-  const [assistantTrigger, setAssistantTrigger] = useState<"mid" | "end" | null>(null);
-  const openAssistant = useCallback((trigger: "mid" | "end") => {
+  const teacherSubject = useMemo(
+    () => teacherSubjects?.find((s) => s.id === subjectId) ?? null,
+    [teacherSubjects, subjectId],
+  );
+  // "mid" = student pressed Ask AI in the player (with where the lecture was), "end" = lecture finished.
+  const [assistant, setAssistant] = useState<{ trigger: "mid" | "end"; context: V5AskContext | null } | null>(null);
+  const openAssistant = useCallback((trigger: "mid" | "end", context: V5AskContext | null = null) => {
     // V5's fullscreen targets its own internal stage, not document.body. The
     // assistant portals to body, so it would render outside the Fullscreen
     // API's visible subtree (i.e. not appear at all) while V5 is fullscreen.
     const exit = document.fullscreenElement ? document.exitFullscreen().catch(() => {}) : Promise.resolve();
-    void exit.finally(() => setAssistantTrigger(trigger));
+    void exit.finally(() => setAssistant({ trigger, context }));
   }, []);
   
   // Checker reviews for lectures
@@ -836,9 +821,9 @@ export const RecordedVideos = ({
             onOpenChange={handleAIPlayerOpenChange}
             initialJobId={watchingLecture.external_job_id}
             initialLanguage={activeAILanguage ?? selectedAILanguage}
-            onVideoEnded={athenaLink?.athenaSubjectId ? () => openAssistant("end") : undefined}
-            onAskAI={athenaLink?.athenaSubjectId ? () => openAssistant("mid") : undefined}
-            askAIOpen={assistantTrigger !== null}
+            onVideoEnded={teacherSubject ? () => openAssistant("end") : undefined}
+            onAskAI={teacherSubject ? (context) => openAssistant("mid", context) : undefined}
+            askAIOpen={assistant !== null}
           />
         ) : watchingLecture.external_job_id && isV4EligibleChapter(chapterNumber) ? (
           <V4PlayerDialog
@@ -873,13 +858,14 @@ export const RecordedVideos = ({
         )
       )}
 
-      {assistantTrigger && athenaLink?.athenaSubjectId && (
+      {assistant && teacherSubject && (
         <AskAIAssistant
-          trigger={assistantTrigger}
-          onClose={() => setAssistantTrigger(null)}
-          subjectName={athenaLink.subjectName}
-          athenaSubjectId={athenaLink.athenaSubjectId}
-          athenaTopicId={athenaLink.athenaTopicId ?? undefined}
+          trigger={assistant.trigger}
+          context={assistant.context}
+          onClose={() => setAssistant(null)}
+          subject={teacherSubject}
+          topicTitle={topicTitle}
+          lectureLanguage={activeAILanguage ?? selectedAILanguage}
         />
       )}
     </div>

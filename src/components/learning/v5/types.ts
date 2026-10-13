@@ -45,6 +45,18 @@ export interface V5Presentation {
   sections: V5Section[];
 }
 
+/** What the lecture was showing/saying when the student tapped "Ask AI". */
+export interface V5AskContext {
+  currentTime: number;
+  duration: number;
+  /** 1-based position of the section being played. */
+  sectionIndex: number;
+  sectionCount: number;
+  sectionTitle?: string;
+  keyPoints: string[];
+  narration: string;
+}
+
 export interface V5TimelineSection {
   section: V5Section;
   sectionIndex: number;

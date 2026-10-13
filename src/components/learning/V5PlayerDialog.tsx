@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { V5Player, type V5Language } from './v5';
+import { V5Player, type V5AskContext, type V5Language } from './v5';
 
 /**
  * Portal wrapper that lets the V5 player be opened from the lecture list the
@@ -25,7 +25,7 @@ interface V5PlayerDialogProps {
    * own onVideoEnded doc comment. Optional, purely a pass-through. */
   onVideoEnded?: () => void;
   /** Pass-throughs for the mid-lecture "Ask AI" button — see V5Player. */
-  onAskAI?: () => void;
+  onAskAI?: (context: V5AskContext) => void;
   askAIOpen?: boolean;
 }
 

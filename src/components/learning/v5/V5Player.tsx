@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Languages, LoaderCircle, Play } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import type { V5Language, V5Presentation, V5SubtitleData } from './types';
+import type { V5AskContext, V5Language, V5Presentation, V5SubtitleData } from './types';
 import {
+  buildAskContext,
   buildSectionTimeline,
   getMergedVideoCandidates,
   getPresentationUrl,
@@ -25,8 +26,8 @@ interface V5PlayerProps {
    * itself plays, renders, or controls video. */
   onVideoEnded?: () => void;
   /** When set, shows an "Ask AI" button; clicking it pauses the lecture and
-   * calls this so the parent can open its assistant. */
-  onAskAI?: () => void;
+   * calls this, with where the lecture was, so the parent can open its assistant. */
+  onAskAI?: (context: V5AskContext) => void;
   /** Whether that assistant is open. When it closes, the lecture resumes if
    * it was playing when "Ask AI" was pressed. */
   askAIOpen?: boolean;
@@ -193,8 +194,8 @@ export function V5Player({
     const video = videoRef.current;
     resumeAfterAskRef.current = Boolean(video && !video.paused && !video.ended);
     video?.pause();
-    onAskAI?.();
-  }, [onAskAI]);
+    onAskAI?.(buildAskContext(timeline, position.active, video?.currentTime ?? currentTime, video?.duration ?? duration));
+  }, [onAskAI, timeline, position.active, currentTime, duration]);
 
   // Read by handleMetadata, which is created once per playbackRate.
   const askAIOpenRef = useRef(Boolean(askAIOpen));
