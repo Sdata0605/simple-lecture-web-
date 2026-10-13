@@ -1,6 +1,7 @@
 // "Ask AI" inside a lecture player: the student talks to the same live AI Teacher as /aiteacher, but the
 // teacher is told which lecture is paused and where, so it can answer in context without asking which
 // subject the student wants.
+import type { TranscriptItem } from "@/components/aiteacher/useLiveTeacher";
 
 /** Where the student was in the lecture when they tapped Ask AI. */
 export interface LectureAskContext {
@@ -72,16 +73,15 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
 
   const rules: string[] = [`My subject is already chosen (${subjectName}), so never ask which subject I want.`];
   if (trigger === "end") {
-    rules.push(
-      "Congratulate me in one short sentence, ask if any part was unclear, and offer a quick 3-question quiz on this lecture (one show_quiz question at a time).",
-    );
+    rules.push("Say in one short sentence that the lecture is over and ask if I have any doubts.");
   } else {
     rules.push("Greet me in one short sentence and ask what I am unsure about.");
-    rules.push(
-      "When I ask, call search_notes first, then answer in a few clear sentences, linking it to what the lecture was saying when that helps. Then ask if it is clear.",
-    );
   }
-  rules.push('If I want to continue the lecture, say a short goodbye and tell me to press "Resume lecture".');
+  rules.push(
+    "When I ask, call search_notes first, then answer in a few clear sentences, linking it to what the lecture was saying when that helps. Then ask if it is clear.",
+  );
+  rules.push("This is a voice-only conversation: just talk, and do not use slides, quizzes, visuals, notes documents or any other on-screen tool.");
+  rules.push("If I want to continue the lecture, say a short goodbye and tell me to close this screen.");
   if (lang && replyInLectureLanguage) rules.push(`Talk to me in ${lang} unless I speak English.`);
   lines.push(`Instructions for this short session: ${rules.join(" ")}`);
 
@@ -102,4 +102,83 @@ export function visibleStudentText(text: string): string | null {
   if (!text.startsWith(LECTURE_CONTEXT_TAG)) return text;
   const at = text.indexOf(QUESTION_MARKER);
   return at === -1 ? null : text.slice(at + QUESTION_MARKER.length).trim() || null;
+}
+
+// ---------------------------------------------------------------- orb screen
+
+export type LectureOrbMode = "idle" | "speaking" | "listening" | "thinking" | "error";
+
+/** The slice of useLiveTeacher the orb screen reads. */
+export interface LectureLive {
+  status: "idle" | "connecting" | "live" | "ended" | "error";
+  speaking: boolean;
+  muted: boolean;
+  micAvailable: boolean;
+  micLevel: number;
+  teacherName: string;
+  transcript: TranscriptItem[];
+}
+
+export type LectureCard = Exclude<TranscriptItem, { kind: "text" }>;
+
+export interface LectureView {
+  orbMode: LectureOrbMode;
+  /** Short line under the orb, or null while the teacher's words are the focus. */
+  status: string | null;
+  statusTone: "normal" | "hearing";
+  /** What the teacher is saying (or last said). */
+  teacherCaption: string | null;
+  /** What the student is saying right now (`live`) or just asked. */
+  studentLine: { text: string; live: boolean } | null;
+  /** Latest quiz / visual / slide the teacher put on screen. */
+  card: LectureCard | null;
+  /** Tapping the orb: mute/unmute the mic, restart the call, or nothing yet. */
+  orbAction: "mute" | "restart" | "none";
+  orbLabel: string;
+  /** The text box works only once the call is live, or when a new call can be started with it. */
+  canType: boolean;
+}
+
+/** Mic level above which we say the student is being heard. */
+const HEARING_LEVEL = 0.2;
+
+export function deriveLectureView(live: LectureLive): LectureView {
+  const { status, speaking, muted, micAvailable, micLevel, teacherName, transcript } = live;
+  const lastText = [...transcript].reverse().find((m) => m.kind === "text");
+  const card = ([...transcript].reverse().find((m) => m.kind !== "text") as LectureCard | undefined) ?? null;
+  const teacherCaption = lastText && lastText.role === "teacher" ? lastText.text : null;
+  const studentLine = lastText && lastText.role === "user" ? { text: lastText.text, live: !lastText.done } : null;
+  const inCall = status === "live";
+
+  let orbMode: LectureOrbMode = "idle";
+  if (status === "error") orbMode = "error";
+  else if (status === "connecting" || status === "idle") orbMode = "thinking";
+  else if (inCall) orbMode = speaking ? "speaking" : micAvailable && !muted ? "listening" : "idle";
+
+  const hearing = inCall && !speaking && micAvailable && !muted && micLevel >= HEARING_LEVEL;
+  let line: string | null = null;
+  if (status === "connecting" || status === "idle") line = "Connecting to your teacher…";
+  else if (status === "error") line = "Tap the orb to try again, or type below";
+  else if (status === "ended") line = "Class ended. Tap the orb to start again";
+  else if (inCall && speaking) line = `${teacherName} is speaking`;
+  else if (inCall && studentLine && !studentLine.live) line = "Thinking…";
+  else if (inCall && !micAvailable) line = "Type your question below";
+  else if (inCall && muted) line = "Microphone muted. Tap the orb to unmute";
+  else if (inCall) line = hearing ? "Listening…" : "Go ahead, I'm listening";
+
+  const orbAction = inCall ? (micAvailable ? "mute" : "none") : status === "ended" || status === "error" ? "restart" : "none";
+  const orbLabel =
+    orbAction === "mute" ? (muted ? "Unmute microphone" : "Mute microphone") : orbAction === "restart" ? "Start talking again" : "Connecting";
+
+  return {
+    orbMode,
+    status: line,
+    statusTone: hearing ? "hearing" : "normal",
+    teacherCaption,
+    studentLine,
+    card,
+    orbAction,
+    orbLabel,
+    canType: inCall || status === "ended" || status === "error",
+  };
 }

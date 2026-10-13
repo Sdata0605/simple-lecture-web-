@@ -1,23 +1,24 @@
-// "Ask AI" inside the lecture player. The student talks, by voice, to the same live AI Teacher as /aiteacher
-// (Gemini Live: the teacher's own voice, answers grounded in the knowledge index, quiz/visual cards), but the
-// teacher is told which lecture is paused and where. There are no pre-recorded clips: every word the
-// student hears is the teacher speaking.
-import { useEffect, useRef, useState } from "react";
+// "Ask AI" inside the lecture player: a full-screen orb over the paused lecture. The student talks, by voice,
+// to the same live AI Teacher as /aiteacher (Gemini Live: the teacher's own voice, answers grounded in the
+// knowledge index, quiz/visual cards), and the teacher is told which lecture is paused and where. There are
+// no pre-recorded clips: every word the student hears is the teacher speaking.
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Lock, Play, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, Lock, Sparkles, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import { usePrefs } from "@/lib/aiTeacherPrefs";
 import type { TeacherSubject } from "@/lib/aiTeacherApi";
 import {
   buildLectureOpening,
+  deriveLectureView,
   visibleStudentText,
   withFirstQuestion,
   type LectureAskContext,
 } from "@/lib/aiTeacherLecture";
 import { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
-import { VoiceMode } from "@/components/aiteacher/VoiceMode";
+import { LectureOrbScreen } from "./LectureOrbScreen";
+import "./ask-assistant.css";
 
 export interface AskAIAssistantProps {
   /** "mid" = opened from the player's Ask AI button, "end" = lecture just finished. */
@@ -46,13 +47,13 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  let body: JSX.Element;
+  let body: ReactNode;
   if (isLoading) {
-    body = <Notice icon={<Loader2 className="h-6 w-6 animate-spin" />} title="Getting your teacher ready…" />;
+    body = <Gate icon={<Loader2 size={16} className="animate-spin" />} title="Getting your teacher ready…" />;
   } else if (!isAuthenticated) {
     body = (
-      <Notice
-        icon={<Lock className="h-6 w-6" />}
+      <Gate
+        icon={<Lock size={16} />}
         title="Log in to talk to your AI teacher"
         text="Your AI teacher answers your doubts by voice while you watch."
         action={{ label: "Log in", onClick: () => window.open("/auth?tab=login", "_blank", "noopener") }}
@@ -60,8 +61,8 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
     );
   } else if (!hasActivePlan) {
     body = (
-      <Notice
-        icon={<Lock className="h-6 w-6" />}
+      <Gate
+        icon={<Lock size={16} />}
         title="Voice doubts need an AI Teacher plan"
         text="Talk to your AI teacher out loud and get answers from your own course notes, right in the lecture."
         action={{ label: "See AI Teacher plans", onClick: () => window.open("/aiteacher", "_blank", "noopener") }}
@@ -72,24 +73,27 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
   }
 
   return createPortal(
-    // Above V5Player (z-index 9999).
-    <div className="fixed inset-0 z-[10000] flex h-[100dvh] flex-col bg-background" role="dialog" aria-modal="true" aria-label="Ask your AI teacher">
-      <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5 sm:px-4">
-        <Sparkles className="h-4 w-4 shrink-0 text-emerald-600" />
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold">
-          Ask AI <span className="font-normal text-muted-foreground">· {subject.name}{topicTitle ? ` · ${topicTitle}` : ""}</span>
-        </p>
-        <Button size="sm" onClick={onClose} className="gap-1.5 bg-emerald-700 hover:bg-emerald-800">
-          <Play className="h-4 w-4" /> Resume lecture
-        </Button>
+    <div className="aa-overlay" role="dialog" aria-modal="true" aria-label="Ask your AI teacher">
+      <header className="aa-topbar">
+        <div className="aa-topbar__title">
+          <Sparkles size={16} />
+          <span>Ask AI</span>
+          <span className="aa-topbar__subject">
+            · {subject.name}
+            {topicTitle ? ` · ${topicTitle}` : ""}
+          </span>
+        </div>
+        <button type="button" className="aa-icon-btn" onClick={onClose} aria-label="Close and return to the lecture">
+          <X size={18} />
+        </button>
       </header>
-      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col p-2 sm:p-4">{body}</main>
+      {body}
     </div>,
     document.body,
   );
 }
 
-/** Starts the live call as soon as it opens and shows the teacher's conversation. */
+/** Starts the live call as soon as it opens and shows the teacher on the orb screen. */
 function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }: AskAIAssistantProps) {
   const [prefs] = usePrefs();
   const [subjects] = useState(() => [subject]);
@@ -104,7 +108,7 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
     }),
   );
 
-  // `enrolledSubjects` scopes the teacher to this subject, like the old assistant's "outside this subject" reply.
+  // `enrolledSubjects` scopes the teacher to this subject.
   const live = useLiveTeacher({ subject, subjects, onSubject: noop, prefs, enrolledSubjects: subject.name });
 
   // Deferred a tick so a dev-time remount cancels it instead of opening two calls.
@@ -115,44 +119,81 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
     return () => window.clearTimeout(t);
   }, [opening]);
 
-  // The context message is plumbing; the student only sees their own words. A restart (or a question typed
-  // before the call was up) must carry the lecture context too, so connect() is wrapped.
+  // The context message is plumbing; the student only sees their own words.
   const transcript = live.transcript.flatMap((item) => {
     if (item.kind !== "text" || item.role !== "user") return [item];
     const text = visibleStudentText(item.text);
     return text === null ? [] : [text === item.text ? item : { ...item, text }];
   });
-  const view = {
-    ...live,
-    status: live.status === "idle" ? ("connecting" as const) : live.status,
+  const view = deriveLectureView({
+    status: live.status,
+    speaking: live.speaking,
+    muted: live.muted,
+    micAvailable: live.micAvailable,
+    micLevel: live.micLevel,
+    teacherName: live.teacherName,
     transcript,
-    connect: (first?: string) => live.connect(withFirstQuestion(opening, first)),
+  });
+
+  // The orb is animated per frame from refs, so it never forces a re-render. The teacher's output has no
+  // level meter, so while it speaks the orb follows a syllable-like envelope.
+  const micLevelRef = useRef(0);
+  const speakingRef = useRef(false);
+  micLevelRef.current = live.micLevel;
+  speakingRef.current = live.speaking;
+  const getLevel = useCallback(() => {
+    if (!speakingRef.current) return micLevelRef.current;
+    const t = performance.now() / 1000;
+    const syllables = Math.abs(Math.sin(t * 9.1)) * 0.55 + Math.abs(Math.sin(t * 3.7 + 1.3)) * 0.3;
+    return Math.min(1, 0.15 + syllables);
+  }, []);
+
+  const onOrbClick = () => {
+    if (view.orbAction === "mute") live.toggleMute();
+    else if (view.orbAction === "restart") {
+      live.reset();
+      void live.connect(opening);
+    }
   };
 
-  return <VoiceMode live={view} subjectName={subject.name} />;
+  // Typed text goes to the live call, or starts a new one that still carries the lecture context.
+  const onSend = (text: string) => {
+    if (live.status === "live") live.sendText(text);
+    else {
+      live.reset();
+      void live.connect(withFirstQuestion(opening, text));
+    }
+  };
+
+  return <LectureOrbScreen view={view} live={live} getLevel={getLevel} onOrbClick={onOrbClick} onSend={onSend} />;
 }
 
-function Notice({
+function Gate({
   icon,
   title,
   text,
   action,
 }: {
-  icon: JSX.Element;
+  icon: ReactNode;
   title: string;
   text?: string;
   action?: { label: string; onClick: () => void };
 }) {
   return (
-    <div className="m-auto flex max-w-sm flex-col items-center gap-3 p-6 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">{icon}</div>
-      <h2 className="text-base font-semibold">{title}</h2>
-      {text && <p className="text-sm text-muted-foreground">{text}</p>}
-      {action && (
-        <Button onClick={action.onClick} className="bg-emerald-700 hover:bg-emerald-800">
-          {action.label}
-        </Button>
-      )}
-    </div>
+    <>
+      <main className="aa-center">
+        <div className="aa-gate">
+          <span className="aa-mic-chip" aria-hidden="true">{icon}</span>
+          <h2>{title}</h2>
+          {text && <p>{text}</p>}
+          {action && (
+            <button type="button" className="aa-action" onClick={action.onClick}>
+              {action.label}
+            </button>
+          )}
+        </div>
+      </main>
+      <div />
+    </>
   );
 }
