@@ -239,44 +239,56 @@ describe("quick requests", () => {
 });
 
 describe("nextStepNudge: the lesson keeps going without the student saying go ahead", () => {
-  const idle = { inCall: true, speaking: false, micLevel: 0 };
-  const finished = (text: string) => say("teacher", text, true);
+  const idle = { inCall: true, speaking: false, turnDone: true };
 
-  it("tells the teacher to go on once it has finished a step and the student said nothing", () => {
-    const n = nextStepNudge({ ...idle, transcript: [say("user", "why?"), slide(1, "Step 1 · The basics"), finished("Plants make food.")] });
+  it("tells the teacher to go on once its turn has finished after a step and the student said nothing", () => {
+    const n = nextStepNudge({ ...idle, transcript: [say("user", "why?"), slide(1, "Step 1 · The basics"), say("teacher", "Plants make food.")] });
     expect(n).toEqual({ cardId: 1, text: expect.stringContaining("next step") });
   });
 
+  it("does not need the teacher to have said anything after the step: it often shows a step and ends its turn", () => {
+    const n = nextStepNudge({ ...idle, transcript: [say("user", "solve it"), slide(1, "Step 1 · The problem")] });
+    expect(n).toMatchObject({ cardId: 1 });
+  });
+
   it("asks for the question to solve after the Answer step", () => {
-    const n = nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), finished("a"), slide(2, "Step 2 · Answer"), finished("So that is why.")] });
+    const n = nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), slide(2, "Step 2 · Answer")] });
     expect(n).toMatchObject({ cardId: 2, text: expect.stringContaining("question to solve") });
   });
 
-  it("waits while the teacher is still talking or has not finished its turn", () => {
-    const transcript = [slide(1, "Step 1 · The basics"), finished("Plants make food.")];
+  it("waits while the teacher is talking or its turn has not finished", () => {
+    const transcript = [slide(1, "Step 1 · The basics")];
     expect(nextStepNudge({ ...idle, speaking: true, transcript })).toBeNull();
-    // the card is up but the teacher has not said anything about it yet
-    expect(nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics")] })).toBeNull();
-    // its words are still open (the turn has not completed)
-    expect(nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), say("teacher", "Plants make", false)] })).toBeNull();
+    expect(nextStepNudge({ ...idle, turnDone: false, transcript })).toBeNull();
   });
 
-  it("holds off while the student is speaking, and once they have said anything since the step", () => {
-    const transcript = [slide(1, "Step 1 · The basics"), finished("Plants make food.")];
-    expect(nextStepNudge({ ...idle, micLevel: 0.5, transcript })).toBeNull();
-    expect(nextStepNudge({ ...idle, transcript: [...transcript, say("user", "wait, what is food?")] })).toBeNull();
+  it("holds off once the student has said something since the step", () => {
+    const transcript = [slide(1, "Step 1 · The basics"), say("teacher", "Plants make food."), say("user", "wait, what is food?")];
+    expect(nextStepNudge({ ...idle, transcript })).toBeNull();
+  });
+
+  it("ignores noise-like transcripts such as a stray full stop or a cough", () => {
+    for (const noise of [".", "you", "uh", "yes", "..."]) {
+      const n = nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), say("user", noise)] });
+      expect(n).toMatchObject({ cardId: 1 });
+    }
+  });
+
+  it("still holds off for a real interruption", () => {
+    for (const words of ["wait", "stop", "what is x", "explain that again"]) {
+      expect(nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), say("user", words)] })).toBeNull();
+    }
   });
 
   it("stops at the student's turn, with nothing to continue, or when the call is not live", () => {
-    const quizTranscript = [slide(1, "Step 1 · The basics"), finished("a"), quizCard(2), finished("Over to you.")];
-    expect(nextStepNudge({ ...idle, transcript: quizTranscript })).toBeNull();
-    expect(nextStepNudge({ ...idle, transcript: [finished("Hello!")] })).toBeNull();
-    expect(nextStepNudge({ ...idle, inCall: false, transcript: [slide(1, "Step 1 · The basics"), finished("x")] })).toBeNull();
+    expect(nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), quizCard(2)] })).toBeNull();
+    expect(nextStepNudge({ ...idle, transcript: [say("teacher", "Hello!")] })).toBeNull();
+    expect(nextStepNudge({ ...idle, inCall: false, transcript: [slide(1, "Step 1 · The basics")] })).toBeNull();
   });
 
   it("does not run a lesson on forever", () => {
     const long: TranscriptItem[] = [];
-    for (let i = 1; i <= 11; i++) long.push(slide(i, `Step ${i} · More`), finished("more"));
+    for (let i = 1; i <= 11; i++) long.push(slide(i, "Step " + i + " · More"));
     expect(nextStepNudge({ ...idle, transcript: long })).toBeNull();
   });
 
@@ -316,6 +328,6 @@ describe("maths: solving a problem step by step in front of the student", () => 
   it("lets a long solution run on by itself", () => {
     const steps: TranscriptItem[] = [];
     for (let i = 1; i <= 8; i++) steps.push(mathSlide(i, "Step " + i + " · Move", ["$$x = " + i + "$$"]), say("teacher", "done", true));
-    expect(nextStepNudge({ inCall: true, speaking: false, micLevel: 0, transcript: steps })).not.toBeNull();
+    expect(nextStepNudge({ inCall: true, speaking: false, turnDone: true, transcript: steps })).not.toBeNull();
   });
 });

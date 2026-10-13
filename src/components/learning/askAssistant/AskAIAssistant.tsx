@@ -15,13 +15,14 @@ import {
   deriveLectureView,
   deriveLesson,
   nextStepNudge,
+  STUDENT_SPEAKING_LEVEL,
   visibleStudentText,
   withFirstQuestion,
   type LectureAskContext,
 } from "@/lib/aiTeacherLecture";
 import { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
 import { LectureOrbScreen } from "./LectureOrbScreen";
-import { useAutoContinue } from "./useAutoContinue";
+import { useAutoContinue, useTurnSinceCard } from "./useAutoContinue";
 import "./ask-assistant.css";
 
 export interface AskAIAssistantProps {
@@ -114,8 +115,9 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
 
   // `enrolledSubjects` scopes the teacher to this subject. `echoGuard`: on speakers the mic would hear the
   // teacher and cut it off, so the mic is closed while it talks and reopens by itself when it finishes;
-  // tapping the orb breaks in.
-  const live = useLiveTeacher({ subject, subjects, onSubject: noop, prefs, enrolledSubjects: subject.name, echoGuard: true });
+  // tapping the orb breaks in. `keepGoing`: a lesson explains in steps and carries straight on to the next
+  // one, instead of the teacher ending its turn after each and waiting to be told to continue.
+  const live = useLiveTeacher({ subject, subjects, onSubject: noop, prefs, enrolledSubjects: subject.name, echoGuard: true, keepGoing: true });
 
   // Deferred a tick so a dev-time remount cancels it instead of opening two calls.
   const connectRef = useRef(live.connect);
@@ -142,18 +144,23 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
   });
   const lesson = deriveLesson(transcript);
 
-  // Keep the lesson moving: once the teacher has finished a step and the student has said nothing, tell it
-  // (silently) to go on, so nobody has to say "go ahead". One nudge per step. Speaking, or any new sound from
-  // the teacher, changes the inputs and cancels a pending nudge.
-  const nudge = nextStepNudge({ inCall: live.status === "live", speaking: live.speaking, micLevel: live.micLevel, transcript });
-  useAutoContinue(nudge, (text) => live.sendText(text, { silent: true }));
-
   // The orb is animated per frame from refs, so it never forces a re-render. The teacher's output has no
   // level meter, so while it speaks the orb follows a syllable-like envelope.
   const micLevelRef = useRef(0);
   const speakingRef = useRef(false);
   micLevelRef.current = live.micLevel;
   speakingRef.current = live.speaking;
+
+  // Backstop for the lesson flow: if the teacher still ends its turn after a step, and the student has said
+  // nothing, tell it (silently) to go on, so nobody has to say "go ahead". It waits while the teacher or the
+  // student is talking.
+  const lastCardId = lesson.cards.length ? lesson.cards[lesson.cards.length - 1].id : null;
+  const turnDone = useTurnSinceCard(live.turnsCompleted, lastCardId);
+  const nudge = nextStepNudge({ inCall: live.status === "live", speaking: live.speaking, turnDone, transcript });
+  useAutoContinue(nudge, (text) => live.sendText(text, { silent: true }), {
+    isStudentSpeaking: () => micLevelRef.current >= STUDENT_SPEAKING_LEVEL,
+    turnsCompleted: live.turnsCompleted,
+  });
   const getLevel = useCallback(() => {
     if (!speakingRef.current) return micLevelRef.current;
     const t = performance.now() / 1000;

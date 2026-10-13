@@ -1,24 +1,65 @@
 import { useEffect, useRef } from "react";
-import { AUTO_CONTINUE_MS, type Nudge } from "@/lib/aiTeacherLecture";
+import { AUTO_CONTINUE_MS, MAX_NUDGES_PER_STEP, type Nudge } from "@/lib/aiTeacherLecture";
+
+/** While the student is clearly talking at the moment a nudge is due, ask again after this long. */
+const RETRY_MS = 700;
 
 /**
- * Sends `nudge.text` once, after `delayMs` of quiet, for each step. A pending nudge is cancelled as soon as
- * `nudge` goes away (the teacher started talking again, or the student spoke), and a step already nudged is
- * never nudged twice.
+ * True once a teacher turn has finished since `cardId` (the latest step) appeared. Counts from the turn total
+ * seen just before the card, so a card and the end of its turn arriving together still count.
  */
-export function useAutoContinue(nudge: Nudge | null, send: (text: string) => void, delayMs: number = AUTO_CONTINUE_MS): void {
+export function useTurnSinceCard(turnsCompleted: number, cardId: number | null): boolean {
+  const previous = useRef(turnsCompleted);
+  const baseline = useRef<{ id: number | null; turns: number }>({ id: cardId, turns: turnsCompleted });
+  if (baseline.current.id !== cardId) baseline.current = { id: cardId, turns: previous.current };
+  useEffect(() => {
+    previous.current = turnsCompleted;
+  });
+  return cardId !== null && turnsCompleted > baseline.current.turns;
+}
+
+export interface AutoContinueOptions {
+  /** Checked at the moment a nudge is due: true while the student is clearly speaking, so it waits a little. */
+  isStudentSpeaking: () => boolean;
+  /** Teacher turns finished so far: a second nudge for the same step needs a turn to have ended since the first. */
+  turnsCompleted: number;
+  delayMs?: number;
+  maxPerStep?: number;
+}
+
+/**
+ * Sends `nudge.text` after `delayMs` of quiet. A pending nudge is cancelled as soon as `nudge` goes away (the
+ * teacher started talking again, or the student spoke). Each step is nudged at most `maxPerStep` times, and
+ * the second time only after the teacher's reply to the first has finished.
+ */
+export function useAutoContinue(nudge: Nudge | null, send: (text: string) => void, options: AutoContinueOptions): void {
+  const { turnsCompleted, delayMs = AUTO_CONTINUE_MS, maxPerStep = MAX_NUDGES_PER_STEP } = options;
   const sendRef = useRef(send);
   sendRef.current = send;
-  const nudgedRef = useRef<number | null>(null);
+  const speakingRef = useRef(options.isStudentSpeaking);
+  speakingRef.current = options.isStudentSpeaking;
+  const turnsRef = useRef(turnsCompleted);
+  turnsRef.current = turnsCompleted;
+  const sent = useRef<{ cardId: number | null; count: number; turns: number }>({ cardId: null, count: 0, turns: 0 });
   const cardId = nudge?.cardId ?? null;
   const text = nudge?.text ?? null;
 
   useEffect(() => {
-    if (cardId === null || text === null || nudgedRef.current === cardId) return;
-    const timer = window.setTimeout(() => {
-      nudgedRef.current = cardId;
+    if (cardId === null || text === null) return;
+    const record = sent.current.cardId === cardId ? sent.current : { cardId, count: 0, turns: -1 };
+    if (record.count >= maxPerStep) return;
+    if (record.count > 0 && turnsCompleted <= record.turns) return; // the reply to the last nudge is still going
+
+    let timer = 0;
+    const fire = () => {
+      if (speakingRef.current()) {
+        timer = window.setTimeout(fire, RETRY_MS);
+        return;
+      }
+      sent.current = { cardId, count: record.count + 1, turns: turnsRef.current };
       sendRef.current(text);
-    }, delayMs);
+    };
+    timer = window.setTimeout(fire, delayMs);
     return () => window.clearTimeout(timer);
-  }, [cardId, text, delayMs]);
+  }, [cardId, text, turnsCompleted, delayMs, maxPerStep]);
 }

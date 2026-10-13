@@ -300,32 +300,46 @@ export const QUICK_REQUESTS = [
 
 /** Quiet time after the teacher finishes a step before the screen tells it to go on. */
 export const AUTO_CONTINUE_MS = 900;
-/** Never push a lesson past this many explanation steps on its own. */
-const MAX_AUTO_STEPS = 10; // a maths solution can take several moves
+/** Never push a lesson past this many explanation steps on its own (a maths solution can take several moves). */
+const MAX_AUTO_STEPS = 10;
+/** A step is nudged at most twice: the second time only if the reply to the first showed no new step. */
+export const MAX_NUDGES_PER_STEP = 2;
+/** A mic level that is clearly the student speaking; room noise and auto-gain stay well below it. */
+export const STUDENT_SPEAKING_LEVEL = 0.35;
 
 export interface Nudge {
-  /** The step this nudge follows; one nudge per step. */
+  /** The step this nudge follows. */
   cardId: number;
   text: string;
 }
 
-const CONTINUE_STEP = "[Continue] Go straight on to the next step now. Do not wait for me.";
-const CONTINUE_TO_QUESTION = "[Continue] Now give me one question to solve about this. Do not wait for me.";
+const CONTINUE_STEP = "[Continue] Go straight on to the next step now. Do not wait for me and do not ask.";
+const CONTINUE_TO_QUESTION = "[Continue] Now give me one question to solve about this. Do not wait for me and do not ask.";
 
 /**
- * After the teacher has finished speaking a step and the student has said nothing, the lesson should go on by
- * itself. Returns what to tell the teacher, or null when it should wait: the teacher is still talking or has
- * not finished its turn, the student is speaking or has spoken since the step, the lesson is already at the
- * student's turn, or nothing has been explained yet.
+ * Whether a transcript line is the student really speaking. A silent room often yields stray "." or "you";
+ * a real interruption ("wait", "stop", "what is x") has at least four letters.
+ */
+const meaningful = (text: string) => text.replace(/[^\p{L}\p{N}]/gu, "").length >= 4;
+
+/**
+ * Once the teacher's turn has finished after a step and the student has said nothing, the lesson should go on
+ * by itself. Returns what to tell the teacher, or null when it should wait: the call is not live, the teacher
+ * is still talking, its turn has not finished, the student has spoken since the step, the lesson is already at
+ * the student's turn, or nothing has been explained yet.
+ *
+ * "Turn finished" is the call's own signal (turnDone), not a guess from the words: the teacher often shows a
+ * step and ends its turn without saying anything more.
  */
 export function nextStepNudge(input: {
   inCall: boolean;
   speaking: boolean;
-  micLevel: number;
+  /** A teacher turn has finished since the latest step appeared. */
+  turnDone: boolean;
   transcript: TranscriptItem[];
 }): Nudge | null {
-  const { inCall, speaking, micLevel, transcript } = input;
-  if (!inCall || speaking || micLevel >= HEARING_LEVEL) return null;
+  const { inCall, speaking, turnDone, transcript } = input;
+  if (!inCall || speaking || !turnDone) return null;
 
   const lesson = deriveLesson(transcript);
   const last = lesson.cards[lesson.cards.length - 1];
@@ -333,11 +347,8 @@ export function nextStepNudge(input: {
 
   const at = transcript.findIndex((item) => item.kind !== "text" && item.id === last.id);
   if (at < 0) return null;
-  const after = transcript.slice(at + 1);
-  if (after.some((item) => item.kind === "text" && item.role === "user")) return null; // the student is in charge
-  // The teacher must have said something about this step and finished its turn (its text is closed).
-  const said = after.filter((item) => item.kind === "text" && item.role === "teacher");
-  if (!said.length || said.some((item) => item.kind === "text" && !item.done)) return null;
+  const studentSpoke = transcript.slice(at + 1).some((item) => item.kind === "text" && item.role === "user" && meaningful(item.text));
+  if (studentSpoke) return null; // the student is in charge
 
   return { cardId: last.id, text: last.role === "answer" ? CONTINUE_TO_QUESTION : CONTINUE_STEP };
 }
