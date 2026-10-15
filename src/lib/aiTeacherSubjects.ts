@@ -49,3 +49,21 @@ export function matchSubjectByName<T extends Named>(name: string, subjects: T[])
     null
   );
 }
+
+/** A subject with the courses it belongs to, as the database returns it (a course is null when it is not visible to the student). */
+export interface SubjectCourseRow {
+  id: string;
+  course_subjects: { courses: { name: string | null } | null }[] | null;
+}
+
+/** subject id -> names of the courses it belongs to (visible courses only, no repeats, in the order given). */
+export function courseNamesBySubject(rows: SubjectCourseRow[]): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  for (const row of rows) {
+    const names = (row.course_subjects ?? [])
+      .map((link) => link.courses?.name?.trim() ?? "")
+      .filter((name, index, all) => name !== "" && all.indexOf(name) === index);
+    if (names.length) result[row.id] = names;
+  }
+  return result;
+}

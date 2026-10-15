@@ -7,13 +7,15 @@ export interface SubjectPickerProps {
   /** null while the list is still loading. */
   subjects: TeacherSubject[] | null;
   failed?: boolean;
+  /** subject id -> names of the courses it belongs to, shown in small letters under the subject's name. */
+  courses?: Record<string, string[]>;
   /** The subject the student was on, when the teacher cannot teach it yet. */
   unknown?: string | null;
   onPick: (subject: TeacherSubject) => void;
   onRetry?: () => void;
 }
 
-export function SubjectPicker({ subjects, failed, unknown, onPick, onRetry }: SubjectPickerProps) {
+export function SubjectPicker({ subjects, failed, courses, unknown, onPick, onRetry }: SubjectPickerProps) {
   if (failed) {
     return (
       <main className="aa-center">
@@ -69,8 +71,11 @@ export function SubjectPicker({ subjects, failed, unknown, onPick, onRetry }: Su
         <div className="aa-picker__list">
           {subjects.map((subject) => (
             <button key={subject.id} type="button" className="aa-picker__item" onClick={() => onPick(subject)}>
-              <span>{subject.name}</span>
-              <small>{subject.topics === 1 ? "1 topic" : `${subject.topics} topics`}</small>
+              <span className="aa-picker__name">
+                {subject.name}
+                {courses?.[subject.id] && <small className="aa-picker__course">{courses[subject.id].join(" · ")}</small>}
+              </span>
+              <small className="aa-picker__topics">{subject.topics === 1 ? "1 topic" : `${subject.topics} topics`}</small>
             </button>
           ))}
         </div>

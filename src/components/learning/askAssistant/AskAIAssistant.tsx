@@ -41,6 +41,8 @@ export interface AskAIAssistantProps {
     /** null while the list loads. */
     subjects: TeacherSubject[] | null;
     failed?: boolean;
+    /** subject id -> names of the courses it belongs to. */
+    courses?: Record<string, string[]>;
     unknown?: string | null;
     onRetry?: () => void;
   };
@@ -96,6 +98,7 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
       <SubjectPicker
         subjects={choices?.subjects ?? null}
         failed={choices?.failed}
+        courses={choices?.courses}
         unknown={choices?.unknown}
         onPick={setPicked}
         onRetry={choices?.onRetry}
