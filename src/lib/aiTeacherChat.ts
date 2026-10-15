@@ -1,5 +1,6 @@
 import { teacherApi, TeacherApiError, type ChatResult, type PreparedChat, type QuizData, type BigQuestionData } from "./aiTeacherApi";
 import { personaPayload, type TeacherPrefs } from "./aiTeacherPrefs";
+import { loadSubscription } from "./aiTeacherSubscription";
 
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -67,28 +68,105 @@ async function generateWithOwnKey(apiKey: string, prep: PreparedChat["prepare"])
   throw new TeacherApiError(lastStatus === 429 ? "Your API key has hit its limit. Please try again in a moment." : "The teacher could not answer right now. Please try again.", lastStatus || undefined);
 }
 
+const KNOWN_EXTERNAL_TOPICS = [
+  "computer fundamentals",
+  "python",
+  "java",
+  "c++",
+  "c programming",
+  "javascript",
+  "html",
+  "css",
+  "machine learning",
+  "artificial intelligence",
+  "data science",
+  "web development",
+  "cyber security",
+  "cloud computing",
+  "database management",
+  "sql",
+];
+
+export function isExternalTopicQuery(query: string, enrolledSubjectsText: string): boolean {
+  const q = query.toLowerCase();
+  const enrolled = enrolledSubjectsText.toLowerCase();
+  for (const ext of KNOWN_EXTERNAL_TOPICS) {
+    const wordPattern = new RegExp(`\\b${ext.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\b`, "i");
+    if (wordPattern.test(q) && !enrolled.includes(ext)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function extractExternalTopicName(query: string): string {
+  const q = query.toLowerCase();
+  for (const ext of KNOWN_EXTERNAL_TOPICS) {
+    const wordPattern = new RegExp(`\\b${ext.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\b`, "i");
+    if (wordPattern.test(q)) {
+      return ext.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    }
+  }
+  return "external topics";
+}
+
 /**
  * One call for every chat mode. With the student's own key, our server only finds the notes and
  * writes the prompt; the answer comes straight from Google and the key never touches our server.
  */
-export async function teacherChat(body: Record<string, unknown>, prefs: TeacherPrefs): Promise<ChatResult> {
-  const common = { ...body, persona: personaPayload(prefs) };
-  if (!prefs.apiKey) return teacherApi<ChatResult>("chat", common);
+export async function teacherChat(
+  body: Record<string, unknown>,
+  prefs: TeacherPrefs,
+  enrolledSubjects?: string
+): Promise<ChatResult> {
+  const sub = loadSubscription();
+  if (!sub) {
+    throw new TeacherApiError("Please purchase an AI Teacher plan (Plus Plan ₹500 or Pro Plan ₹1000) to chat with your personal AI teacher.");
+  }
 
-  const prep = await teacherApi<PreparedChat>("chat", { ...common, byok: true });
-  const text = await generateWithOwnKey(prefs.apiKey, prep.prepare);
-  const out: ChatResult = { found: prep.found, topics: prep.topics };
-  if (prep.mode === "quiz") {
-    const quiz = validQuiz(parseJsonObject(text));
-    if (!quiz) throw new TeacherApiError("I could not make that question this time. Please try again.");
-    return { ...out, quiz };
+  const enrolledList = enrolledSubjects || "your enrolled subjects";
+  const question = typeof body.question === "string" ? body.question.trim() : "";
+
+  // Enforce purchased courses syllabus boundary
+  if (question && isExternalTopicQuery(question, enrolledList)) {
+    const topicName = extractExternalTopicName(question);
+    return {
+      found: false,
+      answer: `I am your personal AI tutor for your enrolled syllabus (${enrolledList}). I cannot answer questions about external topics like ${topicName}. Which of your enrolled subjects would you like to study today?`,
+    };
   }
-  if (prep.mode === "bigq") {
-    const bigq = validBigQ(parseJsonObject(text));
-    if (!bigq) throw new TeacherApiError("I could not make that question this time. Please try again.");
-    return { ...out, bigq };
+
+  const common = { ...body, enrolledSubjects: enrolledList, persona: personaPayload(prefs) };
+  const ownKey = prefs.apiKey?.trim();
+
+  // Plus Plan (₹500): user must provide their own Gemini API key
+  if (sub.planId === "byok_500" && !ownKey) {
+    throw new TeacherApiError("Your Plus Plan requires your own Google Gemini API key. Please add your key in Settings to chat.");
   }
-  return { ...out, answer: text };
+
+  // Plus Plan users always use their own key.
+  // Pro Plan users use their own key if apiMode is 'own' and key is provided; otherwise Admin key.
+  const shouldUseOwnKey = sub.planId === "byok_500" || (prefs.apiMode === "own" && !!ownKey);
+
+  if (shouldUseOwnKey && ownKey) {
+    const prep = await teacherApi<PreparedChat>("chat", { ...common, byok: true });
+    const text = await generateWithOwnKey(ownKey, prep.prepare);
+    const out: ChatResult = { found: prep.found, topics: prep.topics };
+    if (prep.mode === "quiz") {
+      const quiz = validQuiz(parseJsonObject(text));
+      if (!quiz) throw new TeacherApiError("I could not make that question this time. Please try again.");
+      return { ...out, quiz };
+    }
+    if (prep.mode === "bigq") {
+      const bigq = validBigQ(parseJsonObject(text));
+      if (!bigq) throw new TeacherApiError("I could not make that question this time. Please try again.");
+      return { ...out, bigq };
+    }
+    return { ...out, answer: text };
+  }
+
+  // Pro Plan (admin_1000) without own key: runs on Admin's managed API key
+  return teacherApi<ChatResult>("chat", common);
 }
 
 /** Quick check used by the Settings page. */

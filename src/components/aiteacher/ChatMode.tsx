@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { type BigQuestionData, type TeacherSubject } from "@/lib/aiTeacherApi";
-import { teacherChat } from "@/lib/aiTeacherChat";
+import { teacherChat, isExternalTopicQuery, extractExternalTopicName } from "@/lib/aiTeacherChat";
 import { usePrefs } from "@/lib/aiTeacherPrefs";
 import { detectSubject, isOnlySubject } from "@/lib/aiTeacherSubjects";
 import { downloadWord, markdownToHtml, printPdf } from "@/lib/aiTeacherExport";
@@ -20,14 +20,13 @@ interface ChatMessage {
   error?: boolean;
   /** Written by the page itself (greeting, "which subject?"), never sent to the AI as history. */
   local?: boolean;
-  /** "subjects" shows one tappable chip per subject; a list shows fixed quick replies. */
-  chips?: "subjects" | ChipDef[];
+  chips?: ChipDef[];
   quiz?: QuizItem;
   /** Teaching answers can be saved as a PDF or Word document. */
   exportable?: boolean;
 }
 
-const WELCOME = "Hi! How can I help you today? Which subject would you like to study?";
+const WELCOME = "Namaste! How can I help you today? Which subject would you like to study?";
 
 const AFTER_ANSWER: ChipDef[] = [
   { label: "👍 Got it", text: "👍 Got it! Please continue with the next part." },
@@ -46,16 +45,20 @@ export function ChatMode({
   subjects,
   subject,
   onSubject,
+  enrolledSubjects,
 }: {
   subjects: TeacherSubject[];
   subject: TeacherSubject | null;
   onSubject: (s: TeacherSubject) => void;
+  enrolledSubjects?: string;
 }) {
   const [prefs] = usePrefs();
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
+  const enrolledSubjectsRef = useRef(enrolledSubjects);
+  enrolledSubjectsRef.current = enrolledSubjects;
 
-  const [messages, setMessages] = useState<ChatMessage[]>([{ id: 0, role: "assistant", content: WELCOME, local: true, chips: "subjects" }]);
+  const [messages, setMessages] = useState<ChatMessage[]>([{ id: 0, role: "assistant", content: WELCOME, local: true }]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [awaitingAnswer, setAwaitingAnswer] = useState(false);
@@ -86,7 +89,11 @@ export function ChatMode({
     const history = messagesRef.current.filter((m) => !m.error && !m.local && !m.quiz).map((m) => ({ role: m.role, content: m.content }));
     setBusy(true);
     try {
-      const r = await teacherChat({ subjectId: subj.id, question: q, messages: history }, prefsRef.current);
+      const r = await teacherChat(
+        { subjectId: subj.id, question: q, messages: history },
+        prefsRef.current,
+        enrolledSubjectsRef.current
+      );
       lastTopicRef.current = r.topics?.[0]?.topic_id ?? lastTopicRef.current;
       lastQuestionRef.current = q;
       push({ role: "assistant", content: r.answer ?? "", exportable: true, chips: AFTER_ANSWER });
@@ -107,6 +114,7 @@ export function ChatMode({
       const r = await teacherChat(
         { mode, subjectId: subj.id, question: label, topicId: lastTopicRef.current, context: lastQuestionRef.current, avoid: askedRef.current },
         prefsRef.current,
+        enrolledSubjectsRef.current
       );
       if (mode === "quiz" && r.quiz) {
         askedRef.current = [...askedRef.current, r.quiz.question].slice(-8);
@@ -141,7 +149,11 @@ export function ChatMode({
     setAwaitingAnswer(false);
     setBusy(true);
     try {
-      const r = await teacherChat({ mode: "grade", subjectId: subj.id, question: answer, bigq: bq }, prefsRef.current);
+      const r = await teacherChat(
+        { mode: "grade", subjectId: subj.id, question: answer, bigq: bq },
+        prefsRef.current,
+        enrolledSubjectsRef.current
+      );
       push({ role: "assistant", content: r.answer ?? "", chips: AFTER_PRACTICE });
     } catch (e) {
       fail(e);
@@ -158,36 +170,76 @@ export function ChatMode({
     // The next message after a big question is the student's answer.
     if (bigQRef.current) { await gradeAnswer(q); return; }
 
-    // Listen for a subject in the message.
+    const enrolledList = enrolledSubjectsRef.current || subjects.map(s => s.name).join(", ");
+
+    // 1. Enforce enrolled syllabus boundary: check for topics outside enrolled courses
+    if (isExternalTopicQuery(q, enrolledList)) {
+      const externalTopic = extractExternalTopicName(q);
+      push({
+        role: "assistant",
+        content: `I am your personal AI tutor for your enrolled syllabus (${enrolledList}). I cannot answer questions about external topics like ${externalTopic}. Which of your enrolled subjects would you like to study today?`,
+        local: true,
+      });
+      return;
+    }
+
+    // 2. Greeting check: when user says "hey" or "hello", prompt them for the subject
+    const isGreeting = /^(hi|hey|hello|namaste|vanakkam|good\s*(morning|afternoon|evening)|hola)(\s*teacher|\s*sir|\s*madam)?\b[!.?]*$/i.test(q);
+    if (isGreeting) {
+      if (!subjRef.current) {
+        push({
+          role: "assistant",
+          content: "Namaste! How can I help you today? Which subject would you like to study?",
+          local: true,
+        });
+        return;
+      } else {
+        push({
+          role: "assistant",
+          content: `Namaste! We are currently studying ${subjRef.current.name}. What would you like to learn today? Ask me any question, or say "teach me chapter 1".`,
+          local: true,
+        });
+        return;
+      }
+    }
+
+    // 3. Listen for a subject in the message.
     const named = detectSubject(q, subjects);
     let subj = subjRef.current;
-    if (named && named.id !== subj?.id) {
+    if (named) {
       subj = named;
       subjRef.current = named;
       onSubject(named);
     }
 
-    if (!subj) {
-      pendingRef.current = { q };
-      push({ role: "assistant", content: "Sure! Which subject is this for?", local: true, chips: "subjects" });
-      return;
-    }
+    // 4. If user named a subject (e.g. Science, Mathematics, Social Science) or only subject
+    const isSubjectIntent = named && (
+      isOnlySubject(q, named) ||
+      /^(i\s*(want|would like)\s*to\s*(study|learn)|let('?s)?\s*(study|learn)|teach\s*me|start\s*with)\b/i.test(q)
+    );
 
-    if (named && isOnlySubject(q, named)) {
+    if (isSubjectIntent && named) {
       const pending = pendingRef.current;
       pendingRef.current = null;
       push({
         role: "assistant",
         local: true,
         content: pending
-          ? `Got it, ${named.name}! Let me answer your question.`
-          : `Great, ${named.name}! What would you like to learn? Ask me any question, or say "teach me chapter 3 topic 1".`,
-        chips: pending ? undefined : [
-          { label: "What are the main chapters?", text: `What are the main chapters in ${named.name} and what are they about?` },
-          { label: "Teach me chapter 1", text: "Teach me chapter 1 topic 1" },
-        ],
+          ? `Great, let's study ${named.name}! Let me answer your question: "${pending.q}".`
+          : `Great, let's study ${named.name}! What would you like to learn today? Ask me any question, or say "teach me chapter 1".`,
       });
       if (pending) await run(pending.q, named);
+      return;
+    }
+
+    // 5. If still no subject is selected, ask conversationally
+    if (!subj) {
+      pendingRef.current = { q };
+      push({
+        role: "assistant",
+        content: "Namaste! How can I help you today? Which subject would you like to study?",
+        local: true,
+      });
       return;
     }
 
@@ -250,7 +302,7 @@ export function ChatMode({
               )}
               {m.chips && m.id === lastId && !busy && (
                 <div className="flex flex-wrap gap-2">
-                  {(m.chips === "subjects" ? subjects.map((s) => ({ label: s.name, text: s.name } as ChipDef)) : m.chips).map((c) => (
+                  {m.chips.map((c) => (
                     <Button key={c.label} variant="outline" size="sm" className="h-auto whitespace-normal rounded-full py-1.5" onClick={() => onChip(c)}>{c.label}</Button>
                   ))}
                 </div>

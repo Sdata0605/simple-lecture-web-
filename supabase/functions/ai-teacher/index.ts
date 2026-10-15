@@ -27,9 +27,17 @@ const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 });
 
 // ---------------------------------------------------------------- config
+interface KeyPoolItem {
+  id?: string;
+  key: string;
+  label?: string;
+  status?: "active" | "rate_limited" | "invalid" | "untested";
+}
+
 interface TeacherConfig {
   enabled: boolean;
   google_api_key: string;
+  key_pool?: KeyPoolItem[];
   live_model: string;
   chat_model: string;
   voice_name: string;
@@ -38,11 +46,29 @@ interface TeacherConfig {
 const DEFAULT_CONFIG: TeacherConfig = {
   enabled: false,
   google_api_key: "",
+  key_pool: [],
   live_model: "gemini-3.8-live",
   chat_model: "gemini-3.1-flash-lite",
   voice_name: "Kore",
   teacher_name: "AI Teacher",
 };
+
+function getCandidateKeys(cfg: TeacherConfig): string[] {
+  const keys: string[] = [];
+  if (cfg.google_api_key && cfg.google_api_key.trim()) {
+    keys.push(cfg.google_api_key.trim());
+  }
+  if (Array.isArray(cfg.key_pool)) {
+    for (const item of cfg.key_pool) {
+      const k = typeof item === "string" ? item : item?.key;
+      const status = typeof item === "object" ? item?.status : undefined;
+      if (k && typeof k === "string" && k.trim() && status !== "invalid") {
+        keys.push(k.trim());
+      }
+    }
+  }
+  return [...new Set(keys)];
+}
 
 async function loadConfig(): Promise<TeacherConfig> {
   const { data } = await sb.from("ai_settings").select("setting_value").eq("setting_key", "ai_teacher_1to1_config").maybeSingle();
@@ -51,6 +77,7 @@ async function loadConfig(): Promise<TeacherConfig> {
   return {
     enabled: !!v.enabled,
     google_api_key: clean(v.google_api_key, ""),
+    key_pool: Array.isArray((v as any).key_pool) ? (v as any).key_pool : [],
     live_model: clean(v.live_model, DEFAULT_CONFIG.live_model),
     // "gemini-flash-latest" was the first default and is a slow thinking model (8-45 s): treat it as "not chosen".
     chat_model: v.chat_model === "gemini-flash-latest" ? DEFAULT_CONFIG.chat_model : clean(v.chat_model, DEFAULT_CONFIG.chat_model),
@@ -61,11 +88,11 @@ async function loadConfig(): Promise<TeacherConfig> {
 
 // ---------------------------------------------------------------- rate limiting
 const LIMITS: Record<string, { perHour: number; perDay: number }> = {
-  session: { perHour: 6, perDay: 20 },
-  session_byok: { perHour: 30, perDay: 100 },
-  chat_byok: { perHour: 200, perDay: 1000 },
-  chat: { perHour: 60, perDay: 300 },
-  search: { perHour: 200, perDay: 1000 },
+  session: { perHour: 60, perDay: 300 },
+  session_byok: { perHour: 200, perDay: 1000 },
+  chat_byok: { perHour: 500, perDay: 2000 },
+  chat: { perHour: 200, perDay: 1000 },
+  search: { perHour: 500, perDay: 2000 },
 };
 
 async function ipHash(req: Request): Promise<string> {
@@ -257,13 +284,31 @@ The student also asked for this teaching style: "${p.custom}". Follow it for ton
 }
 
 // ---------------------------------------------------------------- prompts
-function voicePrompt(cfg: TeacherConfig, catalog: CatSubject[], persona: Persona) {
+/** How the teacher sounds. Gemini voices have no accent or speed setting, so both are asked for in words. */
+const VOICE_STYLE =
+  "VOICE: when you speak English, use a clear Indian English accent, like a school teacher from India, never an American or British accent. Speak slowly and calmly, clearly slower than a normal conversation, with a short pause between sentences, so a school student can follow every word.";
+
+/** Practice questions in the 1-to-1 class: the teacher keeps the student busy with quizzes as it goes. */
+const PRACTICE_CLASS = `- After every two or three spoken turns of teaching, call either check_understanding or show_quiz (alternate them) so the student is never just listening. If the student is confused, re-explain more simply with a new example and a new visual. If they got it, move on and praise them.
+- Mix practice: after a concept call show_quiz (one MCQ, four options). At the end of a topic call ask_big_question (a "why / explain / describe" question), wait for their answer, then judge it against your model_answer: say what was right, what was missing, and give a score out of 5 in a friendly way.`;
+
+/** Practice questions in Ask AI: the student decides. The teacher answers, offers, and waits. */
+const PRACTICE_ASK = `- PRACTICE QUESTIONS (Ask AI): never show or ask a question, quiz or check-in on your own, and do not call show_quiz, ask_big_question or check_understanding unless the student asks for one. When you have finished explaining the Answer, stop there and ask aloud, in one short sentence: "Would you like to solve a practice question on this?" Then wait. If the student says yes, call show_quiz (one MCQ, four options) or ask_big_question, wait for their answer, then judge it against your model_answer: say what was right, what was missing, and give a score out of 5 in a friendly way. If the student says no, say one short closing sentence and stay quiet: ask nothing else and offer nothing more until they ask you something.`;
+
+function voicePrompt(cfg: TeacherConfig, catalog: CatSubject[], persona: Persona, enrolledSubjects?: string, askMode = false) {
   const list = catalog.length ? catalog.map((s) => s.name).join(", ") : "none yet";
+  const enrolledList = enrolledSubjects || list;
   return `You are ${persona.name}, a one-to-one school teacher on a live voice call with a student.
 
 ${personaText(persona)}
 
-SUBJECTS YOU CAN TEACH: ${list}.
+ENROLLED SYLLABUS BOUNDARY & SCOPE RULE (CRITICAL):
+- You are strictly scoped to the student's enrolled courses and subjects: ${enrolledList}.
+- You MUST ONLY answer questions that belong to their enrolled syllabus (${enrolledList}).
+- If a student asks questions about topics outside their enrolled courses (such as "Computer Fundamentals" or "Python", programming, or other non-enrolled subjects), you MUST NOT answer the unrelated topic. Politely refuse:
+  "I am your personal AI tutor for your enrolled syllabus (${enrolledList}). I cannot answer questions about external topics like [Name of external topic]. Which of your enrolled subjects would you like to study today?"
+
+SUBJECTS YOU CAN TEACH: ${enrolledList}.
 
 YOU KNOW THE FULL SYLLABUS (below). Topic numbers are written <chapter>.<topic>, so "chapter 31 topic 1" means topic 31.1.
 Never ask the student for a topic's name or details that you can find in the syllabus.
@@ -271,8 +316,9 @@ Never ask the student for a topic's name or details that you can find in the syl
 ${catalogText(catalog)}
 
 START OF THE CALL
-- First greet the student in one short sentence and ask: "How can I help you today? Which subject would you like to study?" Then wait for the answer.
-- When the student names a subject, call select_subject with that subject's exact name. If it is not in the list, say which subjects you can teach and ask them to pick one.
+- First greet the student in one short sentence: "Namaste! How can I help you today? Which subject would you like to study?" Then wait for the answer.
+- When the student says "hey", "hello", "hi" or joins the call, prompt them: "Namaste! How can I help you today? Which subject would you like to study?"
+- When the student names or speaks a subject (e.g. Science, Mathematics, Social Science), call select_subject with that subject's exact name and proceed with the lesson. If it is not in their enrolled list, say which subjects you can teach (${enrolledList}) and ask them to pick one.
 - If the student asks for a specific lesson (by chapter and topic number, or by a name you can find in the syllabus) call start_lesson straight away with the subject name, chapter_number and topic_number. This also selects the subject. If the same chapter number exists in more than one subject and they did not say which, ask which subject.
 - If they name only a chapter, start with its first topic and mention how many topics the chapter has.
 - Do not teach other subject content until a subject is selected. If they ask a general question first, ask which subject it is for, then call select_subject and answer it.
@@ -281,6 +327,7 @@ START OF THE CALL
 
 HOW TO TEACH
 - ${LANGUAGES[persona.language]}
+- ${VOICE_STYLE}
 - Speak naturally in short turns (2 to 4 sentences), then pause so the student can respond. Never read out symbols, markdown, URLs, emojis or tool names.
 - start_lesson returns the notes for the whole topic: teach it section by section from those notes, one part at a time. For follow-up questions or other topics call search_notes. Teach ONLY from the notes you receive; if they do not cover something, say so honestly and suggest a related topic.
 - The student can interrupt you at any time. Keep every spoken turn short.
@@ -290,16 +337,22 @@ MAKE IT ENGAGING AND VISUAL (this is what makes you a great teacher)
 - Call show_visual for almost every concept so the student can SEE it. Use kind "scene" for a mini-story told with emojis (for example ship, sea, island, money), "timeline" for events in order, "steps" for a process, "compare" for differences (give each item a group name), and "keyterms" for vocabulary. Use 3 to 6 items, each with one fitting emoji, a 2-4 word title and one simple line. Describe the visual in a few words as you show it.
 - Use present_slide for a short recap of key points; start each bullet with a fitting emoji.
 - Give simple analogies and real-life examples, then tie them back to the notes.
-- After every two or three spoken turns of teaching, call either check_understanding or show_quiz (alternate them) so the student is never just listening. If the student is confused, re-explain more simply with a new example and a new visual. If they got it, move on and praise them.
-- Mix practice: after a concept call show_quiz (one MCQ, four options). At the end of a topic call ask_big_question (a "why / explain / describe" question), wait for their answer, then judge it against your model_answer: say what was right, what was missing, and give a score out of 5 in a friendly way.
+${askMode ? PRACTICE_ASK : PRACTICE_CLASS}
 - When the student asks for notes, a PDF, a Word document or a worksheet, or when a topic is finished, call create_document with well-organised notes: a title, 3 to 6 sections with short points, 4 to 5 MCQs and 2 big questions with answers. Use format "pdf" or "word" as asked, or "both". Tell them it is ready to download.
 - Praise effort, correct mistakes gently, and end each topic with a quick recap and an offer for what to do next.`;
 }
 
-function chatPrompt(cfg: TeacherConfig, subject: string, persona: Persona) {
+function chatPrompt(cfg: TeacherConfig, subject: string, persona: Persona, enrolledSubjects?: string) {
+  const enrolledList = enrolledSubjects || subject;
   return `You are ${persona.name}, a one-to-one school teacher for the subject "${subject}". A student is chatting with you in writing.
 
 ${personaText(persona)}
+
+ENROLLED SYLLABUS BOUNDARY & SCOPE RULE (CRITICAL):
+- You are strictly scoped to the student's enrolled courses and subjects: ${enrolledList}.
+- You MUST ONLY answer questions and doubts that belong to their enrolled syllabus (${enrolledList}).
+- If a student asks questions about topics outside their enrolled courses (such as "Computer Fundamentals" or "Python", programming, or other non-enrolled subjects), you MUST NOT answer the unrelated topic. Politely refuse:
+  "I am your personal AI tutor for your enrolled syllabus (${enrolledList}). I cannot answer questions about external topics like [Name of external topic]. Which of your enrolled subjects would you like to study today?"
 
 RULES
 - Answer ONLY from the NOTES provided with the question. If the NOTES do not contain the answer, say so briefly and suggest a related topic; do not invent facts.
@@ -339,37 +392,50 @@ In 4 to 6 short sentences: give a score out of 5, say what the student got right
  */
 async function geminiGenerate(cfg: TeacherConfig, system: string, contents: any[], opts: { json?: boolean } = {}) {
   const chain = [...new Set([cfg.chat_model, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"])];
+  const candidateKeys = getCandidateKeys(cfg);
+  if (candidateKeys.length === 0) {
+    const err: any = new Error("No Gemini API key available in settings or pool");
+    err.status = 503;
+    throw err;
+  }
+
   let lastStatus = 0;
-  for (const model of chain) {
-    for (const noThinking of [true, false]) {
-      try {
-        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-          method: "POST",
-          signal: AbortSignal.timeout(20_000),
-          headers: { "x-goog-api-key": cfg.google_api_key, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: system }] },
-            contents,
-            generationConfig: { temperature: opts.json ? 0.7 : 0.3, maxOutputTokens: 2048, ...(opts.json ? { responseMimeType: "application/json" } : {}), ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}) },
-          }),
-        });
-        const body = await r.json().catch(() => ({}));
-        if (r.ok) {
-          const text = (body.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("").trim();
-          if (text) return text;
-          break; // empty reply: try the next model
+  for (const apiKey of candidateKeys) {
+    for (const model of chain) {
+      for (const noThinking of [true, false]) {
+        try {
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+            method: "POST",
+            signal: AbortSignal.timeout(20_000),
+            headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: system }] },
+              contents,
+              generationConfig: { temperature: opts.json ? 0.7 : 0.3, maxOutputTokens: 2048, ...(opts.json ? { responseMimeType: "application/json" } : {}), ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}) },
+            }),
+          });
+          const body = await r.json().catch(() => ({}));
+          if (r.ok) {
+            const text = (body.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("").trim();
+            if (text) return text;
+            break; // empty reply: try the next model
+          }
+          lastStatus = r.status;
+          console.error(`[ai-teacher] generateContent ${model} failed with key ${apiKey.slice(0, 8)}...`, r.status, JSON.stringify(body).slice(0, 300));
+          if (r.status === 400 && noThinking) continue;
+          if (r.status === 429 || r.status === 403) {
+            // Key exhausted / rate-limited: break out to failover to next key in pool!
+            break;
+          }
+          break; // 404 / 5xx: next model
+        } catch (e) {
+          console.error(`[ai-teacher] generateContent ${model} error with key ${apiKey.slice(0, 8)}...`, String((e as any)?.message ?? e));
+          break; // timeout / network: next model
         }
-        lastStatus = r.status;
-        console.error(`[ai-teacher] generateContent ${model} failed`, r.status, JSON.stringify(body).slice(0, 300));
-        if (r.status === 400 && noThinking) continue; // this model may not accept thinkingConfig: retry it without
-        break; // 404 / 429 / 5xx: next model
-      } catch (e) {
-        console.error(`[ai-teacher] generateContent ${model} error`, String((e as any)?.message ?? e));
-        break; // timeout / network: next model
       }
     }
   }
-  const e: any = new Error("AI request failed");
+  const e: any = new Error("AI request failed across all pool keys");
   e.status = lastStatus;
   throw e;
 }
@@ -514,7 +580,8 @@ const LIVE_TOOLS = [{
   ],
 }];
 
-async function mintLiveToken(cfg: TeacherConfig, apiKey: string, systemInstruction: string) {
+async function mintLiveToken(cfg: TeacherConfig, apiKeyOrKeys: string | string[], systemInstruction: string) {
+  const candidateKeys = Array.isArray(apiKeyOrKeys) ? apiKeyOrKeys : [apiKeyOrKeys];
   const now = Date.now();
   const expireTime = new Date(now + 20 * 60_000).toISOString();
   const newSessionExpireTime = new Date(now + 90_000).toISOString();
@@ -529,17 +596,19 @@ async function mintLiveToken(cfg: TeacherConfig, apiKey: string, systemInstructi
     { level: "model-only", versions: ["v1alpha", "v1beta"], constraints: { model: cfg.live_model, config: { responseModalities: ["AUDIO"] } } },
   ];
   let lastErr: unknown = null;
-  for (const a of attempts) {
-    for (const apiVersion of a.versions) {
-      try {
-        const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion } });
-        const tok = await ai.authTokens.create({
-          config: { uses: 1, expireTime, newSessionExpireTime, liveConnectConstraints: a.constraints, httpOptions: { apiVersion } },
-        });
-        if (tok?.name) return { token: tok.name, apiVersion, lockLevel: a.level, expireTime };
-      } catch (e) {
-        lastErr = e;
-        console.error(`[ai-teacher] token mint failed (${a.level}/${apiVersion}):`, String((e as any)?.message ?? e).slice(0, 300));
+  for (const apiKey of candidateKeys) {
+    for (const a of attempts) {
+      for (const apiVersion of a.versions) {
+        try {
+          const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion } });
+          const tok = await ai.authTokens.create({
+            config: { uses: 1, expireTime, newSessionExpireTime, liveConnectConstraints: a.constraints, httpOptions: { apiVersion } },
+          });
+          if (tok?.name) return { token: tok.name, apiVersion, lockLevel: a.level, expireTime };
+        } catch (e) {
+          lastErr = e;
+          console.error(`[ai-teacher] token mint failed with key ${apiKey.slice(0, 8)}... (${a.level}/${apiVersion}):`, String((e as any)?.message ?? e).slice(0, 300));
+        }
       }
     }
   }
@@ -658,20 +727,25 @@ async function handleSession(body: any, ip: string) {
   // "Bring your own key": the student's own Gemini key is used directly in their browser, so no
   // token is minted and the admin key is not needed. The on/off switch still applies.
   const byok = body?.byok === true;
-  if (!cfg.enabled) return json({ error: "AI Teacher is switched off. An admin can turn it on in Admin > Settings > AI Teacher 1-to-1." }, 503);
-  if (!byok && !cfg.google_api_key) return json({ error: "AI Teacher has no API key yet. An admin can add one in Admin > Settings > AI Teacher 1-to-1." }, 503);
-  if (!(await allow(byok ? "session_byok" : "session", ip))) return json({ error: "Too many voice sessions. Please try again later." }, 429);
+  const candidateKeys = getCandidateKeys(cfg);
+  if (!cfg.enabled) return json({ error: "AI Teacher is switched off. An admin can turn it on in Admin > AI Teacher." }, 503);
+  if (!byok && candidateKeys.length === 0) return json({ error: "AI Teacher has no API key in the pool. An admin can add keys in Admin > AI Teacher." }, 503);
+  const isTesting = body?.isTesting === true || String(body?.email ?? "").toLowerCase().trim() === "pramod0605@gmail.com";
+  if (!isTesting && !(await allow(byok ? "session_byok" : "session", ip))) return json({ error: "Too many voice sessions. Please try again later." }, 429);
 
   const persona = readPersona(body?.persona, cfg);
   const voiceName = persona.voice ?? cfg.voice_name;
+  const enrolledSubjects = typeof body?.enrolledSubjects === "string" ? body.enrolledSubjects.trim() : "";
   const catalog = await loadCatalog();
   const subjects = catalog.map((s) => ({ id: s.id, name: s.name, topics: s.chapters.reduce((n, c) => n + c.topics.length, 0) }));
-  const systemInstruction = voicePrompt(cfg, catalog, persona);
+  // "ask" = the Ask AI screen (lecture player, home-page AI button, Learning sidebar): practice questions are offered, not asked.
+  const askMode = body?.mode === "ask";
+  const systemInstruction = voicePrompt(cfg, catalog, persona, enrolledSubjects, askMode);
   const base = { model: cfg.live_model, voiceName, teacherName: persona.name, systemInstruction, subjects, catalog, tools: LIVE_TOOLS };
 
   if (byok) return json({ ...base, byok: true, apiVersion: "v1beta" });
   try {
-    const t = await mintLiveToken({ ...cfg, voice_name: voiceName }, cfg.google_api_key, systemInstruction);
+    const t = await mintLiveToken({ ...cfg, voice_name: voiceName }, candidateKeys, systemInstruction);
     return json({ ...base, token: t.token, apiVersion: t.apiVersion, lockLevel: t.lockLevel, expireTime: t.expireTime });
   } catch (e) {
     return json({ error: "Voice teacher is temporarily unavailable. Please use chat mode or try again soon." }, 503);
@@ -734,8 +808,9 @@ async function handleChat(body: any, ip: string) {
   if (!subjectId || typeof question !== "string" || !question.trim()) return json({ error: "subjectId and question are required" }, 400);
   if (question.length > 1500) return json({ error: "Question is too long" }, 400);
   const cfg = await loadConfig();
-  if (!cfg.enabled) return json({ error: "AI Teacher is switched off. An admin can turn it on in Admin > Settings > AI Teacher 1-to-1." }, 503);
-  if (!byok && !cfg.google_api_key) return json({ error: "AI Teacher has no API key yet. An admin can add one in Admin > Settings > AI Teacher 1-to-1." }, 503);
+  const candidateKeys = getCandidateKeys(cfg);
+  if (!cfg.enabled) return json({ error: "AI Teacher is switched off. An admin can turn it on in Admin > AI Teacher." }, 503);
+  if (!byok && candidateKeys.length === 0) return json({ error: "AI Teacher has no API key in the pool. An admin can add keys in Admin > AI Teacher." }, 503);
   const subject = await getSubject(subjectId);
   if (!subject) return json({ error: "Unknown subject" }, 400);
   if (!(await allow(byok ? "chat_byok" : "chat", ip, subjectId))) return json({ error: "Too many questions. Please try again in a while." }, 429);
@@ -794,7 +869,8 @@ async function handleChat(body: any, ip: string) {
       const history = (Array.isArray(messages) ? messages : []).slice(-6)
         .filter((m: any) => m && typeof m.content === "string")
         .map((m: any) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: String(m.content).slice(0, 2000) }] }));
-      system = chatPrompt(cfg, subject.name, persona);
+      const enrolledSubjects = typeof body?.enrolledSubjects === "string" ? body.enrolledSubjects.trim() : "";
+      system = chatPrompt(cfg, subject.name, persona, enrolledSubjects);
       contents = [...history, { role: "user", parts: [{ text: `${notesBlock}\n\nSTUDENT: ${question}` }] }];
     } else {
       const avoid = (Array.isArray(body.avoid) ? body.avoid : []).slice(-5).map((s: unknown) => String(s).slice(0, 200)).join(" | ");

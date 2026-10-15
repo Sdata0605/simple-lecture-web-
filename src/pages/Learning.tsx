@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { CheckCircle, Circle, Lock, AlertCircle, PanelLeftClose, PanelLeft, FolderOpen, ArrowLeft, BookOpen, BookMarked, ChevronRight, Video, Sparkles, ClipboardList, FileText, Target, BarChart3, HelpCircle, MessageCircleQuestion, Menu, Lightbulb } from "lucide-react";
+import { CheckCircle, Circle, Lock, AlertCircle, PanelLeftClose, PanelLeft, FolderOpen, ArrowLeft, BookOpen, BookMarked, ChevronRight, Video, Sparkles, ClipboardList, FileText, Target, BarChart3, HelpCircle, MessageCircleQuestion, Menu, Lightbulb, GraduationCap } from "lucide-react";
 
 
 import { SubjectNavigationBar } from "@/components/learning/SubjectNavigationBar";
@@ -24,6 +24,8 @@ import { SubjectNavigationBar } from "@/components/learning/SubjectNavigationBar
 import { AssignmentViewer } from "@/components/learning/AssignmentViewer";
 import { RecordedVideos } from "@/components/learning/RecordedVideos";
 import { AITeachingAssistant } from "@/components/learning/AITeachingAssistant";
+import { AITeacherTab } from "@/components/learning/AITeacherTab";
+import { openAskAI } from "@/lib/askAIStore";
 import { PreviousYearPapers } from "@/components/learning/PreviousYearPapers";
 import { PaperTestResults } from "@/components/learning/PaperTestResults";
 import { DPPTab } from "@/components/learning/DPPTab";
@@ -357,6 +359,17 @@ export default function Learning({
   }, [isAiReadyPending, aiJob.job?.status, aiJob.job?.presentationStarted, aiJob.job?.response?.blocked, activeTab]);
 
   const handleTabChange = useCallback((value: string) => {
+    // "Ask AI" and "AI Teacher" in the sidebar/tabs are buttons for one thing: the Ask AI screen the lecture
+    // player opens. They open it over the page instead of switching to a tab of their own. (The old "AI" tab
+    // is still used for finished-presentation jobs and doubt clearing, which set it directly.)
+    if (value === 'ai-assistant' || value === 'ai-teacher') {
+      openAskAI({
+        subjectId: selectedSubjectId,
+        subjectName: learningData?.subjects?.find((s) => s.id === selectedSubjectId)?.name,
+        topicTitle: selectedTopic?.title,
+      });
+      return;
+    }
     console.log('[AIGate] handleTabChange', { from: activeTab, to: value, isAiReadyPending });
     if (activeTab === 'ai-assistant' && value !== 'ai-assistant' && isAiReadyPending) {
       console.log('[AIGate] handleTabChange BLOCKED → opening dialog');
@@ -370,7 +383,7 @@ export default function Learning({
     if (value === "ai-assistant") {
       setSidebarCollapsed(true);
     }
-  }, [activeTab, isAiReadyPending, queryClient]);
+  }, [activeTab, isAiReadyPending, queryClient, selectedSubjectId, selectedTopic, learningData?.subjects]);
 
   // Guard any in-page route navigation (e.g. Back buttons) the same way as
   // tab switches: if a presentation is ready, prompt before leaving.
@@ -580,8 +593,9 @@ export default function Learning({
                 <TabsTrigger value="questions" className="py-2 rounded-lg font-medium text-sm">Questions</TabsTrigger>
               </TabsList>
             ) : (
-              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-11">
+              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-12">
                 <TabsTrigger value="videos" className="py-2 rounded-lg font-medium text-sm">Classes</TabsTrigger>
+                <TabsTrigger value="ai-teacher" className="py-2 rounded-lg font-medium text-sm">AI Teacher</TabsTrigger>
                 <TabsTrigger value="notes" className="py-2 rounded-lg font-medium text-sm">Notes</TabsTrigger>
                 <TabsTrigger value="important-notes" className="py-2 rounded-lg font-medium text-xs">Important Notes</TabsTrigger>
                 <TabsTrigger value="ai-assistant" className="py-2 rounded-lg font-medium text-sm">AI</TabsTrigger>
@@ -624,6 +638,18 @@ export default function Learning({
           </TabsContent>
           {!isChecker && (
             <>
+              <TabsContent value="ai-teacher">
+                <AITeacherTab
+                  courseId={courseId}
+                  courseName={course?.name}
+                  subjectId={selectedSubjectId ?? undefined}
+                  subjectName={selectedSubject?.name}
+                  chapterId={selectedTopic.chapter_id}
+                  chapterTitle={(chapters as any[] | undefined)?.find((c) => c.id === selectedTopic.chapter_id)?.title}
+                  topicId={selectedTopic.id}
+                  topicTitle={selectedTopic.title}
+                />
+              </TabsContent>
               <TabsContent value="ai-assistant">
                 <AITeachingAssistant 
                   key={selectedTopic.id}
@@ -686,6 +712,7 @@ export default function Learning({
             ) : (
               <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-11">
                 <TabsTrigger value="videos" className="py-2 rounded-lg font-medium text-sm">Classes</TabsTrigger>
+                <TabsTrigger value="ai-teacher" className="py-2 rounded-lg font-medium text-sm">AI Teacher</TabsTrigger>
                 <TabsTrigger value="notes" className="py-2 rounded-lg font-medium text-sm">Notes</TabsTrigger>
                 <TabsTrigger value="important-notes" className="py-2 rounded-lg font-medium text-xs">Important Notes</TabsTrigger>
                 <TabsTrigger value="ai-assistant" className="py-2 rounded-lg font-medium text-sm">AI</TabsTrigger>
@@ -722,6 +749,16 @@ export default function Learning({
           </TabsContent>
           {!isChecker && (
             <>
+              <TabsContent value="ai-teacher">
+                <AITeacherTab
+                  courseId={courseId}
+                  courseName={course?.name}
+                  subjectId={selectedSubjectId ?? undefined}
+                  subjectName={selectedSubject?.name}
+                  chapterId={selectedChapter.id}
+                  chapterTitle={selectedChapter.title}
+                />
+              </TabsContent>
               <TabsContent value="ai-assistant">
                 <AITeachingAssistant 
                   key={selectedChapter.id}
@@ -986,6 +1023,7 @@ export default function Learning({
                           { value: "questions", label: "Questions", icon: HelpCircle },
                         ] : [
                           { value: "videos", label: "Classes", icon: Video },
+                          { value: "ai-teacher", label: "AI Teacher (1-to-1)", icon: GraduationCap },
                           { value: "ai-assistant", label: "Ask AI", icon: Sparkles },
                           { value: "notes", label: "Notes", icon: BookOpen },
                           { value: "important-notes", label: "Important Notes", icon: BookMarked },
@@ -1029,6 +1067,7 @@ export default function Learning({
                     {(isChecker ? [
                       { value: "questions", label: "Questions", icon: HelpCircle, desc: "Browse Q&A" },
                     ] : [
+                      { value: "ai-teacher", label: "AI Teacher", icon: GraduationCap, desc: "1-to-1 Voice & Chat" },
                       { value: "ai-assistant", label: "Ask AI", icon: Sparkles, desc: "Have a doubt? Get help" },
                       { value: "notes", label: "Notes", icon: BookOpen, desc: "Read topic notes" },
                       { value: "important-notes", label: "Important Notes", icon: BookMarked, desc: "Generated revision notes" },

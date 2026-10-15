@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { safeLocalStorage } from "@/lib/safeStorage";
 
-/** A visitor's own settings. They live only in this browser (localStorage), never on a server. */
 export interface TeacherPrefs {
   /** Optional: the visitor's own Google Gemini key. */
   apiKey: string;
+  /** Active key mode: 'admin' to use SimpleLecture managed key, 'own' to use student's personal key. Default is 'admin'. */
+  apiMode: "admin" | "own";
   /** Gemini voice name, or "" for the site default. */
   voice: string;
   /** Teacher's name, or "" for the site default. */
@@ -14,7 +15,15 @@ export interface TeacherPrefs {
   language: string;
 }
 
-export const DEFAULT_PREFS: TeacherPrefs = { apiKey: "", voice: "", teacherName: "", preset: "friendly", custom: "", language: "auto" };
+export const DEFAULT_PREFS: TeacherPrefs = {
+  apiKey: "",
+  apiMode: "admin",
+  voice: "",
+  teacherName: "",
+  preset: "friendly",
+  custom: "",
+  language: "auto",
+};
 
 export const PRESET_OPTIONS = [
   { id: "friendly", emoji: "😊", label: "Friendly", desc: "Warm, patient and encouraging" },

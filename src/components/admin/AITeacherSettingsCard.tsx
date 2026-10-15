@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,14 +48,21 @@ export function AITeacherSettingsCard() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <GraduationCap className="h-5 w-5 text-emerald-600" />
-          <div>
-            <CardTitle>AI Teacher 1-to-1</CardTitle>
-            <CardDescription>
-              Public voice + chat teacher page (no login). Uses its own Google Gemini API key, which stays on the server.
-            </CardDescription>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-5 w-5 text-emerald-600" />
+            <div>
+              <CardTitle>AI Teacher 1-to-1</CardTitle>
+              <CardDescription>
+                Public voice + chat teacher settings. Configure up to 100 API keys with auto-failover & plan pricing.
+              </CardDescription>
+            </div>
           </div>
+          <Button size="sm" variant="outline" asChild className="text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-semibold">
+            <Link to="/admin/ai-teacher">
+              Manage 100-Key Pool & Pricing →
+            </Link>
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -84,6 +92,17 @@ export function AITeacherSettingsCard() {
                 <a href="/aiteacher" target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5 mr-1" />Open</a>
               </Button>
             </div>
+
+            {local.key_pool && local.key_pool.length > 0 && (
+              <div className="flex items-center justify-between rounded-md border border-emerald-300 bg-emerald-50/70 p-3 text-xs">
+                <span className="font-semibold text-emerald-900">
+                  Key Pool: {local.key_pool.length} of 100 Gemini API keys configured (Auto-failover active)
+                </span>
+                <Link to="/admin/ai-teacher" className="font-bold text-emerald-800 hover:underline">
+                  Manage Pool ({local.key_pool.length}) →
+                </Link>
+              </div>
+            )}
 
             <Separator />
 

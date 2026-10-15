@@ -9,6 +9,7 @@ import { Loader2, Lock, Sparkles, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import { usePrefs } from "@/lib/aiTeacherPrefs";
+import { TEACHER_PLAYBACK_RATE } from "@/lib/aiTeacherVoice";
 import type { TeacherSubject } from "@/lib/aiTeacherApi";
 import {
   buildLectureOpening,
@@ -22,14 +23,27 @@ import {
 } from "@/lib/aiTeacherLecture";
 import { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
 import { LectureOrbScreen } from "./LectureOrbScreen";
+import { SubjectPicker } from "./SubjectPicker";
 import { useAutoContinue, useTurnSinceCard } from "./useAutoContinue";
 import "./ask-assistant.css";
 
 export interface AskAIAssistantProps {
-  /** "mid" = opened from the player's Ask AI button, "end" = lecture just finished. */
-  trigger: "mid" | "end";
+  /**
+   * "mid" = opened from the player's Ask AI button, "end" = lecture just finished, "ask" = opened from
+   * anywhere else on the site (no lecture is paused).
+   */
+  trigger: "mid" | "end" | "ask";
   onClose: () => void;
-  subject: TeacherSubject;
+  /** The subject to teach. When null the student picks one first (see `choices`). */
+  subject: TeacherSubject | null;
+  /** What the picker shows while `subject` is null. */
+  choices?: {
+    /** null while the list loads. */
+    subjects: TeacherSubject[] | null;
+    failed?: boolean;
+    unknown?: string | null;
+    onRetry?: () => void;
+  };
   topicTitle?: string | null;
   /** Language the lecture is playing in, e.g. "kannada". */
   lectureLanguage?: string | null;
@@ -40,9 +54,11 @@ export interface AskAIAssistantProps {
 const noop = () => {};
 
 export function AskAIAssistant(props: AskAIAssistantProps) {
-  const { onClose, subject, topicTitle } = props;
+  const { onClose, topicTitle, choices } = props;
   const { isAuthenticated, isLoading } = useAuth();
   const { hasActivePlan } = useAITeacherSubscription();
+  const [picked, setPicked] = useState<TeacherSubject | null>(null);
+  const subject = props.subject ?? picked;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -73,8 +89,18 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
         action={{ label: "See AI Teacher plans", onClick: () => window.open("/aiteacher", "_blank", "noopener") }}
       />
     );
+  } else if (subject) {
+    body = <LiveLecture {...props} subject={subject} />;
   } else {
-    body = <LiveLecture {...props} />;
+    body = (
+      <SubjectPicker
+        subjects={choices?.subjects ?? null}
+        failed={choices?.failed}
+        unknown={choices?.unknown}
+        onPick={setPicked}
+        onRetry={choices?.onRetry}
+      />
+    );
   }
 
   return createPortal(
@@ -83,10 +109,12 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
         <div className="aa-topbar__title">
           <Sparkles size={16} />
           <span>Ask AI</span>
-          <span className="aa-topbar__subject">
-            · {subject.name}
-            {topicTitle ? ` · ${topicTitle}` : ""}
-          </span>
+          {subject && (
+            <span className="aa-topbar__subject">
+              · {subject.name}
+              {topicTitle ? ` · ${topicTitle}` : ""}
+            </span>
+          )}
         </div>
         <button type="button" className="aa-icon-btn" onClick={onClose} aria-label="Close and return to the lecture">
           <X size={18} />
@@ -99,7 +127,7 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
 }
 
 /** Starts the live call as soon as it opens and shows the teacher on the orb screen. */
-function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }: AskAIAssistantProps) {
+function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }: AskAIAssistantProps & { subject: TeacherSubject }) {
   const [prefs] = usePrefs();
   const [subjects] = useState(() => [subject]);
   const [opening] = useState(() =>
@@ -116,8 +144,19 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
   // `enrolledSubjects` scopes the teacher to this subject. `echoGuard`: on speakers the mic would hear the
   // teacher and cut it off, so the mic is closed while it talks and reopens by itself when it finishes;
   // tapping the orb breaks in. `keepGoing`: a lesson explains in steps and carries straight on to the next
-  // one, instead of the teacher ending its turn after each and waiting to be told to continue.
-  const live = useLiveTeacher({ subject, subjects, onSubject: noop, prefs, enrolledSubjects: subject.name, echoGuard: true, keepGoing: true });
+  // one, instead of the teacher ending its turn after each and waiting to be told to continue. `sessionMode`
+  // makes the teacher offer practice questions rather than ask them, and `playbackRate` slows its voice a little.
+  const live = useLiveTeacher({
+    subject,
+    subjects,
+    onSubject: noop,
+    prefs,
+    enrolledSubjects: subject.name,
+    echoGuard: true,
+    keepGoing: true,
+    sessionMode: "ask",
+    playbackRate: TEACHER_PLAYBACK_RATE,
+  });
 
   // Deferred a tick so a dev-time remount cancels it instead of opening two calls.
   const connectRef = useRef(live.connect);

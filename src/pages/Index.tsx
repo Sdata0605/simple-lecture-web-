@@ -21,6 +21,7 @@ const TopCourses = lazyWithRetry(() => import("@/components/TopCourses").then(m 
 const MostPopularSection = lazyWithRetry(() => import("@/components/MostPopularSection").then(m => ({ default: m.MostPopularSection })));
 const Footer = lazyWithRetry(() => import("@/components/Footer").then(m => ({ default: m.Footer })));
 const ExpertAITeachers = lazyWithRetry(() => import("@/components/ExpertAITeachers").then(m => ({ default: m.ExpertAITeachers })));
+const AITeacherPromo = lazyWithRetry(() => import("@/components/aiteacher/AITeacherPromo").then(m => ({ default: m.AITeacherPromo })));
 const SSLCPromoDialog = lazyWithRetry(() => import("@/components/SSLCPromoDialog").then(m => ({ default: m.SSLCPromoDialog })));
 const PromotionalSection = lazyWithRetry(() => import("@/components/PromotionalSection").then(m => ({ default: m.PromotionalSection })));
 const TestimonialsSection = lazyWithRetry(() => import("@/components/TestimonialsSection").then(m => ({ default: m.TestimonialsSection })));
@@ -101,6 +102,9 @@ const Index = () => {
         <SmartHeader />
         <main>
           <Hero heroVideoSettings={homepageData?.heroVideoSettings} />
+          <Suspense fallback={null}>
+            <AITeacherPromo />
+          </Suspense>
           {isLoading && !homepageData && (
             <div className="flex items-center justify-center py-20">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mr-3" />

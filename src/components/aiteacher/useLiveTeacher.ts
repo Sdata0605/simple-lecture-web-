@@ -8,9 +8,12 @@ import {
 } from "@/lib/aiTeacherApi";
 import { matchSubjectByName } from "@/lib/aiTeacherSubjects";
 import { personaPayload, type TeacherPrefs } from "@/lib/aiTeacherPrefs";
+import { loadSubscription } from "@/lib/aiTeacherSubscription";
 import type { DocData } from "@/lib/aiTeacherExport";
 import type { QuizItem } from "./QuizCard";
 import type { VisualData } from "./Cards";
+import { ECHO_TAIL_MS, createEchoGate } from "./echoGate";
+import { createStepPacer, waitUntilIdle } from "./stepPacing";
 
 export type LiveStatus = "idle" | "connecting" | "live" | "ended" | "error";
 
@@ -78,7 +81,14 @@ const pcm16Base64ToFloat32 = (b64: string) => {
   return out;
 };
 
-const GREETING = "Hello! I have just joined the class. Greet me and ask which subject I want to study.";
+/** Added to the reply of a shown step so the teacher carries on instead of ending its turn. */
+const KEEP_GOING =
+  "Shown on the student's screen. Now explain this step aloud properly: 3 to 5 clear sentences in simple words, saying what we are doing, how, and why, like teaching a beginner. Do this before anything else. Only when you have finished speaking, go on to the next step (call its tool). Never show a step without explaining it, and do not stop or ask whether to continue until the Answer step has been shown. After you have explained the Answer step, ask me aloud in one short sentence whether I would like to solve a practice question on this, then wait: never show or ask a question unless I say yes.";
+
+/** Tools that put a card on the student's screen; with keepGoing they are paced to the teacher's voice. */
+const PACED_TOOLS = new Set(["present_slide", "show_visual", "show_quiz", "ask_big_question", "check_understanding", "create_document"]);
+
+const GREETING = "Hello! I have just joined the class. Greet me with: 'Namaste! How can I help you today? Which subject would you like to study?' and ask which subject I want to study.";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -87,11 +97,27 @@ export function useLiveTeacher({
   subjects,
   onSubject,
   prefs,
+  enrolledSubjects,
+  echoGuard = false,
+  keepGoing = false,
+  sessionMode,
+  playbackRate = 1,
 }: {
   subject: TeacherSubject | null;
   subjects: TeacherSubject[];
   onSubject: (s: TeacherSubject) => void;
   prefs: TeacherPrefs;
+  enrolledSubjects?: string;
+  /** "ask" = the Ask AI screen: the server tells the teacher to offer practice questions instead of asking them. */
+  sessionMode?: "ask";
+  /** Speed of the teacher's voice (1 = as generated; a little under 1 sounds slower). */
+  playbackRate?: number;
+  /** For speakers: keep the mic closed while the teacher talks (so it cannot hear itself) and let the
+   * student break in with interrupt(). Off by default, which keeps the mic open all the time. */
+  echoGuard?: boolean;
+  /** For a lesson that explains in steps: tell the teacher, in each tool reply, to carry straight on to the
+   * next step instead of ending its turn and waiting for the student. */
+  keepGoing?: boolean;
 }) {
   const [status, setStatus] = useState<LiveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +128,8 @@ export function useLiveTeacher({
   const [micAvailable, setMicAvailable] = useState(true);
   const [teacherName, setTeacherName] = useState(prefs.teacherName.trim() || "AI Teacher");
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
+  /** How many of the teacher's turns have finished (the server's "turn complete" signal). */
+  const [turnsCompleted, setTurnsCompleted] = useState(0);
 
   const sessionRef = useRef<any>(null);
   const mutedRef = useRef(false);
@@ -112,6 +140,17 @@ export function useLiveTeacher({
   const playCtxRef = useRef<AudioContext | null>(null);
   const playNextRef = useRef(0);
   const playingRef = useRef(new Set<AudioBufferSourceNode>());
+  const echoGuardRef = useRef(echoGuard);
+  echoGuardRef.current = echoGuard;
+  const keepGoingRef = useRef(keepGoing);
+  keepGoingRef.current = keepGoing;
+  const playbackRateRef = useRef(playbackRate);
+  playbackRateRef.current = playbackRate;
+  const sessionModeRef = useRef(sessionMode);
+  sessionModeRef.current = sessionMode;
+  const gateRef = useRef(createEchoGate());
+  const speakTailRef = useRef<number | null>(null);
+  const pacerRef = useRef(createStepPacer());
   const msgIdRef = useRef(1);
   const subjectRef = useRef(subject);
   subjectRef.current = subject;
@@ -123,6 +162,8 @@ export function useLiveTeacher({
   const pendingTextRef = useRef<string | null>(null);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
+  const enrolledSubjectsRef = useRef(enrolledSubjects);
+  enrolledSubjectsRef.current = enrolledSubjects;
 
   const setStatusBoth = (s: LiveStatus) => { statusRef.current = s; setStatus(s); };
 
@@ -158,14 +199,33 @@ export function useLiveTeacher({
     return playCtxRef.current;
   };
 
+  const clearSpeakTail = useCallback(() => {
+    if (speakTailRef.current !== null) { window.clearTimeout(speakTailRef.current); speakTailRef.current = null; }
+  }, []);
+
   const stopPlayback = useCallback(() => {
     playingRef.current.forEach((s) => { try { s.onended = null; s.stop(); } catch { /* already stopped */ } });
     playingRef.current.clear();
     playNextRef.current = 0;
+    clearSpeakTail();
+    gateRef.current.playbackStopped(performance.now());
     setSpeaking(false);
-  }, []);
+  }, [clearSpeakTail]);
+
+  /** The queue ran dry. With the echo guard, "speaking" (and the closed mic) lasts a short tail longer. */
+  const playbackDrained = useCallback(() => {
+    if (!echoGuardRef.current) { setSpeaking(false); return; }
+    // Bluetooth and some speakers play a moment after the audio is handed over.
+    const latency = Math.min(600, Math.round(((playCtxRef.current as (AudioContext & { outputLatency?: number }) | null)?.outputLatency ?? 0) * 1000));
+    const tail = ECHO_TAIL_MS + latency;
+    gateRef.current.playbackEnded(performance.now(), tail);
+    clearSpeakTail();
+    speakTailRef.current = window.setTimeout(() => { speakTailRef.current = null; setSpeaking(false); }, tail);
+  }, [clearSpeakTail]);
 
   const enqueueAudio = useCallback((b64: string) => {
+    // A turn the student cut off by tapping: the server may still be sending its last words.
+    if (echoGuardRef.current && !gateRef.current.acceptChunk(performance.now())) return;
     const ctx = ensurePlayCtx();
     const data = pcm16Base64ToFloat32(b64);
     if (!data.length) return;
@@ -173,17 +233,30 @@ export function useLiveTeacher({
     buf.copyToChannel(data, 0);
     const src = ctx.createBufferSource();
     src.buffer = buf;
+    // A rate under 1 plays the same audio more slowly, so it also takes longer on the clock.
+    const rate = playbackRateRef.current;
+    src.playbackRate.value = rate;
     src.connect(ctx.destination);
     const startAt = Math.max(ctx.currentTime + 0.03, playNextRef.current);
     src.start(startAt);
-    playNextRef.current = startAt + buf.duration;
+    const playSeconds = buf.duration / rate;
+    playNextRef.current = startAt + playSeconds;
+    pacerRef.current.spoke(playSeconds * 1000);
     playingRef.current.add(src);
+    clearSpeakTail();
+    gateRef.current.playbackStarted();
     setSpeaking(true);
     src.onended = () => {
       playingRef.current.delete(src);
-      if (playingRef.current.size === 0) setSpeaking(false);
+      if (playingRef.current.size === 0) playbackDrained();
     };
-  }, []);
+  }, [clearSpeakTail, playbackDrained]);
+
+  /** The student taps to break in: the teacher stops now and the mic opens. */
+  const interrupt = useCallback(() => {
+    stopPlayback();
+    gateRef.current.interrupt(performance.now());
+  }, [stopPlayback]);
 
   // ---------------------------------------------------------------- tools
   const handleToolCalls = useCallback(async (calls: any[]) => {
@@ -191,6 +264,18 @@ export function useLiveTeacher({
     for (const fc of calls) {
       const args = fc.args ?? {};
       try {
+        // A lesson in steps: keep the board and the voice together (see stepPacing.ts).
+        if (keepGoingRef.current && PACED_TOOLS.has(fc.name)) {
+          if (fc.name === "present_slide" || fc.name === "show_visual") {
+            const verdict = pacerRef.current.request(String(args.title ?? ""));
+            if (!verdict.allow) {
+              responses.push({ id: fc.id, name: fc.name, response: { status: "not_shown", instruction: verdict.instruction ?? "Explain the previous step aloud first." } });
+              continue;
+            }
+          }
+          // The teacher's speech is generated faster than it plays: show the card once the voice has caught up.
+          await waitUntilIdle({ isIdle: () => playingRef.current.size === 0, isAborted: () => statusRef.current !== "live" });
+        }
         if (fc.name === "search_notes") {
           const sub = subjectRef.current;
           if (!sub) {
@@ -265,7 +350,7 @@ export function useLiveTeacher({
         } else if (fc.name === "present_slide") {
           const bullets = (Array.isArray(args.bullets) ? args.bullets : []).map(String).slice(0, 7);
           pushCard({ kind: "slide", title: String(args.title ?? ""), bullets });
-          responses.push({ id: fc.id, name: fc.name, response: { status: "shown" } });
+          pacerRef.current.shown(); responses.push({ id: fc.id, name: fc.name, response: keepGoingRef.current ? { status: "shown", instruction: KEEP_GOING } : { status: "shown" } });
         } else if (fc.name === "show_quiz") {
           const options = (Array.isArray(args.options) ? args.options : []).map(String).slice(0, 6);
           const correctIndex = Number(args.correct_index);
@@ -288,7 +373,7 @@ export function useLiveTeacher({
             responses.push({ id: fc.id, name: fc.name, response: { status: "error", message: "Use a valid kind and at least 2 items." } });
           } else {
             pushCard({ kind: "visual", visual: { kind: args.kind, title: String(args.title ?? "").slice(0, 100), items, caption: args.caption ? String(args.caption).slice(0, 200) : undefined } });
-            responses.push({ id: fc.id, name: fc.name, response: { status: "shown", note: "The visual is on the student's screen. Describe it in a few words." } });
+            pacerRef.current.shown(); responses.push({ id: fc.id, name: fc.name, response: keepGoingRef.current ? { status: "shown", instruction: KEEP_GOING } : { status: "shown", note: "The visual is on the student's screen. Describe it in a few words." } });
           }
         } else if (fc.name === "ask_big_question") {
           const q = String(args.question ?? "").slice(0, 500);
@@ -331,6 +416,9 @@ export function useLiveTeacher({
 
   // ---------------------------------------------------------------- teardown
   const cleanup = useCallback(() => {
+    clearSpeakTail();
+    gateRef.current = createEchoGate();
+    pacerRef.current = createStepPacer();
     try { sessionRef.current?.close(); } catch { /* ignore */ }
     sessionRef.current = null;
     try { workletRef.current?.disconnect(); workletRef.current?.port.close(); } catch { /* ignore */ }
@@ -343,7 +431,7 @@ export function useLiveTeacher({
     void playCtxRef.current?.close().catch(() => {});
     playCtxRef.current = null;
     setMicLevel(0);
-  }, [stopPlayback]);
+  }, [stopPlayback, clearSpeakTail]);
 
   const disconnect = useCallback(() => {
     cleanup();
@@ -370,8 +458,31 @@ export function useLiveTeacher({
     setError(null); setNotice(null); setStatusBoth("connecting");
     if (firstMessage) pendingTextRef.current = firstMessage;
     try {
+      const sub = loadSubscription();
+      if (!sub) {
+        setError("Please purchase an AI Teacher plan (Plus Plan ₹500 or Pro Plan ₹1000) to start your 1-to-1 voice class.");
+        setStatusBoth("error");
+        return;
+      }
+
+      const isByok500 = sub.planId === "byok_500";
       const own = prefsRef.current.apiKey.trim();
-      const s = await teacherApi<LiveSession>("session", { persona: personaPayload(prefsRef.current), byok: !!own });
+
+      if (isByok500 && !own) {
+        setError("Your Plus Plan requires your own Google Gemini API key. Please add your key in Settings to start the class.");
+        setStatusBoth("error");
+        return;
+      }
+
+      // Plus Plan users always use their own key (byok: true).
+      // Pro Plan users use their own key if apiMode is 'own' and key is provided; otherwise they use the Admin key.
+      const shouldUseOwnKey = isByok500 || (prefsRef.current.apiMode === "own" && !!own);
+      const s = await teacherApi<LiveSession>("session", {
+        persona: personaPayload(prefsRef.current),
+        byok: shouldUseOwnKey,
+        enrolledSubjects: enrolledSubjectsRef.current,
+        mode: sessionModeRef.current,
+      });
       setTeacherName(s.teacherName);
       if (s.subjects?.length) subjectsRef.current = s.subjects;
       catalogRef.current = s.catalog ?? [];
@@ -392,8 +503,8 @@ export function useLiveTeacher({
       }
 
       const { GoogleGenAI, Modality } = await import("@google/genai");
-      // With the student's own key the browser connects straight to Google; otherwise with the one-use token.
-      const ai = s.byok && own
+      // If student provided their own key, connect straight to Google; otherwise use one-use token from Admin key.
+      const ai = shouldUseOwnKey
         ? new GoogleGenAI({ apiKey: own })
         : new GoogleGenAI({ apiKey: s.token, httpOptions: { apiVersion: s.apiVersion } });
 
@@ -416,10 +527,10 @@ export function useLiveTeacher({
             if (sc?.modelTurn?.parts) {
               for (const p of sc.modelTurn.parts) if (p.inlineData?.data) enqueueAudio(p.inlineData.data);
             }
-            if (sc?.interrupted) stopPlayback();
+            if (sc?.interrupted) { stopPlayback(); gateRef.current.turnEnded(); }
             if (sc?.inputTranscription?.text) appendTranscript("user", sc.inputTranscription.text);
             if (sc?.outputTranscription?.text) appendTranscript("teacher", sc.outputTranscription.text);
-            if (sc?.turnComplete) closeOpenBubbles();
+            if (sc?.turnComplete) { closeOpenBubbles(); gateRef.current.turnEnded(); setTurnsCompleted((n) => n + 1); }
             if (m.toolCall?.functionCalls?.length) void handleToolCalls(m.toolCall.functionCalls);
             if (m.goAway) setNotice("This session is about to end. You can start a new class right after.");
           },
@@ -456,6 +567,7 @@ export function useLiveTeacher({
           // Only re-render when the level visibly changes (this state lives in the page component).
           setMicLevel((prev) => { const next = prev * 0.6 + Math.min(1, ev.data.rms * 6) * 0.4; return Math.abs(next - prev) < 0.08 ? prev : Math.round(next * 10) / 10; });
           if (mutedRef.current || !sessionRef.current || statusRef.current !== "live") return;
+          if (echoGuardRef.current && gateRef.current.micClosed(performance.now())) return; // do not let the mic hear the teacher
           try {
             sessionRef.current.sendRealtimeInput({ audio: { data: b64FromBuffer(ev.data.pcm), mimeType: "audio/pcm;rate=16000" } });
           } catch { /* socket closing */ }
@@ -506,6 +618,7 @@ export function useLiveTeacher({
   return {
     status, error, notice, speaking, micLevel, muted, micAvailable, teacherName,
     transcript,
-    connect, disconnect, toggleMute, sendText, reportQuizAnswer, answerBigQuestion, reportUnderstanding, reset,
+    turnsCompleted,
+    connect, disconnect, toggleMute, interrupt, sendText, reportQuizAnswer, answerBigQuestion, reportUnderstanding, reset,
   };
 }

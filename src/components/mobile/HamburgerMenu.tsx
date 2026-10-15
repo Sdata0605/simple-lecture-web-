@@ -1,6 +1,6 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Menu, LayoutDashboard, BookOpen, Video, Trophy, MessageSquare, HelpCircle, User, LogOut, Home, Grid3X3, LogIn, UserPlus, Newspaper, FileText } from "lucide-react";
+import { Menu, LayoutDashboard, BookOpen, Video, Trophy, MessageSquare, HelpCircle, User, LogOut, Home, Grid3X3, LogIn, UserPlus, Newspaper, FileText, GraduationCap } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -8,6 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/lib/queryClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
+import { useMemo } from "react";
 
 const authenticatedMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -33,6 +35,7 @@ export const HamburgerMenu = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { data: profile } = useUserProfile();
+  const { hasActivePlan } = useAITeacherSubscription();
 
   const initials = (profile?.full_name || profile?.email || "U").slice(0, 2).toUpperCase();
 
@@ -42,7 +45,19 @@ export const HamburgerMenu = () => {
     navigate("/");
   };
 
-  const menuItems = isAuthenticated ? authenticatedMenuItems : guestMenuItems;
+  const menuItems = useMemo(() => {
+    if (!isAuthenticated) return guestMenuItems;
+    if (!hasActivePlan) return authenticatedMenuItems;
+    const list = [...authenticatedMenuItems];
+    const myCoursesIdx = list.findIndex((i) => i.path === "/my-courses");
+    const aiItem = { icon: GraduationCap, label: "AI Teacher", path: "/aiteacher" };
+    if (myCoursesIdx !== -1) {
+      list.splice(myCoursesIdx + 1, 0, aiItem);
+    } else {
+      list.unshift(aiItem);
+    }
+    return list;
+  }, [isAuthenticated, hasActivePlan]);
 
   return (
     <Sheet>

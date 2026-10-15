@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Menu, Search, ChevronDown, Bell, User, LogOut, LayoutDashboard, X } from "lucide-react";
+import { Menu, Search, ChevronDown, Bell, User, LogOut, LayoutDashboard, X, Sparkles, GraduationCap } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -17,6 +17,7 @@ import { useSearchCourses } from "@/hooks/usePaginatedCourses";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import logo from "@/assets/website-logo.png";
 
 export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
@@ -28,6 +29,7 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
 
   // Use centralized auth context instead of duplicate listeners
   const { user } = useAuth();
+  const { hasActivePlan } = useAITeacherSubscription();
   const { data: currentUserData } = useCurrentUser();
   const userProfile = currentUserData?.profile;
 
@@ -236,6 +238,14 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
                         My Recordings
                       </Link>
                     </DropdownMenuItem>
+                    {hasActivePlan && (
+                      <DropdownMenuItem asChild>
+                        <Link to="/aiteacher" className="cursor-pointer">
+                          <GraduationCap className="mr-2 h-4 w-4" />
+                          AI Teacher
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
                       <LogOut className="mr-2 h-4 w-4" />
@@ -318,6 +328,11 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
                   <Link to="/my-courses" className="text-sm font-medium hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>
                     My Courses
                   </Link>
+                  {hasActivePlan && (
+                    <Link to="/aiteacher" className="text-sm font-medium hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>
+                      AI Teacher
+                    </Link>
+                  )}
                   <Button variant="destructive" onClick={handleLogout} className="w-full">
                     Logout
                   </Button>

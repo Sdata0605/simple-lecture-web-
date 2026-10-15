@@ -1,5 +1,5 @@
 // The lesson board: what the student asked, a progress bar, and the teacher's explanation as steps that
-// appear one by one (basics, build up, example, answer, then a question to solve). The newest step is open
+// appear one by one (basics, build up, example, answer; a question to solve only if the student wants one). The newest step is open
 // and scrolled into view; earlier steps fold into a single line the student can reopen. Cards stay mounted
 // while folded so a picked answer is not lost.
 import { useEffect, useRef, useState } from "react";
@@ -17,7 +17,7 @@ interface Pill {
   turn?: boolean;
 }
 
-/** Progress along the usual path: basics, build up, example, answer, your turn. */
+/** Progress along the usual path: basics, build up, example, answer (and "your turn", once the student asked for a question). */
 function pillsFor(lesson: Lesson): Pill[] {
   const last = lesson.cards[lesson.cards.length - 1];
   const onTurn = last?.role === "turn";
@@ -27,8 +27,9 @@ function pillsFor(lesson: Lesson): Pill[] {
     const target = lesson.cards.find((c) => c.step === i)?.id ?? null;
     pills.push({ key: `s${i}`, label: String(i), target, state: onTurn || i < current ? "done" : i === current ? "now" : "todo" });
   }
+  // No question is promised up front: the "?" step only appears when the student has taken a question.
   const turn = lesson.cards.find((c) => c.role === "turn");
-  pills.push({ key: "turn", label: "?", turn: true, target: turn?.id ?? null, state: onTurn ? "now" : "todo" });
+  if (turn) pills.push({ key: "turn", label: "?", turn: true, target: turn.id, state: onTurn ? "now" : "todo" });
   return pills;
 }
 
@@ -60,7 +61,7 @@ export function LessonBoard({ lesson, actions }: { lesson: Lesson; actions: Card
     return (
       <div className="lb-empty">
         <span className="aa-mic-chip" aria-hidden="true"><Sparkles size={16} /></span>
-        <h2>Ask me anything about this lesson</h2>
+        <h2>Ask me anything</h2>
         <p>I'll explain it from the very basics, one step at a time, so you really understand it.</p>
         <div className="lb-empty__path" aria-hidden="true">
           <span>1 The basics</span>

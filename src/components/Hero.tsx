@@ -6,6 +6,8 @@ import type { HeroVideoSettings } from "@/hooks/useHomepageData";
 import { HeroLecturePlayer } from "@/components/HeroLecturePlayer";
 import { HeroV4Launcher } from "@/components/HeroV4Launcher";
 import { HOMEPAGE_HERO_LECTURE } from "@/lib/homepageHeroLecture";
+import { AITeacherPlanModal } from "@/components/aiteacher/AITeacherPlanModal";
+import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 
 // Only import first hero image statically - others loaded after first paint
 import heroBoardExams from "@/assets/hero-board-exams.jpg";
@@ -50,6 +52,8 @@ interface HeroProps {
 
 export const Hero = (_props: HeroProps) => {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const { hasActivePlan } = useAITeacherSubscription();
   const heroImages = [heroBoardExams, heroBoardExams, heroBoardExams];
   const navigate = useNavigate();
 
@@ -158,7 +162,17 @@ export const Hero = (_props: HeroProps) => {
                     ))}
                   </div>
 
-                  <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+                  <div className="pt-4 flex flex-col sm:flex-row flex-wrap gap-3 justify-center lg:justify-start">
+                    {!hasActivePlan && (
+                      <Button
+                        size="lg"
+                        className="bg-gradient-to-r from-amber-400 via-amber-300 to-orange-400 hover:from-amber-300 hover:to-orange-500 text-slate-950 font-bold text-base md:text-lg px-6 py-5 h-auto rounded-xl shadow-xl shadow-amber-500/25 border border-amber-200/60 transition-all duration-300 hover:scale-[1.02] flex items-center gap-2.5"
+                        onClick={() => setPlanModalOpen(true)}
+                      >
+                        <Sparkles className="w-5 h-5 text-slate-950 shrink-0" />
+                        <span>Purchase Your Personal AI Teacher</span>
+                      </Button>
+                    )}
                     <Button 
                       size="lg" 
                       className="relative overflow-hidden bg-white/95 backdrop-blur-sm text-primary hover:bg-white shadow-2xl shadow-purple-500/30 border border-white/50 text-base md:text-lg px-6 py-5 h-auto rounded-xl group transition-all duration-300 hover:shadow-purple-500/40 hover:scale-[1.02] whitespace-normal text-left"
@@ -240,6 +254,7 @@ export const Hero = (_props: HeroProps) => {
           </div>
         </div>
       </div>
+      <AITeacherPlanModal open={planModalOpen} onOpenChange={setPlanModalOpen} />
     </section>
   );
 };

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   LECTURE_CONTEXT_TAG,
+  PRACTICE_OFFER,
   buildLectureOpening,
   QUICK_REQUESTS,
   deriveLectureView,
@@ -67,7 +68,7 @@ describe("buildLectureOpening", () => {
       subjectName: "Science",
       context: { ...ctx, narration: "word ".repeat(2000), keyPoints: Array.from({ length: 30 }, (_, i) => `point ${i}`) },
     });
-    expect(t.length).toBeLessThan(5000); // the narration is cut to 1200 characters, not passed through whole
+    expect(t.length).toBeLessThan(6000); // the narration is cut to 1200 characters, not passed through whole (10000)
     expect(t).toContain("point 7");
     expect(t).not.toContain("point 8");
   });
@@ -159,9 +160,30 @@ describe("deriveLectureView: what the orb screen shows", () => {
     expect(deriveLectureView({ ...base, status: "ended" })).toMatchObject({ orbMode: "idle", orbAction: "restart", status: "Class ended. Tap the orb to start again" });
   });
 
-  it("asks for an explanation from the very basics, as numbered steps ending in a question to solve", () => {
+  it("asks for an explanation from the very basics, as numbered steps ending in the answer", () => {
     const mid = buildLectureOpening({ trigger: "mid", subjectName: "Science", context: null });
     for (const tool of ["show_visual", "present_slide", "show_quiz", "ask_big_question"]) expect(mid).toContain(tool);
+  });
+
+  it("asks the teacher for a slow Indian-English voice, never an American or British one", () => {
+    for (const trigger of ["mid", "end", "ask"] as const) {
+      const t = buildLectureOpening({ trigger, subjectName: "Science", context: null });
+      expect(t).toContain("clear Indian English accent");
+      expect(t).toContain("never an American or British accent");
+      expect(t).toContain("Speak slowly");
+    }
+  });
+
+  it("opens Ask AI from outside a lecture without pretending a lecture is paused", () => {
+    const t = buildLectureOpening({ trigger: "ask", subjectName: "Maths", topicTitle: "Quadratic equations", context: null });
+    expect(t.startsWith(LECTURE_CONTEXT_TAG)).toBe(true);
+    expect(t).toContain('a doubt in Maths, on the topic "Quadratic equations"');
+    expect(t).toContain("not watching a lecture");
+    expect(t).not.toContain("paused");
+    expect(t).not.toContain("continue the lecture");
+    expect(t).toContain("never ask which subject");
+    expect(t).toContain("close this screen");
+    expect(buildLectureOpening({ trigger: "ask", subjectName: "Maths", context: null })).toContain("a doubt in Maths. I am not");
   });
 });
 
@@ -268,9 +290,16 @@ describe("nextStepNudge: the lesson keeps going without the student saying go ah
     expect(n?.text).toContain("Go on to the next step");
   });
 
-  it("asks for the question to solve after the Answer step", () => {
+  it("stops after the Answer step has been explained: no question is pushed on the student", () => {
     const n = nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), say("teacher", "Here is the idea."), slide(2, "Step 2 · Answer"), say("teacher", "So that is why.")] });
-    expect(n).toMatchObject({ cardId: 2, text: expect.stringContaining("question to solve") });
+    expect(n).toBeNull();
+  });
+
+  it("makes the teacher explain a silent Answer step, then offer practice instead of asking a question", () => {
+    const n = nextStepNudge({ ...idle, transcript: [slide(1, "Step 1 · The basics"), say("teacher", "Here is the idea."), slide(2, "Step 2 · Answer")] });
+    expect(n).toMatchObject({ cardId: 2, text: expect.stringContaining("did not explain it aloud") });
+    expect(n?.text).toContain(PRACTICE_OFFER);
+    expect(n?.text).toContain("Do not show any question yet");
   });
 
   it("waits while the teacher is talking or its turn has not finished", () => {
@@ -307,6 +336,16 @@ describe("nextStepNudge: the lesson keeps going without the student saying go ah
     const long: TranscriptItem[] = [];
     for (let i = 1; i <= 11; i++) long.push(slide(i, "Step " + i + " · More"));
     expect(nextStepNudge({ ...idle, transcript: long })).toBeNull();
+  });
+
+  it("is told, in the instructions, to offer a practice question after the answer and then wait", () => {
+    for (const trigger of ["mid", "end", "ask"] as const) {
+      const opening = buildLectureOpening({ trigger, subjectName: "Science", context: null });
+      expect(opening).toContain("never show or ask a question, quiz or check-in on your own");
+      expect(opening).toContain(PRACTICE_OFFER);
+      expect(opening).toContain("If I say no");
+      expect(opening).not.toContain("After the answer give me one question");
+    }
   });
 
   it("is told, in the instructions, never to wait between steps", () => {

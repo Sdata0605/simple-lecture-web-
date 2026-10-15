@@ -20,6 +20,7 @@ import { RouteNoIndex } from "@/components/SEO";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { AIAssistantJobProvider } from "@/contexts/AIAssistantJobContext";
 import { AIAssistantBackgroundUI } from "@/components/ai-assistant/AIAssistantBackgroundUI";
+import { closeAskAI, useAskAIRequest } from "@/lib/askAIStore";
 
 // Essential pages loaded immediately
 import Index from "./pages/Index";
@@ -239,6 +240,7 @@ const RecordingsManager = lazyWithRetry(() => import("./pages/admin/RecordingsMa
 const ForumModeration = lazyWithRetry(() => import("./pages/admin/ForumModeration"));
 const SupportDashboard = lazyWithRetry(() => import("./pages/admin/SupportDashboard"));
 const SalesLeads = lazyWithRetry(() => import("./pages/admin/SalesLeads"));
+const AdminAITeacher = lazyWithRetry(() => import("./pages/admin/AdminAITeacher"));
 
 // Checker pages
 const CheckerProtectedRoute = lazyWithRetry(() => import("./components/checker/CheckerProtectedRoute").then(m => ({ default: m.CheckerProtectedRoute })));
@@ -292,6 +294,22 @@ const DeferredSalesWidget = () => {
 
 const VisitorTracker = () => { useVisitorTracking(); return null; };
 
+// The one Ask AI screen (the lecture player's), opened by openAskAI() from any Ask AI button. Only loaded once
+// someone opens it.
+const AskAIHost = lazyWithRetry(() => import("@/components/learning/askAssistant/AskAIHost"));
+const AskAILayer = () => {
+  const request = useAskAIRequest();
+  const { pathname } = useLocation();
+  // Going to another page (browser Back, a link) ends the lesson, so the microphone never stays on behind it.
+  useEffect(() => closeAskAI, [pathname]);
+  if (!request) return null;
+  return (
+    <Suspense fallback={null}>
+      <AskAIHost />
+    </Suspense>
+  );
+};
+
 const App = () => (
   <ErrorBoundary>
   <HelmetProvider>
@@ -310,6 +328,7 @@ const App = () => (
             <RouteNoIndex />
             <SocialProofToast />
             <AIAssistantBackgroundUI />
+            <AskAILayer />
             <ErrorBoundary>
             <Suspense fallback={<PageLoader />}>
               <Routes>
@@ -427,6 +446,7 @@ const App = () => (
                     <Route path="academics/timetable" element={<AcademicsTimetable />} />
                     <Route path="academics/holidays" element={<HolidaysManager />} />
                     <Route path="settings" element={<Settings />} />
+                    <Route path="ai-teacher" element={<AdminAITeacher />} />
                     <Route path="settings/documentation" element={<Documentation />} />
                     <Route path="settings/generate-images" element={<GenerateSeedImages />} />
                     <Route path="settings/counselor-avatars" element={<CounselorAvatars />} />

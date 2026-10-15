@@ -2,11 +2,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LayoutDashboard, BookOpen, Video, Trophy, MessageSquare, HelpCircle, User, LogOut, Menu, Newspaper, CalendarClock, Grid3X3, FileText, NotebookPen } from "lucide-react";
+import { LayoutDashboard, BookOpen, Video, Trophy, MessageSquare, HelpCircle, User, LogOut, Menu, Newspaper, CalendarClock, Grid3X3, FileText, NotebookPen, GraduationCap } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/lib/queryClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
+import { useMemo } from "react";
+import { cn } from "@/lib/utils";
 
 const items = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
@@ -27,6 +30,24 @@ export const DashboardMenu = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: profile } = useUserProfile();
+  const { hasActivePlan } = useAITeacherSubscription();
+
+  const menuItems = useMemo(() => {
+    if (!hasActivePlan) return items;
+    const list = [...items];
+    const myCoursesIdx = list.findIndex((i) => i.to === "/my-courses");
+    const aiItem = {
+      label: "AI Teacher",
+      icon: GraduationCap,
+      to: "/aiteacher",
+    };
+    if (myCoursesIdx !== -1) {
+      list.splice(myCoursesIdx + 1, 0, aiItem);
+    } else {
+      list.unshift(aiItem);
+    }
+    return list;
+  }, [hasActivePlan]);
 
   const initials = (profile?.full_name || profile?.email || "U").slice(0, 2).toUpperCase();
 
@@ -63,7 +84,7 @@ export const DashboardMenu = () => {
           <Separator className="my-4" />
 
           <nav className="space-y-1">
-            {items.map(({ label, icon: Icon, to }) => {
+            {menuItems.map(({ label, icon: Icon, to }) => {
               const active = location.pathname === to;
               return (
                 <Link key={to} to={to} className="block">

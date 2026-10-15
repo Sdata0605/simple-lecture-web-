@@ -3,6 +3,7 @@
 // subject the student wants.
 import type { TranscriptItem } from "@/components/aiteacher/useLiveTeacher";
 import { hasMath } from "./aiTeacherMath";
+import { TEACHER_VOICE_STYLE } from "./aiTeacherVoice";
 
 /** Where the student was in the lecture when they tapped Ask AI. */
 export interface LectureAskContext {
@@ -18,7 +19,8 @@ export interface LectureAskContext {
 }
 
 export interface LectureOpeningInput {
-  trigger: "mid" | "end";
+  /** "mid" = paused a lecture, "end" = finished one, "ask" = opened Ask AI on its own, with no lecture. */
+  trigger: "mid" | "end" | "ask";
   subjectName: string;
   topicTitle?: string | null;
   /** Language the lecture is playing in, e.g. "kannada". */
@@ -31,6 +33,11 @@ export interface LectureOpeningInput {
 /** Every opening message starts with this tag; the conversation view hides it from the student. */
 export const LECTURE_CONTEXT_TAG = "[Lecture context]";
 const QUESTION_MARKER = "My first question:";
+
+/** What the teacher says once the Answer step is explained: it offers practice and waits, it never just asks. */
+export const PRACTICE_OFFER = "Would you like to solve a practice question on this?";
+
+const PRACTICE_RULE = `PRACTICE QUESTIONS: never show or ask a question, quiz or check-in on your own. When you have explained the Answer step, stop there and ask me aloud, in one short sentence: "${PRACTICE_OFFER}" Then wait. If I say yes, give me one question to solve (show_quiz or ask_big_question). If I say no, say one short closing sentence and then stay quiet: do not ask me anything else and do not offer anything more until I ask you something.`;
 
 const NARRATION_MAX = 1200;
 const KEY_POINT_MAX = 160;
@@ -55,7 +62,10 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
   const lang = lectureLanguage && lectureLanguage.toLowerCase() !== "english" ? capitalise(lectureLanguage) : null;
 
   const lines: string[] = [];
-  if (trigger === "end") {
+  if (trigger === "ask") {
+    const about = topicTitle ? `${subjectName}, on the topic "${topicTitle}"` : subjectName;
+    lines.push(`${LECTURE_CONTEXT_TAG} I opened Ask AI to ask you a doubt in ${about}. I am not watching a lecture right now.`);
+  } else if (trigger === "end") {
     lines.push(`${LECTURE_CONTEXT_TAG} I just finished watching the video lecture ${lecture}.`);
   } else {
     const where = context
@@ -75,7 +85,7 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
   const rules: string[] = [`My subject is already chosen (${subjectName}), so never ask which subject I want.`];
   if (trigger === "end") {
     rules.push(
-      "Say in one short sentence that the lecture is over and ask if I have any doubts. Offer a quick 3-question quiz on this lecture (one show_quiz question at a time).",
+      "Say in one short sentence that the lecture is over and ask if I have any doubts. Offer a quick 3-question quiz on this lecture, but start it only if I say yes (then one show_quiz question at a time).",
     );
   } else {
     rules.push("Greet me in one short sentence and ask what I am unsure about.");
@@ -87,12 +97,18 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
     "Explain it as steps on my screen. For every step call show_visual (with emojis) or present_slide, and start its title with 'Step 1 · ', 'Step 2 · ' and so on, followed by 2 to 4 words (for example 'Step 2 · Build up'). Use these steps: The basics (what I already know, in plain words), Build up (one new idea at a time), Everyday example (a comparison from daily life), Answer (the answer, stated clearly). Explain every step aloud properly before the next one: 3 to 5 clear sentences in simple words, saying what we are doing, how, and why, like teaching a beginner. Never show a step without explaining it aloud, and do not call the next step's tool until you have finished saying the current step. Then go straight on to the next step yourself: never wait for me, and never ask whether to continue, unless I interrupt. When I say nothing, keep going until the Answer step.",
   );
   rules.push(
-    "MATHS: if my question is a maths problem or an equation, or I ask you to solve something, solve it step by step in front of me instead of using visuals. Use present_slide for every step, titled 'Step 1 · The problem', then 'Step 2 · ' and a short description of the move (for example 'Step 3 · Subtract 3 from both sides'). Write each line of working as LaTeX in its own bullet, wrapped in $$ and $$ (for example $$2x + 3 = 11$$). Step 1 states what is given and what to find. Do exactly one move per step, showing the equation after it, and add a bullet starting with 'Why:' that gives the reason in plain words (for example 'Why: subtract 3 from both sides to get x alone'). The last step is titled 'Step N · Answer': show the result boxed, like $$\\boxed{x = 4}$$, then check it by putting it back into the original equation. As you say each step aloud, read the equations the way a teacher does (say 'two x plus three equals eleven'), never the LaTeX symbols, and then explain what you did and why in plain words. After the answer, give me a similar problem to solve (show_quiz or ask_big_question), written in LaTeX too.",
+    "MATHS: if my question is a maths problem or an equation, or I ask you to solve something, solve it step by step in front of me instead of using visuals. Use present_slide for every step, titled 'Step 1 · The problem', then 'Step 2 · ' and a short description of the move (for example 'Step 3 · Subtract 3 from both sides'). Write each line of working as LaTeX in its own bullet, wrapped in $$ and $$ (for example $$2x + 3 = 11$$). Step 1 states what is given and what to find. Do exactly one move per step, showing the equation after it, and add a bullet starting with 'Why:' that gives the reason in plain words (for example 'Why: subtract 3 from both sides to get x alone'). The last step is titled 'Step N · Answer': show the result boxed, like $$\\boxed{x = 4}$$, then check it by putting it back into the original equation. As you say each step aloud, read the equations the way a teacher does (say 'two x plus three equals eleven'), never the LaTeX symbols, and then explain what you did and why in plain words. Do not give me a practice problem on your own: only if I say yes to the practice offer, give me a similar problem to solve (show_quiz or ask_big_question), written in LaTeX too.",
+  );
+  rules.push(PRACTICE_RULE);
+  rules.push(
+    "Start again from Step 1 for each new question. If I say I do not understand, explain it again more simply with a new example and a new visual (or, for a maths problem, solve it again slower, one small move per step). Make notes only if I ask.",
   );
   rules.push(
-    "After the answer give me one question to solve (show_quiz or ask_big_question). Start again from Step 1 for each new question. If I say I do not understand, explain it again more simply with a new example and a new visual (or, for a maths problem, solve it again slower, one small move per step). Make notes only if I ask.",
+    trigger === "ask"
+      ? "If I say I am done, say a short goodbye and tell me I can close this screen."
+      : "If I want to continue the lecture, say a short goodbye and tell me to close this screen.",
   );
-  rules.push("If I want to continue the lecture, say a short goodbye and tell me to close this screen.");
+  rules.push(TEACHER_VOICE_STYLE);
   if (lang && replyInLectureLanguage) rules.push(`Talk to me in ${lang} unless I speak English.`);
   lines.push(`Instructions for this short session: ${rules.join(" ")}`);
 
@@ -317,7 +333,7 @@ const CONTINUE_STEP =
   "[Continue] Go on to the next step now. Explain it aloud properly, in 3 to 5 clear sentences, before you show the one after it. Do not wait for me and do not ask.";
 const EXPLAIN_FIRST =
   "[Continue] You showed that step but did not explain it aloud. Explain it now, properly, in 3 to 5 clear sentences (what we do, how, and why), and then go on to the next step. Do not wait for me and do not ask.";
-const CONTINUE_TO_QUESTION = "[Continue] Now give me one question to solve about this. Do not wait for me and do not ask.";
+const EXPLAIN_ANSWER_FIRST = `[Continue] You showed the answer but did not explain it aloud. Explain it now, properly, in 3 to 5 clear sentences. Then ask me aloud, in one short sentence: "${PRACTICE_OFFER}" and wait for my reply. Do not show any question yet.`;
 
 /**
  * Whether a transcript line is the student really speaking. A silent room often yields stray "." or "you";
@@ -327,9 +343,9 @@ const meaningful = (text: string) => text.replace(/[^\p{L}\p{N}]/gu, "").length 
 
 /**
  * Once the teacher's turn has finished after a step and the student has said nothing, the lesson should go on
- * by itself. Returns what to tell the teacher, or null when it should wait: the call is not live, the teacher
- * is still talking, its turn has not finished, the student has spoken since the step, the lesson is already at
- * the student's turn, or nothing has been explained yet.
+ * by itself, up to the Answer. Returns what to tell the teacher, or null when it should wait: the call is not
+ * live, the teacher is still talking, its turn has not finished, the student has spoken since the step, the
+ * lesson is already at the student's turn or past the explained Answer, or nothing has been explained yet.
  *
  * "Turn finished" is the call's own signal (turnDone), not a guess from the words: the teacher often shows a
  * step and ends its turn without saying anything more.
@@ -356,7 +372,9 @@ export function nextStepNudge(input: {
   // Did the teacher explain this step? Only words after its card count: speech before a card could just as
   // well belong to the step before it, and a step shown in silence is the thing to catch.
   const explained = transcript.slice(at + 1).some((item) => item.kind === "text" && item.role === "teacher" && meaningful(item.text));
-  if (!explained) return { cardId: last.id, text: EXPLAIN_FIRST };
+  if (!explained) return { cardId: last.id, text: last.role === "answer" ? EXPLAIN_ANSWER_FIRST : EXPLAIN_FIRST };
 
-  return { cardId: last.id, text: last.role === "answer" ? CONTINUE_TO_QUESTION : CONTINUE_STEP };
+  // The answer is the end of the explanation: the teacher offers practice and the student decides. Nothing is
+  // pushed after it, so the lesson never turns into a question the student did not ask for.
+  return last.role === "answer" ? null : { cardId: last.id, text: CONTINUE_STEP };
 }

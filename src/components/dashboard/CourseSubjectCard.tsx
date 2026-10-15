@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Bot, BookOpen, ClipboardList, Video, FileText, GraduationCap, Sparkles } from 'lucide-react';
 import type { SubjectWithDetails } from '@/hooks/useDashboardCourseDetails';
+import { openAskAI } from '@/lib/askAIStore';
 
 interface CourseSubjectCardProps {
   subject: SubjectWithDetails;
@@ -16,8 +17,9 @@ export const CourseSubjectCard = ({ subject, courseId }: CourseSubjectCardProps)
   
   const { contentProgress, overallPercentage } = subject;
 
+  // Opens the Ask AI screen (the one the lecture player has) right here, on this subject.
   const handleAskAI = () => {
-    navigate(`/learning/${courseId}?subject=${subject.id}&tab=ai-assistant`);
+    openAskAI({ subjectId: subject.id, subjectName: subject.name });
   };
 
   const handleViewSubject = () => {

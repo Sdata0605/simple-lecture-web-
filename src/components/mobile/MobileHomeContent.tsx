@@ -6,8 +6,11 @@ import {
   ArrowRight,
   AlertCircle,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { MobileHomeSearch } from "./MobileHomeSearch";
+import { AITeacherPlanModal } from "@/components/aiteacher/AITeacherPlanModal";
+import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHomepageData } from "@/hooks/useHomepageData";
@@ -24,6 +27,7 @@ import heroBoardExams from "@/assets/hero-board-exams.jpg";
 const HamburgerMenu = lazy(() => import("./HamburgerMenu").then(m => ({ default: m.HamburgerMenu })));
 const MobileCourseSections = lazy(() => import("./MobileCourseSections"));
 const ExpertAITeachers = lazy(() => import("@/components/ExpertAITeachers").then(m => ({ default: m.ExpertAITeachers })));
+const AITeacherPromo = lazy(() => import("@/components/aiteacher/AITeacherPromo").then(m => ({ default: m.AITeacherPromo })));
 const AISearchContentSection = lazy(() => import("@/components/AISearchContentSection").then(m => ({ default: m.AISearchContentSection })));
 const TrustCredibilitySection = lazy(() => import("@/components/TrustCredibilitySection").then(m => ({ default: m.TrustCredibilitySection })));
 const HomepageFAQSection = lazy(() => import("@/components/HomepageFAQSection").then(m => ({ default: m.HomepageFAQSection })));
@@ -70,6 +74,8 @@ export const MobileHomeContent = () => {
   const navigate = useNavigate();
   
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const { hasActivePlan } = useAITeacherSubscription();
   const heroImages = [heroBoardExams, heroBoardExams, heroBoardExams];
   
   const { data: user, isLoading: userLoading } = useCurrentUser();
@@ -148,7 +154,7 @@ export const MobileHomeContent = () => {
       </div>
 
       {/* Hero Section - Fixed dimensions for CLS */}
-      <div className="relative overflow-hidden" style={{ height: '256px' }}>
+      <div className="relative overflow-hidden" style={{ height: '280px' }}>
         {heroSlides.map((slide, index) => {
           const isActive = currentSlide === index;
           const isFirst = index === 0;
@@ -166,17 +172,17 @@ export const MobileHomeContent = () => {
                 alt={slide.title}
                 className="w-full h-full object-cover"
                 width={414}
-                height={256}
+                height={280}
                 {...(isFirst ? ({ fetchpriority: 'high' } as any) : { loading: 'lazy' as const })}
               />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent" />
             
             <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
               <h2 className="text-xl font-bold leading-tight mb-1">{slide.title}</h2>
               <p className="text-white/80 text-xs mb-2">{slide.subtitle}</p>
               
-              <div className="space-y-1 mb-3">
+              <div className="space-y-1 mb-2.5">
                 {slide.points.map((point, i) => (
                   <div key={i} className="flex items-center gap-1.5">
                     <CheckCircle2 className="w-3 h-3 text-green-400 flex-shrink-0" />
@@ -185,10 +191,10 @@ export const MobileHomeContent = () => {
                 ))}
               </div>
               
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <Button 
                   size="sm"
-                  className="bg-white text-primary hover:bg-white/90 text-xs h-8 px-4"
+                  className="bg-white text-primary hover:bg-white/90 text-xs h-8 px-3 font-semibold"
                   onClick={() => navigate("/course/Class-10")}
                 >
                   {slide.cta}
@@ -197,11 +203,21 @@ export const MobileHomeContent = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="bg-white/10 text-white border border-white/40 hover:bg-white/20 hover:text-white text-xs h-8 px-3"
+                  className="bg-white/10 text-white border border-white/40 hover:bg-white/20 hover:text-white text-xs h-8 px-2.5"
                   onClick={() => navigate("/course/Class-10/preview")}
                 >
                   Free Preview
                 </Button>
+                {!hasActivePlan && (
+                  <Button
+                    size="sm"
+                    className="bg-gradient-to-r from-amber-400 to-orange-400 text-slate-950 font-bold hover:brightness-105 text-xs h-8 px-2.5 shadow border border-amber-200/60"
+                    onClick={() => setPlanModalOpen(true)}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 mr-1 text-slate-950" />
+                    Purchase AI Teacher
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -244,6 +260,11 @@ export const MobileHomeContent = () => {
         )}
       </div>
 
+      {/* AI Teacher pitch (students without a plan) + the floating AI button - Lazy loaded */}
+      <Suspense fallback={null}>
+        <AITeacherPromo />
+      </Suspense>
+
       {/* Course Sections - Lazy loaded */}
       <Suspense fallback={<div className="min-h-[420px] animate-pulse bg-muted/40 rounded-xl mx-4 mt-4" />}>
         <div style={{ minHeight: 420 }}>
@@ -269,6 +290,8 @@ export const MobileHomeContent = () => {
       <Suspense fallback={<div className="min-h-[300px]" />}>
         <HomepageFAQSection />
       </Suspense>
+
+      <AITeacherPlanModal open={planModalOpen} onOpenChange={setPlanModalOpen} />
     </div>
   );
 };

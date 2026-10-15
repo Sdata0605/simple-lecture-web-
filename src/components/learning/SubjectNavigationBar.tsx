@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
-import { BookOpen, ChevronLeft } from "lucide-react";
+import { BookOpen, ChevronLeft, GraduationCap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { openAskAI } from "@/lib/askAIStore";
 
 interface SubjectNavigationBarProps {
   subjects: { name: string; slug: string; id: string }[];
@@ -21,7 +22,7 @@ export const SubjectNavigationBar = ({
   const navigate = useNavigate();
 
   return (
-    <div className="border-b sticky top-0 z-40">
+    <div className="border-b sticky top-0 z-40 bg-background/95 backdrop-blur">
       <div className="flex items-center gap-3 px-6 py-3 overflow-x-auto">
         <Button
           variant="ghost"
@@ -64,6 +65,21 @@ export const SubjectNavigationBar = ({
               {subject.name}
             </Button>
           ))}
+        </div>
+
+        <div className="ml-auto flex items-center pl-2 flex-shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 font-medium border-primary/30 hover:bg-primary/10"
+            onClick={() => {
+              const currentSubject = subjects.find(s => s.id === selectedSubjectId);
+              openAskAI({ subjectId: currentSubject?.id, subjectName: currentSubject?.name });
+            }}
+          >
+            <GraduationCap className="h-4 w-4 text-primary" />
+            AI Teacher
+          </Button>
         </div>
       </div>
     </div>
