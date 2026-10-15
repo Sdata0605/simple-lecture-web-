@@ -48,8 +48,9 @@ export const VOICE_OPTIONS = [
 export const LANGUAGE_OPTIONS = [
   { id: "auto", label: "Match my language" },
   { id: "en", label: "English" },
-  { id: "hi", label: "हिन्दी (Hindi)" },
-  { id: "kn", label: "ಕನ್ನಡ (Kannada)" },
+  { id: "hi", label: "हिन्दी (Hinglish: Hindi + English)" },
+  { id: "mr", label: "मराठी (Menglish: Marathi + English)" },
+  { id: "kn", label: "ಕನ್ನಡ (Kanglish: Kannada + English)" },
 ];
 
 const KEY = "aiteacher.prefs.v1";

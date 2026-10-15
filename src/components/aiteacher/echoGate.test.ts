@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ECHO_TAIL_MS, FENCE_QUIET_MS, INTERRUPT_TAIL_MS, createEchoGate } from "./echoGate";
+import { ECHO_TAIL_MS, FENCE_QUIET_MS, INTERRUPT_TAIL_MS, TOOL_HOLD_MAX_MS, TOOL_RESUME_MS, TURN_GRACE_MS, createEchoGate } from "./echoGate";
 
 describe("echo gate: the mic stays closed while the teacher is audible", () => {
   it("is open before the teacher speaks", () => {
@@ -93,5 +93,82 @@ describe("other ways playback stops", () => {
     g.playbackStopped(0);
     expect(g.micClosed(INTERRUPT_TAIL_MS - 1)).toBe(true);
     expect(g.micClosed(INTERRUPT_TAIL_MS)).toBe(false);
+  });
+});
+
+describe("the mic stays closed for the whole teacher turn, not only while sound plays", () => {
+  it("stays closed in a gap in the middle of a turn, when nothing is playing for a moment", () => {
+    const g = createEchoGate();
+    g.acceptChunk(0);
+    g.playbackStarted();
+    g.playbackEnded(1_000); // the queue ran dry, but the server has not finished the turn
+    expect(g.micClosed(1_000 + ECHO_TAIL_MS + 100)).toBe(true);
+    expect(g.micClosed(TURN_GRACE_MS - 1)).toBe(true);
+  });
+
+  it("reopens right after the tail once the server says the turn is complete", () => {
+    const g = createEchoGate();
+    g.acceptChunk(0);
+    g.playbackStarted();
+    g.playbackEnded(1_000);
+    g.turnEnded();
+    expect(g.micClosed(1_000 + ECHO_TAIL_MS)).toBe(false);
+  });
+
+  it("does not stay shut forever if the end-of-turn signal never arrives", () => {
+    const g = createEchoGate();
+    g.acceptChunk(0);
+    g.playbackStarted();
+    g.playbackEnded(1_000);
+    expect(g.micClosed(TURN_GRACE_MS + 1)).toBe(false);
+  });
+
+  it("stays closed while a card waits for the voice, then a little longer for the teacher to carry on", () => {
+    const g = createEchoGate();
+    g.acceptChunk(0);
+    g.playbackStarted();
+    g.playbackEnded(5_000);
+    g.turnEnded(); // the teacher stopped to wait for its card
+    g.toolStarted(0);
+    expect(g.micClosed(5_000 + ECHO_TAIL_MS + 10)).toBe(true);
+    g.toolFinished(6_000);
+    expect(g.micClosed(6_000 + TOOL_RESUME_MS - 1)).toBe(true);
+    expect(g.micClosed(6_000 + TOOL_RESUME_MS)).toBe(false);
+  });
+
+  it("opens again as soon as the teacher speaks after its card and finishes", () => {
+    const g = createEchoGate();
+    g.toolStarted(0);
+    g.toolFinished(100);
+    g.acceptChunk(200); // the teacher is speaking again
+    g.playbackStarted();
+    g.playbackEnded(2_000);
+    g.turnEnded();
+    expect(g.micClosed(2_000 + ECHO_TAIL_MS)).toBe(false);
+  });
+
+  it("never holds the mic longer than the cap for a card that never comes", () => {
+    const g = createEchoGate();
+    g.toolStarted(0);
+    expect(g.micClosed(TOOL_HOLD_MAX_MS - 1)).toBe(true);
+    expect(g.micClosed(TOOL_HOLD_MAX_MS)).toBe(false);
+  });
+
+  it("gives the floor to the student who taps, even in the middle of a turn or a card wait", () => {
+    const g = createEchoGate();
+    g.acceptChunk(0);
+    g.toolStarted(0);
+    g.interrupt(1_000);
+    expect(g.busy(1_000)).toBe(false);
+    expect(g.micClosed(1_000 + INTERRUPT_TAIL_MS)).toBe(false);
+  });
+
+  it("reports when the teacher is busy, so a silent nudge can wait", () => {
+    const g = createEchoGate();
+    expect(g.busy(0)).toBe(false);
+    g.acceptChunk(0);
+    expect(g.busy(100)).toBe(true);
+    g.turnEnded();
+    expect(g.busy(200)).toBe(false);
   });
 });

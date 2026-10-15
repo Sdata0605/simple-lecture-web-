@@ -85,3 +85,25 @@ export const voiceLock = {
     }
   }
 };
+
+/**
+ * Stops every other voice on the page: any video or audio that is playing (a lecture, a podcast) and any
+ * browser text-to-speech. Used when the live AI teacher starts, so the student never hears two teachers at once.
+ */
+export function silenceOtherAudio(): void {
+  if (typeof document !== 'undefined') {
+    document.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
+      try {
+        // Only what can be heard: a muted background video keeps playing.
+        if (!media.paused && !media.muted && media.volume > 0) media.pause();
+      } catch {
+        // a media element that cannot be paused is not worth failing over
+      }
+    });
+  }
+  try {
+    window.speechSynthesis?.cancel();
+  } catch {
+    // no speech synthesis here
+  }
+}

@@ -3,7 +3,7 @@
 // subject the student wants.
 import type { TranscriptItem } from "@/components/aiteacher/useLiveTeacher";
 import { hasMath } from "./aiTeacherMath";
-import { TEACHER_VOICE_STYLE } from "./aiTeacherVoice";
+import { KEEP_LANGUAGE, TEACHER_LANGUAGE_RULE, TEACHER_SPEAK_RULE, TEACHER_VOICE_STYLE } from "./aiTeacherVoice";
 
 /** Where the student was in the lecture when they tapped Ask AI. */
 export interface LectureAskContext {
@@ -54,6 +54,9 @@ const clip = (text: string, max: number) => {
 };
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** How a regional language is spoken in class: the language with the subject words in English. */
+const MIXED_STYLE: Record<string, string> = { kannada: "Kanglish", hindi: "Hinglish", marathi: "Menglish" };
 
 /** The first message the live teacher receives: lecture context plus how to run this short session. */
 export function buildLectureOpening(input: LectureOpeningInput): string {
@@ -109,7 +112,12 @@ export function buildLectureOpening(input: LectureOpeningInput): string {
       : "If I want to continue the lecture, say a short goodbye and tell me to close this screen.",
   );
   rules.push(TEACHER_VOICE_STYLE);
-  if (lang && replyInLectureLanguage) rules.push(`Talk to me in ${lang} unless I speak English.`);
+  rules.push(TEACHER_SPEAK_RULE);
+  rules.push(TEACHER_LANGUAGE_RULE);
+  if (lang && replyInLectureLanguage) {
+    const mixed = MIXED_STYLE[lang.toLowerCase()];
+    rules.push(`Talk to me in ${lang}${mixed ? ` (${mixed})` : ""} unless I speak English or ask for another language.`);
+  }
   lines.push(`Instructions for this short session: ${rules.join(" ")}`);
 
   return lines.join("\n");
@@ -298,17 +306,17 @@ export const QUICK_REQUESTS = [
   {
     id: "simpler",
     label: "Explain simpler",
-    prompt: "[Student request] I did not understand. Please explain it again more simply, from the very basics, with a new everyday example and a new visual. If it is a maths problem, solve it again more slowly, one small move per step.",
+    prompt: `[Student request] I did not understand. Please explain it again more simply, from the very basics, with a new everyday example and a new visual. If it is a maths problem, solve it again more slowly, one small move per step. ${KEEP_LANGUAGE}`,
   },
   {
     id: "example",
     label: "Give an example",
-    prompt: "[Student request] Please give me one more example of this, with a visual. If it is a maths problem, solve a similar one step by step.",
+    prompt: `[Student request] Please give me one more example of this, with a visual. If it is a maths problem, solve a similar one step by step. ${KEEP_LANGUAGE}`,
   },
   {
     id: "repeat",
     label: "Repeat that",
-    prompt: "[Student request] Please repeat your last explanation slowly, step by step.",
+    prompt: `[Student request] Please repeat your last explanation slowly, step by step. ${KEEP_LANGUAGE}`,
   },
 ] as const;
 
@@ -329,17 +337,15 @@ export interface Nudge {
   text: string;
 }
 
-const CONTINUE_STEP =
-  "[Continue] Go on to the next step now. Explain it aloud properly, in 3 to 5 clear sentences, before you show the one after it. Do not wait for me and do not ask.";
-const EXPLAIN_FIRST =
-  "[Continue] You showed that step but did not explain it aloud. Explain it now, properly, in 3 to 5 clear sentences (what we do, how, and why), and then go on to the next step. Do not wait for me and do not ask.";
-const EXPLAIN_ANSWER_FIRST = `[Continue] You showed the answer but did not explain it aloud. Explain it now, properly, in 3 to 5 clear sentences. Then ask me aloud, in one short sentence: "${PRACTICE_OFFER}" and wait for my reply. Do not show any question yet.`;
+const CONTINUE_STEP = `[Continue] Go on to the next step now. Explain it aloud properly, in 3 to 5 clear sentences, before you show the one after it. Do not wait for me and do not ask. ${KEEP_LANGUAGE}`;
+const EXPLAIN_FIRST = `[Continue] You showed that step but did not explain it aloud. Explain it now, properly, in 3 to 5 clear sentences (what we do, how, and why), and then go on to the next step. Do not wait for me and do not ask. ${KEEP_LANGUAGE}`;
+const EXPLAIN_ANSWER_FIRST = `[Continue] You showed the answer but did not explain it aloud. Explain it now, properly, in 3 to 5 clear sentences. Then ask me aloud, in one short sentence: "${PRACTICE_OFFER}" and wait for my reply. Do not show any question yet. ${KEEP_LANGUAGE}`;
 
 /**
  * Whether a transcript line is the student really speaking. A silent room often yields stray "." or "you";
  * a real interruption ("wait", "stop", "what is x") has at least four letters.
  */
-const meaningful = (text: string) => text.replace(/[^\p{L}\p{N}]/gu, "").length >= 4;
+const meaningful = (text: string) => text.replace(/[^\p{L}\p{M}\p{N}]/gu, "").length >= 4;
 
 /**
  * Once the teacher's turn has finished after a step and the student has said nothing, the lesson should go on

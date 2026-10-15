@@ -4,6 +4,7 @@
 //   - a new step is only accepted once the teacher has actually spoken since the previous one;
 //   - any card appears only after the teacher has finished speaking what it queued before it.
 // Pure and clock-injected so the rules can be tested without audio hardware.
+import { KEEP_LANGUAGE } from "@/lib/aiTeacherVoice";
 
 /** Audio the teacher must have spoken between two steps (about two sentences). */
 export const MIN_SPOKEN_MS = 3500;
@@ -17,7 +18,7 @@ export const MAX_WAIT_MS = 25_000;
 const STEP_NUMBER = /^\s*step\s*(\d+)/i;
 
 export const REFUSAL =
-  "That step was not shown. You have not explained the previous step aloud yet. First say the previous step out loud, properly: 3 to 5 clear sentences saying what we did, how, and why, in simple words. Only after you have finished speaking, call this tool again with the same content.";
+  `That step was not shown. You have not explained the previous step aloud yet. First say the previous step out loud, properly: 3 to 5 clear sentences saying what we did, how, and why, in simple words. Only after you have finished speaking, call this tool again with the same content. ${KEEP_LANGUAGE}`;
 
 /** `instruction` is set when the step is refused: what to tell the teacher to do first. */
 export interface StepVerdict {

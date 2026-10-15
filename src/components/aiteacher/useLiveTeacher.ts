@@ -9,6 +9,8 @@ import {
 import { matchSubjectByName } from "@/lib/aiTeacherSubjects";
 import { personaPayload, type TeacherPrefs } from "@/lib/aiTeacherPrefs";
 import { loadSubscription } from "@/lib/aiTeacherSubscription";
+import { KEEP_LANGUAGE } from "@/lib/aiTeacherVoice";
+import { safeLocalStorage } from "@/lib/safeStorage";
 import type { DocData } from "@/lib/aiTeacherExport";
 import type { QuizItem } from "./QuizCard";
 import type { VisualData } from "./Cards";
@@ -83,7 +85,16 @@ const pcm16Base64ToFloat32 = (b64: string) => {
 
 /** Added to the reply of a shown step so the teacher carries on instead of ending its turn. */
 const KEEP_GOING =
-  "Shown on the student's screen. Now explain this step aloud properly: 3 to 5 clear sentences in simple words, saying what we are doing, how, and why, like teaching a beginner. Do this before anything else. Only when you have finished speaking, go on to the next step (call its tool). Never show a step without explaining it, and do not stop or ask whether to continue until the Answer step has been shown. After you have explained the Answer step, ask me aloud in one short sentence whether I would like to solve a practice question on this, then wait: never show or ask a question unless I say yes.";
+  `Shown on the student's screen. Now explain this step aloud properly: 3 to 5 clear sentences in simple words, saying what we are doing, how, and why, like teaching a beginner. Never say the same sentence twice: if you already said this explanation just before showing the step, do not repeat it, only add what is missing. Only when you have finished speaking, go on to the next step (call its tool). Never show a step without explaining it, and do not stop or ask whether to continue until the Answer step has been shown. After you have explained the Answer step, ask me aloud in one short sentence whether I would like to solve a practice question on this, then wait: never show or ask a question unless I say yes. ${KEEP_LANGUAGE}`;
+
+/**
+ * The first chunk of a stretch of speech is scheduled this far ahead of "now". Too small and a chunk that is a
+ * little late leaves a gap, which sounds like the voice sticking; the rest of the speech arrives several times
+ * faster than it plays, so this only delays the first word.
+ */
+const START_LEAD_S = 0.15;
+
+const debugOn = () => safeLocalStorage.getItem("aiteacher.debug") === "1";
 
 /** Tools that put a card on the student's screen; with keepGoing they are paced to the teacher's voice. */
 const PACED_TOOLS = new Set(["present_slide", "show_visual", "show_quiz", "ask_big_question", "check_understanding", "create_document"]);
@@ -149,6 +160,12 @@ export function useLiveTeacher({
   const sessionModeRef = useRef(sessionMode);
   sessionModeRef.current = sessionMode;
   const gateRef = useRef(createEchoGate());
+  /** Which connection is current. Every call bumps it, so a late message from an old session is ignored. */
+  const epochRef = useRef(0);
+  /** Cards the server cancelled (the student cut the teacher off before they were shown). */
+  const cancelledRef = useRef(new Set<string>());
+  /** Tool calls are handled one at a time, in the order the teacher made them. */
+  const toolChainRef = useRef<Promise<void>>(Promise.resolve());
   const speakTailRef = useRef<number | null>(null);
   const pacerRef = useRef(createStepPacer());
   const msgIdRef = useRef(1);
@@ -204,6 +221,7 @@ export function useLiveTeacher({
   }, []);
 
   const stopPlayback = useCallback(() => {
+    if (debugOn() && playingRef.current.size) console.debug("[teacher] playback cut", { queuedChunks: playingRef.current.size, secondsLeft: Math.max(0, playNextRef.current - (playCtxRef.current?.currentTime ?? 0)).toFixed(1) });
     playingRef.current.forEach((s) => { try { s.onended = null; s.stop(); } catch { /* already stopped */ } });
     playingRef.current.clear();
     playNextRef.current = 0;
@@ -235,9 +253,12 @@ export function useLiveTeacher({
     src.buffer = buf;
     // A rate under 1 plays the same audio more slowly, so it also takes longer on the clock.
     const rate = playbackRateRef.current;
-    src.playbackRate.value = rate;
+    if (rate !== 1) src.playbackRate.value = rate;
     src.connect(ctx.destination);
-    const startAt = Math.max(ctx.currentTime + 0.03, playNextRef.current);
+    // Chunks follow each other exactly; only the first chunk of a stretch of speech gets a lead, so a chunk
+    // that arrives a little late does not leave a gap.
+    const startAt = playNextRef.current > ctx.currentTime ? playNextRef.current : ctx.currentTime + START_LEAD_S;
+    if (debugOn() && playNextRef.current <= ctx.currentTime) console.debug("[teacher] speech starts", { lead: START_LEAD_S, queued: playingRef.current.size });
     src.start(startAt);
     const playSeconds = buf.duration / rate;
     playNextRef.current = startAt + playSeconds;
@@ -259,8 +280,11 @@ export function useLiveTeacher({
   }, [stopPlayback]);
 
   // ---------------------------------------------------------------- tools
-  const handleToolCalls = useCallback(async (calls: any[]) => {
+  const handleToolCalls = useCallback(async (calls: any[], epoch: number) => {
     const responses: any[] = [];
+    // While the teacher waits for its cards the mic stays closed (a noise now would cut the lesson off).
+    for (let i = 0; i < calls.length; i++) gateRef.current.toolStarted(performance.now());
+    const stale = () => epoch !== epochRef.current || statusRef.current !== "live";
     for (const fc of calls) {
       const args = fc.args ?? {};
       try {
@@ -274,7 +298,10 @@ export function useLiveTeacher({
             }
           }
           // The teacher's speech is generated faster than it plays: show the card once the voice has caught up.
-          await waitUntilIdle({ isIdle: () => playingRef.current.size === 0, isAborted: () => statusRef.current !== "live" });
+          await waitUntilIdle({ isIdle: () => playingRef.current.size === 0, isAborted: () => stale() || cancelledRef.current.has(fc.id) });
+          // The student cut the teacher off while the card waited: the server dropped this call, so showing the
+          // card or answering it now would only start a second, unwanted turn.
+          if (cancelledRef.current.delete(fc.id) || stale()) continue;
         }
         if (fc.name === "search_notes") {
           const sub = subjectRef.current;
@@ -411,11 +438,15 @@ export function useLiveTeacher({
         responses.push({ id: fc.id, name: fc.name, response: { status: "error", message: errMsg(e).slice(0, 120) } });
       }
     }
+    for (let i = 0; i < calls.length; i++) gateRef.current.toolFinished(performance.now());
+    if (stale() || responses.length === 0) return;
     try { sessionRef.current?.sendToolResponse({ functionResponses: responses }); } catch { /* session closed */ }
   }, [pushCard]);
 
   // ---------------------------------------------------------------- teardown
   const cleanup = useCallback(() => {
+    epochRef.current += 1; // whatever the old connection still delivers is ignored from here on
+    cancelledRef.current.clear();
     clearSpeakTail();
     gateRef.current = createEchoGate();
     pacerRef.current = createStepPacer();
@@ -441,7 +472,12 @@ export function useLiveTeacher({
   useEffect(() => () => cleanup(), [cleanup]);
 
   // ---------------------------------------------------------------- connect
-  const sendText = useCallback((text: string, opts?: { silent?: boolean }) => {
+  /**
+   * `silent`: not shown as something the student said. `bargeIn` (default true): the message cuts the teacher
+   * off, like typing does; the app's own nudges pass false, because they are only sent once the teacher has
+   * finished and must never chop its speech.
+   */
+  const sendText = useCallback((text: string, opts?: { silent?: boolean; bargeIn?: boolean }) => {
     const t = text.trim();
     if (!t) return;
     if (!sessionRef.current || statusRef.current !== "live") { pendingTextRef.current = t; return; }
@@ -449,14 +485,28 @@ export function useLiveTeacher({
       closeOpenBubbles();
       setTranscript((prev) => [...closeAll(prev), { kind: "text", id: msgIdRef.current++, role: "user", text: t, done: true }]);
     }
-    stopPlayback(); // typing barges in on the teacher
+    if (opts?.bargeIn !== false) {
+      stopPlayback(); // typing barges in on the teacher
+      // The server still has the rest of that turn in flight: drop it instead of playing the tail end of a sentence.
+      gateRef.current.interrupt(performance.now());
+    }
+    if (debugOn()) console.debug("[teacher] text sent", { silent: !!opts?.silent, bargeIn: opts?.bargeIn !== false, text: t.slice(0, 60) });
     sessionRef.current.sendRealtimeInput({ text: t });
   }, [closeOpenBubbles, stopPlayback]);
+
+  /** True while the teacher is speaking, or is partway through a turn (also while a card waits for its voice). */
+  const isTeacherBusy = useCallback(
+    () => playingRef.current.size > 0 || speakTailRef.current !== null || gateRef.current.busy(performance.now()),
+    [],
+  );
 
   const connect = useCallback(async (firstMessage?: string) => {
     if (statusRef.current === "connecting" || statusRef.current === "live") return;
     setError(null); setNotice(null); setStatusBoth("connecting");
     if (firstMessage) pendingTextRef.current = firstMessage;
+    const epoch = ++epochRef.current;
+    /** True once this attempt has been replaced or torn down (the screen was closed while it was connecting). */
+    const stale = () => epoch !== epochRef.current;
     try {
       const sub = loadSubscription();
       if (!sub) {
@@ -483,6 +533,7 @@ export function useLiveTeacher({
         enrolledSubjects: enrolledSubjectsRef.current,
         mode: sessionModeRef.current,
       });
+      if (stale()) return;
       setTeacherName(s.teacherName);
       if (s.subjects?.length) subjectsRef.current = s.subjects;
       catalogRef.current = s.catalog ?? [];
@@ -502,7 +553,9 @@ export function useLiveTeacher({
         setNotice("Microphone is blocked, so you can type your questions and the teacher will answer by voice.");
       }
 
+      if (stale()) { stream?.getTracks().forEach((t) => t.stop()); return; }
       const { GoogleGenAI, Modality } = await import("@google/genai");
+      if (stale()) { stream?.getTracks().forEach((t) => t.stop()); return; }
       // If student provided their own key, connect straight to Google; otherwise use one-use token from Admin key.
       const ai = shouldUseOwnKey
         ? new GoogleGenAI({ apiKey: own })
@@ -521,23 +574,36 @@ export function useLiveTeacher({
           tools: s.tools as any,
         },
         callbacks: {
-          onopen: () => { setStatusBoth("live"); },
+          onopen: () => { if (!stale()) setStatusBoth("live"); },
           onmessage: (m: any) => {
+            if (stale()) return; // a late message from a connection that has been replaced or closed
             const sc = m.serverContent;
             if (sc?.modelTurn?.parts) {
               for (const p of sc.modelTurn.parts) if (p.inlineData?.data) enqueueAudio(p.inlineData.data);
             }
-            if (sc?.interrupted) { stopPlayback(); gateRef.current.turnEnded(); }
+            if (sc?.interrupted) {
+              if (debugOn()) console.debug("[teacher] server interrupted the teacher");
+              stopPlayback();
+              gateRef.current.turnEnded();
+            }
             if (sc?.inputTranscription?.text) appendTranscript("user", sc.inputTranscription.text);
             if (sc?.outputTranscription?.text) appendTranscript("teacher", sc.outputTranscription.text);
             if (sc?.turnComplete) { closeOpenBubbles(); gateRef.current.turnEnded(); setTurnsCompleted((n) => n + 1); }
-            if (m.toolCall?.functionCalls?.length) void handleToolCalls(m.toolCall.functionCalls);
+            if (m.toolCallCancellation?.ids?.length) for (const id of m.toolCallCancellation.ids) cancelledRef.current.add(String(id));
+            if (m.toolCall?.functionCalls?.length) {
+              // One call at a time, in the order the teacher made them (a second card must not overtake the first).
+              const calls = m.toolCall.functionCalls;
+              toolChainRef.current = toolChainRef.current.then(() => handleToolCalls(calls, epoch)).catch(() => {});
+            }
             if (m.goAway) setNotice("This session is about to end. You can start a new class right after.");
           },
           onerror: (e: any) => {
+            if (stale()) return;
             setError(e?.message || "The voice connection had a problem.");
           },
           onclose: (e: any) => {
+            // Closing the old connection (a restart, or leaving the screen) must not tear down the new one.
+            if (stale()) return;
             const wasLive = statusRef.current === "live";
             cleanup();
             if (statusRef.current === "connecting") { setError(e?.reason || "Could not start the voice session."); setStatusBoth("error"); }
@@ -545,6 +611,12 @@ export function useLiveTeacher({
           },
         },
       });
+      if (stale()) {
+        // The screen was closed while the connection was being made: do not leave a live session behind.
+        try { session.close(); } catch { /* ignore */ }
+        stream?.getTracks().forEach((t) => t.stop());
+        return;
+      }
       sessionRef.current = session;
       if ((statusRef.current as LiveStatus) === "connecting") setStatusBoth("live");
 
@@ -591,14 +663,14 @@ export function useLiveTeacher({
   const reportQuizAnswer = useCallback((quiz: QuizItem, optionIndex: number) => {
     const correct = optionIndex === quiz.correctIndex;
     sendText(
-      `[Quiz result] My answer: option ${"ABCDEFGH"[optionIndex]} "${quiz.options[optionIndex]}". That is ${correct ? "correct" : `wrong; the right answer is "${quiz.options[quiz.correctIndex]}"`}. Please react to my answer and continue.`,
+      `[Quiz result] My answer: option ${"ABCDEFGH"[optionIndex]} "${quiz.options[optionIndex]}". That is ${correct ? "correct" : `wrong; the right answer is "${quiz.options[quiz.correctIndex]}"`}. Please react to my answer and continue. ${KEEP_LANGUAGE}`,
       { silent: true },
     );
   }, [sendText]);
 
   /** The student's typed answer to a big question card. */
   const answerBigQuestion = useCallback((answer: string) => {
-    sendText(`[Big question answer] ${answer}`, { silent: true });
+    sendText(`[Big question answer] ${answer} ${KEEP_LANGUAGE}`, { silent: true });
   }, [sendText]);
 
   /** The student tapped Got it / Somewhat / Confused on an understanding card. */
@@ -607,7 +679,7 @@ export function useLiveTeacher({
       choice === "got_it" ? "[Understanding check] I feel: Got it. Please praise me briefly and continue."
       : choice === "somewhat" ? "[Understanding check] I feel: Somewhat. Please clarify the tricky part and give one more example."
       : "[Understanding check] I feel: Confused. Please explain again more simply with a new real-life example and a new visual.";
-    sendText(text, { silent: true });
+    sendText(`${text} ${KEEP_LANGUAGE}`, { silent: true });
   }, [sendText]);
 
   const reset = useCallback(() => {
@@ -619,6 +691,6 @@ export function useLiveTeacher({
     status, error, notice, speaking, micLevel, muted, micAvailable, teacherName,
     transcript,
     turnsCompleted,
-    connect, disconnect, toggleMute, interrupt, sendText, reportQuizAnswer, answerBigQuestion, reportUnderstanding, reset,
+    connect, disconnect, toggleMute, interrupt, sendText, isTeacherBusy, reportQuizAnswer, answerBigQuestion, reportUnderstanding, reset,
   };
 }

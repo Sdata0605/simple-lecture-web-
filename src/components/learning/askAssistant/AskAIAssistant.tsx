@@ -9,7 +9,9 @@ import { Loader2, Lock, Settings, Sparkles, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import { usePrefs } from "@/lib/aiTeacherPrefs";
-import { TEACHER_PLAYBACK_RATE } from "@/lib/aiTeacherVoice";
+import { teacherPlaybackRate } from "@/lib/aiTeacherVoice";
+import { safeLocalStorage } from "@/lib/safeStorage";
+import { silenceOtherAudio, voiceLock } from "@/lib/voiceLock";
 import type { TeacherSubject } from "@/lib/aiTeacherApi";
 import {
   buildLectureOpening,
@@ -54,6 +56,9 @@ export interface AskAIAssistantProps {
 }
 
 const noop = () => {};
+
+/** A nudge is held back until the student has been quiet this long. */
+const STUDENT_PAUSE_MS = 1500;
 
 export function AskAIAssistant(props: AskAIAssistantProps) {
   const { onClose, topicTitle, choices } = props;
@@ -172,8 +177,16 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
     echoGuard: true,
     keepGoing: true,
     sessionMode: "ask",
-    playbackRate: TEACHER_PLAYBACK_RATE,
+    playbackRate: teacherPlaybackRate(safeLocalStorage.getItem("aiteacher.rate")),
   });
+
+  // One voice at a time: take the voice lock (the old AI assistant and the sales assistant stop talking) and
+  // pause any lecture or audio still playing behind this screen, which otherwise sounds like a second teacher.
+  useEffect(() => {
+    voiceLock.acquire("askAssistant");
+    silenceOtherAudio();
+    return () => voiceLock.release("askAssistant");
+  }, []);
 
   // Deferred a tick so a dev-time remount cancels it instead of opening two calls.
   const connectRef = useRef(live.connect);
@@ -206,6 +219,12 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
   const speakingRef = useRef(false);
   micLevelRef.current = live.micLevel;
   speakingRef.current = live.speaking;
+  // When the student was last clearly heard. A nudge waits for a real pause after that: the server decides
+  // the student has finished only after a short silence, and a message sent inside that silence cuts them off.
+  const lastVoiceAtRef = useRef(0);
+  if (live.micLevel >= STUDENT_SPEAKING_LEVEL) lastVoiceAtRef.current = performance.now();
+  const liveRef = useRef(live);
+  liveRef.current = live;
 
   // Backstop for the lesson flow: if the teacher still ends its turn after a step, and the student has said
   // nothing, tell it (silently) to go on, so nobody has to say "go ahead". It waits while the teacher or the
@@ -213,8 +232,13 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
   const lastCardId = lesson.cards.length ? lesson.cards[lesson.cards.length - 1].id : null;
   const turnDone = useTurnSinceCard(live.turnsCompleted, lastCardId);
   const nudge = nextStepNudge({ inCall: live.status === "live", speaking: live.speaking, turnDone, transcript });
-  useAutoContinue(nudge, (text) => live.sendText(text, { silent: true }), {
-    isStudentSpeaking: () => micLevelRef.current >= STUDENT_SPEAKING_LEVEL,
+  // A nudge never cuts the teacher off (bargeIn: false) and waits while the teacher is mid-turn or the student
+  // has just spoken.
+  useAutoContinue(nudge, (text) => live.sendText(text, { silent: true, bargeIn: false }), {
+    isStudentSpeaking: () =>
+      micLevelRef.current >= STUDENT_SPEAKING_LEVEL ||
+      performance.now() - lastVoiceAtRef.current < STUDENT_PAUSE_MS ||
+      liveRef.current.isTeacherBusy(),
     turnsCompleted: live.turnsCompleted,
   });
   const getLevel = useCallback(() => {

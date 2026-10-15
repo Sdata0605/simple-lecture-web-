@@ -14,6 +14,7 @@ import {
   type LectureLive,
 } from "./aiTeacherLecture";
 import type { TranscriptItem } from "@/components/aiteacher/useLiveTeacher";
+import { KEEP_LANGUAGE } from "./aiTeacherVoice";
 
 const ctx: LectureAskContext = {
   currentTime: 754,
@@ -55,11 +56,56 @@ describe("buildLectureOpening", () => {
 
   it("asks for the lecture language only when the student's setting is auto", () => {
     const base = { trigger: "mid" as const, subjectName: "Science", lectureLanguage: "kannada", context: null };
-    expect(buildLectureOpening({ ...base, replyInLectureLanguage: true })).toContain("Talk to me in Kannada unless I speak English.");
+    expect(buildLectureOpening({ ...base, replyInLectureLanguage: true })).toContain("Talk to me in Kannada (Kanglish) unless I speak English or ask for another language.");
+    expect(buildLectureOpening({ ...base, lectureLanguage: "marathi", replyInLectureLanguage: true })).toContain("Talk to me in Marathi (Menglish)");
+    expect(buildLectureOpening({ ...base, lectureLanguage: "hindi", replyInLectureLanguage: true })).toContain("Talk to me in Hindi (Hinglish)");
     const fixed = buildLectureOpening({ ...base, replyInLectureLanguage: false });
     expect(fixed).toContain("The lecture is in Kannada.");
     expect(fixed).not.toContain("Talk to me in");
     expect(buildLectureOpening({ ...base, lectureLanguage: "english", replyInLectureLanguage: true })).not.toContain("Talk to me in");
+  });
+
+  it("lets the student ask for Hindi, Marathi or Kannada at any time, spoken as Hinglish, Menglish or Kanglish", () => {
+    for (const trigger of ["mid", "end", "ask"] as const) {
+      const t = buildLectureOpening({ trigger, subjectName: "Science", context: null });
+      expect(t).toContain("LANGUAGE:");
+      for (const style of ["Hinglish", "Menglish", "Kanglish"]) expect(t).toContain(style);
+      expect(t).toContain("technical term");
+      expect(t).toContain("Marathi is not Hindi");
+      expect(t).toContain("shown to me"); // the words under the orb follow the spoken language
+      expect(t).toContain("never change the language"); // the app's English [Continue] messages must not pull it back
+      expect(t).toContain("stay in English"); // card titles keep 'Step 1 · ' so the board keeps working
+    }
+  });
+
+  it("tells the teacher to speak only to the student, never its own thoughts or tool calls", () => {
+    for (const trigger of ["mid", "end", "ask"] as const) {
+      const t = buildLectureOpening({ trigger, subjectName: "Science", context: null });
+      expect(t).toContain("SPEAK ONLY TO ME");
+      expect(t).toContain("never begin with the word 'think'");
+      expect(t).toContain("never repeat a sentence you have already said");
+    }
+  });
+
+  it("keeps the teacher in English until the student speaks or asks for another language", () => {
+    const t = buildLectureOpening({ trigger: "ask", subjectName: "Science", context: null });
+    expect(t).toContain("never switch language on your own");
+  });
+
+  it("tells the teacher to keep the language in every message the app sends it", () => {
+    const transcript = [slide(1, "Step 1 · The basics")];
+    const nudge = nextStepNudge({ inCall: true, speaking: false, turnDone: true, transcript });
+    expect(nudge?.text).toContain(KEEP_LANGUAGE);
+    for (const q of QUICK_REQUESTS) expect(q.prompt).toContain(KEEP_LANGUAGE);
+  });
+
+  it("counts the letters of Indian-language speech correctly, so a real interruption in Marathi or Kannada is not ignored", () => {
+    // vowel signs are marks, not letters: they must still count towards a real word
+    const nudge = (said: string) =>
+      nextStepNudge({ inCall: true, speaking: false, turnDone: true, transcript: [slide(1, "Step 1 · The basics"), say("user", said)] });
+    expect(nudge("थांबा")).toBeNull();
+    expect(nudge("ಸ್ವಲ್ಪ ನಿಲ್ಲಿಸಿ")).toBeNull();
+    expect(nudge("uh")).not.toBeNull(); // noise is still ignored
   });
 
   it("keeps a very long narration short", () => {
@@ -68,7 +114,7 @@ describe("buildLectureOpening", () => {
       subjectName: "Science",
       context: { ...ctx, narration: "word ".repeat(2000), keyPoints: Array.from({ length: 30 }, (_, i) => `point ${i}`) },
     });
-    expect(t.length).toBeLessThan(6000); // the narration is cut to 1200 characters, not passed through whole (10000)
+    expect(t.length).toBeLessThan(7500); // the narration is cut to 1200 characters, not passed through whole (10000)
     expect(t).toContain("point 7");
     expect(t).not.toContain("point 8");
   });
