@@ -5,7 +5,7 @@
 // student hears is the teacher speaking.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Lock, Sparkles, X } from "lucide-react";
+import { Loader2, Lock, Settings, Sparkles, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import { usePrefs } from "@/lib/aiTeacherPrefs";
@@ -116,9 +116,23 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
             </span>
           )}
         </div>
-        <button type="button" className="aa-icon-btn" onClick={onClose} aria-label="Close and return to the lecture">
-          <X size={18} />
-        </button>
+        <div className="aa-topbar__actions">
+          {isAuthenticated && (
+            <a
+              href="/aiteacher/settings"
+              target="_blank"
+              rel="noopener"
+              className="aa-icon-btn"
+              aria-label="Teacher settings: your API key, voice and teacher style"
+              title="Teacher settings"
+            >
+              <Settings size={17} />
+            </a>
+          )}
+          <button type="button" className="aa-icon-btn" onClick={onClose} aria-label="Close and return to the lecture">
+            <X size={18} />
+          </button>
+        </div>
       </header>
       {body}
     </div>,

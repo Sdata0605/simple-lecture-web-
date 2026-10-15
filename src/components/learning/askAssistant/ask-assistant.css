@@ -435,3 +435,9 @@
   outline: 2px solid var(--aa-mint);
   outline-offset: 2px;
 }
+
+.aa-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

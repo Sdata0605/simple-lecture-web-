@@ -1,4 +1,4 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,10 +8,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/lib/queryClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
-import { useMemo } from "react";
+import { openAskAI } from "@/lib/askAIStore";
+import { useMemo, type ComponentType } from "react";
 import { cn } from "@/lib/utils";
 
-const items = [
+type MenuItem =
+  | { label: string; icon: ComponentType<{ className?: string }>; to: string }
+  | { label: string; icon: ComponentType<{ className?: string }>; askAI: true };
+
+const items: MenuItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
   { label: "Browse Courses", icon: Grid3X3, to: "/programs" },
   { label: "My Courses", icon: BookOpen, to: "/my-courses" },
@@ -34,13 +39,10 @@ export const DashboardMenu = () => {
 
   const menuItems = useMemo(() => {
     if (!hasActivePlan) return items;
-    const list = [...items];
-    const myCoursesIdx = list.findIndex((i) => i.to === "/my-courses");
-    const aiItem = {
-      label: "AI Teacher",
-      icon: GraduationCap,
-      to: "/aiteacher",
-    };
+    const list: MenuItem[] = [...items];
+    const myCoursesIdx = list.findIndex((i) => "to" in i && i.to === "/my-courses");
+    // Opens the Ask AI screen (the one the lecture player has) instead of going to a page of its own.
+    const aiItem: MenuItem = { label: "AI Teacher", icon: GraduationCap, askAI: true };
     if (myCoursesIdx !== -1) {
       list.splice(myCoursesIdx + 1, 0, aiItem);
     } else {
@@ -84,7 +86,19 @@ export const DashboardMenu = () => {
           <Separator className="my-4" />
 
           <nav className="space-y-1">
-            {menuItems.map(({ label, icon: Icon, to }) => {
+            {menuItems.map((item) => {
+              const { label, icon: Icon } = item;
+              if ("askAI" in item) {
+                return (
+                  <SheetClose asChild key={label}>
+                    <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => openAskAI()}>
+                      <Icon className="h-5 w-5" />
+                      {label}
+                    </Button>
+                  </SheetClose>
+                );
+              }
+              const { to } = item;
               const active = location.pathname === to;
               return (
                 <Link key={to} to={to} className="block">

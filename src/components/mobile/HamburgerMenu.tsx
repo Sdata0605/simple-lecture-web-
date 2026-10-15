@@ -1,4 +1,4 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Menu, LayoutDashboard, BookOpen, Video, Trophy, MessageSquare, HelpCircle, User, LogOut, Home, Grid3X3, LogIn, UserPlus, Newspaper, FileText, GraduationCap } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -9,9 +9,14 @@ import { queryClient } from "@/lib/queryClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
-import { useMemo } from "react";
+import { openAskAI } from "@/lib/askAIStore";
+import { useMemo, type ComponentType } from "react";
 
-const authenticatedMenuItems = [
+type MenuItem =
+  | { icon: ComponentType<{ className?: string }>; label: string; path: string }
+  | { icon: ComponentType<{ className?: string }>; label: string; askAI: true };
+
+const authenticatedMenuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: Grid3X3, label: "Browse Courses", path: "/programs" },
   { icon: BookOpen, label: "My Courses", path: "/my-courses" },
@@ -23,7 +28,7 @@ const authenticatedMenuItems = [
   { icon: User, label: "Profile", path: "/profile" },
 ];
 
-const guestMenuItems = [
+const guestMenuItems: MenuItem[] = [
   { icon: Home, label: "Home", path: "/" },
   { icon: Grid3X3, label: "Browse Courses", path: "/programs" },
   { icon: Newspaper, label: "Blog", path: "/blog" },
@@ -48,9 +53,10 @@ export const HamburgerMenu = () => {
   const menuItems = useMemo(() => {
     if (!isAuthenticated) return guestMenuItems;
     if (!hasActivePlan) return authenticatedMenuItems;
-    const list = [...authenticatedMenuItems];
-    const myCoursesIdx = list.findIndex((i) => i.path === "/my-courses");
-    const aiItem = { icon: GraduationCap, label: "AI Teacher", path: "/aiteacher" };
+    const list: MenuItem[] = [...authenticatedMenuItems];
+    const myCoursesIdx = list.findIndex((i) => "path" in i && i.path === "/my-courses");
+    // Opens the Ask AI screen (the one the lecture player has) instead of going to a page of its own.
+    const aiItem: MenuItem = { icon: GraduationCap, label: "AI Teacher", askAI: true };
     if (myCoursesIdx !== -1) {
       list.splice(myCoursesIdx + 1, 0, aiItem);
     } else {
@@ -93,7 +99,19 @@ export const HamburgerMenu = () => {
         <Separator className="my-4" />
         
         <nav className="flex flex-col gap-1">
-          {menuItems.map(({ icon: Icon, label, path }) => {
+          {menuItems.map((item) => {
+            const { icon: Icon, label } = item;
+            if ("askAI" in item) {
+              return (
+                <SheetClose asChild key={label}>
+                  <Button variant="ghost" className="w-full justify-start gap-3 h-11" onClick={() => openAskAI()}>
+                    <Icon className="h-5 w-5" />
+                    <span>{label}</span>
+                  </Button>
+                </SheetClose>
+              );
+            }
+            const { path } = item;
             const isActive = location.pathname === path;
             return (
               <Link key={path} to={path}>
