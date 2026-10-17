@@ -15,6 +15,9 @@ import { V5Controls } from './V5Controls';
 import { V5KeyPoints } from './V5KeyPoints';
 import './v5-player.css';
 
+/** Order the player falls back through when the requested language has no merged video. */
+const V5_LANGUAGE_PREFERENCE: V5Language[] = ['english', 'kannada'];
+
 interface V5PlayerProps {
   jobId: string;
   initialLanguage?: V5Language;
@@ -117,6 +120,20 @@ export function V5Player({
   useEffect(() => {
     setSourceIndex(0);
   }, [language]);
+
+  // The requested language may simply never have been rendered for this job — free-preview
+  // visitors, for instance, arrive locked to Kannada. Drop to a language that does have a
+  // merged video instead of dead-ending on "No <language> final presentation was found".
+  useEffect(() => {
+    if (!presentation || sources.length > 0) return;
+    const fallback = V5_LANGUAGE_PREFERENCE.find(
+      (candidate) => candidate !== language && hasMergedVideo(presentation, candidate),
+    );
+    if (!fallback) return;
+    console.warn(`[V5Player] No ${language} merged video for ${jobId}; playing ${fallback}.`);
+    setLanguage(fallback);
+    onLanguageChange?.(fallback);
+  }, [presentation, sources.length, language, jobId, onLanguageChange]);
 
   useEffect(() => {
     const onFullscreen = () => {
@@ -284,10 +301,22 @@ export function V5Player({
   }
 
   if (!source) {
+    // The fallback effect above is about to switch us to a language that does have a video,
+    // so show the loader for that one render instead of flashing an error.
+    if (V5_LANGUAGE_PREFERENCE.some((candidate) => hasMergedVideo(presentation, candidate))) {
+      return (
+        <div className="v5-state">
+          <LoaderCircle className="v5-state__spinner" size={44} />
+          <strong>Preparing the merged presentation</strong>
+          <span>Loading timeline and key points...</span>
+        </div>
+      );
+    }
+
     return (
       <div className="v5-state">
         <span className="v5-state__code">V5 / NO MERGED VIDEO</span>
-        <strong>No {language} final presentation was found.</strong>
+        <strong>This lecture has no playable video yet.</strong>
         <button onClick={onExit} type="button">Choose another job</button>
       </div>
     );
