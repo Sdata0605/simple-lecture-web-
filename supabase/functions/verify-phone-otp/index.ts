@@ -84,6 +84,45 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Signup pre-flight, BEFORE the OTP is consumed, so someone who has to correct
+    // their email can retry with the code already on their phone.
+    if (purpose !== 'login') {
+      if (!signup_data?.full_name || !signup_data?.email) {
+        return new Response(JSON.stringify({ error: 'Full name and email are required for signup' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // O(log n) indexed duplicate check on profiles table
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', signup_data.email.toLowerCase().trim())
+        .maybeSingle();
+      if (existingProfile) {
+        return new Response(JSON.stringify({ error: 'An account with this email already exists.' }), {
+          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // profiles.phone_number carries a UNIQUE index (idx_profiles_phone_unique) and is
+      // written by the on_auth_user_created trigger. A collision therefore aborts the whole
+      // auth.users insert, which GoTrue reports only as the opaque 500 "Database error
+      // creating new user". Reject it here instead, with something the user can act on.
+      const { data: existingPhone } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone_number', cleanPhone)
+        .maybeSingle();
+      if (existingPhone) {
+        return new Response(JSON.stringify({
+          error: 'An account with this phone number already exists. Please log in instead.'
+        }), {
+          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Mark OTP as used
     await supabase
       .from('phone_otp_verifications')
@@ -108,32 +147,16 @@ Deno.serve(async (req) => {
 
       userId = profile.id;
     } else {
-      // Signup: create user
-      if (!signup_data?.full_name || !signup_data?.email) {
-        return new Response(JSON.stringify({ error: 'Full name and email are required for signup' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+      // Signup: create user. Validation and duplicate checks already ran above.
 
-      // O(log n) indexed duplicate check on profiles table
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', signup_data.email.toLowerCase().trim())
-        .maybeSingle();
-      const emailExists = !!existingProfile;
-      if (emailExists) {
-        return new Response(JSON.stringify({ error: 'An account with this email already exists.' }), {
-          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
+      // Phone is deliberately NOT passed here: the Auth phone provider is disabled on this
+      // project, so auth.users.phone is a liability rather than a source of truth. The number
+      // lives in user_metadata and profiles.phone_number (what phone login actually reads);
+      // auth.users.phone is mirrored below on a best-effort basis.
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
         email: signup_data.email,
-        phone: `+91${cleanPhone}`,
         password: generateRandomPassword(),
         email_confirm: true,
-        phone_confirm: true,
         user_metadata: {
           full_name: signup_data.full_name,
           phone: cleanPhone,
@@ -143,11 +166,22 @@ Deno.serve(async (req) => {
       if (createError) {
         console.error('Create user error:', createError);
         return new Response(JSON.stringify({ error: createError.message || 'Failed to create account' }), {
-          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: (createError as { status?: number }).status || 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
       userId = newUser.user.id;
+
+      // Mirror the phone onto auth.users. Skipped silently when the phone provider
+      // is disabled — signup must not depend on that toggle.
+      const { error: attachPhoneError } = await supabase.auth.admin.updateUserById(
+        userId,
+        { phone: `+91${cleanPhone}`, phone_confirm: true },
+      );
+      if (attachPhoneError) {
+        console.warn('Could not attach phone to auth user:', attachPhoneError.message);
+      }
 
       // Update profile with phone
       await supabase
