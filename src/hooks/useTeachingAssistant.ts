@@ -1,50 +1,8 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { SUPABASE_DIRECT_URL } from '@/lib/supabaseUrl';
 import { useToast } from '@/hooks/use-toast';
 import { useAIAssistantJob } from '@/contexts/AIAssistantJobContext';
-
-/**
- * Direct invoke for ai-teaching-assistant — bypasses Cloudflare Worker proxy
- * (which has a 150s idle timeout) and goes straight to Supabase, giving us
- * the full 400s edge-function budget (Supabase Pro).
- */
-async function invokeAiTeachingAssistantDirect(body: any): Promise<{ data: any; error: any }> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 420_000); // 420s
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-    const apikey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-
-    const res = await fetch(`${SUPABASE_DIRECT_URL}/functions/v1/ai-teaching-assistant`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': apikey,
-        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-
-    const text = await res.text();
-    let data: any = null;
-    try { data = text ? JSON.parse(text) : null; } catch { data = { error: text }; }
-
-    if (!res.ok) {
-      return { data, error: { message: data?.error || `HTTP ${res.status}`, status: res.status } };
-    }
-    return { data, error: null };
-  } catch (err: any) {
-    const message = err?.name === 'AbortError'
-      ? 'Request timed out after 420 seconds'
-      : (err?.message || 'Network error');
-    return { data: null, error: { message } };
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
+import { invokeAiTeachingAssistantDirect } from '@/lib/invokeAiTeachingAssistant';
 
 
 export interface DetectedTopic {
