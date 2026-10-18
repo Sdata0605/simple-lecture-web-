@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { CheckCircle, Circle, Lock, AlertCircle, PanelLeftClose, PanelLeft, FolderOpen, ArrowLeft, BookOpen, BookMarked, ChevronRight, Video, Sparkles, ClipboardList, FileText, Target, BarChart3, HelpCircle, MessageCircleQuestion, Menu, Lightbulb } from "lucide-react";
+import { CheckCircle, Circle, Lock, AlertCircle, PanelLeftClose, PanelLeft, FolderOpen, ArrowLeft, BookOpen, BookMarked, ChevronRight, Video, Sparkles, ClipboardList, FileText, Target, BarChart3, HelpCircle, MessageCircleQuestion, Menu, Lightbulb, GraduationCap } from "lucide-react";
 
 
 import { SubjectNavigationBar } from "@/components/learning/SubjectNavigationBar";
@@ -358,10 +358,10 @@ export default function Learning({
   }, [isAiReadyPending, aiJob.job?.status, aiJob.job?.presentationStarted, aiJob.job?.response?.blocked, activeTab]);
 
   const handleTabChange = useCallback((value: string) => {
-    // "Ask AI" in the sidebar/tabs is a button for one thing: the Ask AI screen the lecture player opens. It
-    // opens it over the page instead of switching to a tab of its own. (The old "AI" tab is still used for
-    // finished-presentation jobs and doubt clearing, which set it directly.)
-    if (value === 'ai-assistant') {
+    // "AI Teacher" in the sidebar/tabs is a button for one thing: the Ask AI screen the lecture player opens. It
+    // opens it over the page instead of switching to a tab of its own. The "AI" tab (ai-assistant) is a normal
+    // tab again: it is where a question is answered as a slide presentation.
+    if (value === 'ai-teacher') {
       openAskAI({
         subjectId: selectedSubjectId,
         subjectName: learningData?.subjects?.find((s) => s.id === selectedSubjectId)?.name,
@@ -416,7 +416,8 @@ export default function Learning({
       ];
     }
     return [
-      { value: "ai-assistant", label: "Ask AI", icon: Sparkles, desc: "Have a doubt? Get help" },
+      { value: "ai-assistant", label: "AI", icon: Sparkles, desc: "Ask a question, get slides" },
+      { value: "ai-teacher", label: "AI Teacher", icon: GraduationCap, desc: "Ask AI, talk to your teacher" },
       { value: "notes", label: "Notes", icon: BookOpen, desc: "Read topic notes" },
       { value: "important-notes", label: "Important Notes", icon: BookMarked, desc: "Generated revision notes" },
       { value: "all-questions", label: "Questions", icon: HelpCircle, desc: "Browse Q&A" },
@@ -592,11 +593,12 @@ export default function Learning({
                 <TabsTrigger value="questions" className="py-2 rounded-lg font-medium text-sm">Questions</TabsTrigger>
               </TabsList>
             ) : (
-              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-11">
+              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-12">
                 <TabsTrigger value="videos" className="py-2 rounded-lg font-medium text-sm">Classes</TabsTrigger>
                 <TabsTrigger value="notes" className="py-2 rounded-lg font-medium text-sm">Notes</TabsTrigger>
                 <TabsTrigger value="important-notes" className="py-2 rounded-lg font-medium text-xs">Important Notes</TabsTrigger>
                 <TabsTrigger value="ai-assistant" className="py-2 rounded-lg font-medium text-sm">AI</TabsTrigger>
+                <TabsTrigger value="ai-teacher" className="py-2 rounded-lg font-medium text-sm">AI Teacher</TabsTrigger>
                 <TabsTrigger value="all-questions" className="py-2 rounded-lg font-medium text-sm">Questions</TabsTrigger>
                 <TabsTrigger value="solutions" className="py-2 rounded-lg font-medium text-sm">Solutions</TabsTrigger>
                 <TabsTrigger value="assignments" className="py-2 rounded-lg font-medium text-sm">Assignments</TabsTrigger>
@@ -696,11 +698,12 @@ export default function Learning({
                 <TabsTrigger value="questions" className="py-2 rounded-lg font-medium text-sm">Questions</TabsTrigger>
               </TabsList>
             ) : (
-              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-11">
+              <TabsList className="p-1.5 h-auto bg-muted/80 rounded-xl border shadow-sm grid w-full grid-cols-12">
                 <TabsTrigger value="videos" className="py-2 rounded-lg font-medium text-sm">Classes</TabsTrigger>
                 <TabsTrigger value="notes" className="py-2 rounded-lg font-medium text-sm">Notes</TabsTrigger>
                 <TabsTrigger value="important-notes" className="py-2 rounded-lg font-medium text-xs">Important Notes</TabsTrigger>
                 <TabsTrigger value="ai-assistant" className="py-2 rounded-lg font-medium text-sm">AI</TabsTrigger>
+                <TabsTrigger value="ai-teacher" className="py-2 rounded-lg font-medium text-sm">AI Teacher</TabsTrigger>
                 <TabsTrigger value="all-questions" className="py-2 rounded-lg font-medium text-sm">Questions</TabsTrigger>
                 <TabsTrigger value="solutions" className="py-2 rounded-lg font-medium text-sm">Solutions</TabsTrigger>
                 <TabsTrigger value="assignments" className="py-2 rounded-lg font-medium text-sm">Assignments</TabsTrigger>
@@ -998,7 +1001,8 @@ export default function Learning({
                           { value: "questions", label: "Questions", icon: HelpCircle },
                         ] : [
                           { value: "videos", label: "Classes", icon: Video },
-                          { value: "ai-assistant", label: "Ask AI", icon: Sparkles },
+                          { value: "ai-assistant", label: "AI", icon: Sparkles },
+                          { value: "ai-teacher", label: "AI Teacher", icon: GraduationCap },
                           { value: "notes", label: "Notes", icon: BookOpen },
                           { value: "important-notes", label: "Important Notes", icon: BookMarked },
                           { value: "all-questions", label: "Questions", icon: HelpCircle },
@@ -1041,7 +1045,8 @@ export default function Learning({
                     {(isChecker ? [
                       { value: "questions", label: "Questions", icon: HelpCircle, desc: "Browse Q&A" },
                     ] : [
-                      { value: "ai-assistant", label: "Ask AI", icon: Sparkles, desc: "Have a doubt? Get help" },
+                      { value: "ai-assistant", label: "AI", icon: Sparkles, desc: "Ask a question, get slides" },
+                      { value: "ai-teacher", label: "AI Teacher", icon: GraduationCap, desc: "Ask AI, talk to your teacher" },
                       { value: "notes", label: "Notes", icon: BookOpen, desc: "Read topic notes" },
                       { value: "important-notes", label: "Important Notes", icon: BookMarked, desc: "Generated revision notes" },
                       { value: "all-questions", label: "Questions", icon: HelpCircle, desc: "Browse Q&A" },
