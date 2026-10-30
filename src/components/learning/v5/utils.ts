@@ -11,6 +11,9 @@ import type {
 const V5_PROXY_BASE = `${SUPABASE_URL}/functions/v1/v4-player-proxy`;
 const V5_CDN_BASE = 'https://server1.simplelecture.com/video';
 
+/** Playback speeds offered in the V5 menu: 0.75x to 1.75x in 0.05 steps. */
+export const V5_SPEEDS = Array.from({ length: 21 }, (_, index) => Math.round((0.75 + index * 0.05) * 100) / 100);
+
 export const getPresentationUrl = (jobId: string) =>
   `${V5_PROXY_BASE}/player/jobs/${encodeURIComponent(jobId)}/presentation.json?t=${Date.now()}`;
 
@@ -131,14 +134,15 @@ export function getTimelinePosition(
   videoTime: number,
   videoDuration: number,
 ) {
-  const logicalDuration = timeline.at(-1)?.end || 0;
+  const lastEntry = timeline[timeline.length - 1];
+  const logicalDuration = lastEntry?.end || 0;
   const logicalTime =
     videoDuration > 0 && logicalDuration > 0
       ? (videoTime / videoDuration) * logicalDuration
       : videoTime;
   const active =
     timeline.find((entry) => logicalTime >= entry.start && logicalTime < entry.end) ||
-    timeline.at(-1) ||
+    lastEntry ||
     null;
 
   if (!active) {

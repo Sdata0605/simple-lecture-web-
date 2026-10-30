@@ -1,4 +1,6 @@
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { goHome } from "@/lib/goHome";
 import { SmartHeader } from "@/components/SmartHeader";
 import { Footer } from "@/components/Footer";
@@ -95,6 +97,23 @@ const SubjectDetail = () => {
     : siblingData && siblingData.length > 0 && siblingData[0].courseSlug
       ? `/enroll/${siblingData[0].courseSlug}`
       : "/programs";
+
+  // Coming-soon courses cannot be enrolled in yet, so hide the Enroll buttons for them.
+  const enrollTargetSlug = courseSlug ?? siblingData?.[0]?.courseSlug;
+  const { data: enrollTargetCourse } = useQuery({
+    queryKey: ["subject-enroll-target", enrollTargetSlug],
+    enabled: !!enrollTargetSlug,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("courses")
+        .select("is_coming_soon")
+        .eq("slug", enrollTargetSlug!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const enrollBlocked = !!enrollTargetCourse?.is_coming_soon;
 
   const features = [
     { icon: Brain, title: "AI-Based Tutorial", description: "Personalized learning with AI" },
@@ -376,12 +395,16 @@ const SubjectDetail = () => {
                       {enrolledCourses.length > 0 ? "Back to Course" : "Explore Courses"}
                     </Link>
                   </Button>
-                  <Button size="sm" asChild>
-                    <Link to={enrollUrl}>
-                      <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-                      Enroll Now
-                    </Link>
-                  </Button>
+                  {enrollBlocked ? (
+                    <Badge className="bg-amber-500 text-white">Coming Soon</Badge>
+                  ) : (
+                    <Button size="sm" asChild>
+                      <Link to={enrollUrl}>
+                        <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                        Enroll Now
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               </>
             )}
@@ -499,12 +522,16 @@ const SubjectDetail = () => {
                           {enrolledCourses.length > 0 ? "Back to Course" : "Explore Courses"}
                         </Link>
                       </Button>
-                      <Button size="sm" asChild className="shadow-xl bg-white text-primary hover:bg-white/90">
-                        <Link to={enrollUrl}>
-                          <ShoppingCart className="h-4 w-4 mr-2" />
-                          Enroll Now
-                        </Link>
-                      </Button>
+                      {enrollBlocked ? (
+                        <Badge className="bg-amber-500 text-white">Coming Soon</Badge>
+                      ) : (
+                        <Button size="sm" asChild className="shadow-xl bg-white text-primary hover:bg-white/90">
+                          <Link to={enrollUrl}>
+                            <ShoppingCart className="h-4 w-4 mr-2" />
+                            Enroll Now
+                          </Link>
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -634,12 +661,16 @@ const SubjectDetail = () => {
                       {enrolledCourses.length > 0 ? "Back to Course" : "Explore Courses"}
                     </Link>
                   </Button>
-                  <Button size="lg" asChild className="shadow-xl bg-white text-primary hover:bg-white/90 text-base md:text-lg px-6 md:px-8">
-                    <Link to={enrollUrl}>
-                      <ShoppingCart className="h-4 w-4 md:h-5 md:w-5 mr-2" />
-                      Enroll Now
-                    </Link>
-                  </Button>
+                  {enrollBlocked ? (
+                    <Badge className="bg-amber-500 text-white text-base md:text-lg px-6 py-2">Coming Soon</Badge>
+                  ) : (
+                    <Button size="lg" asChild className="shadow-xl bg-white text-primary hover:bg-white/90 text-base md:text-lg px-6 md:px-8">
+                      <Link to={enrollUrl}>
+                        <ShoppingCart className="h-4 w-4 md:h-5 md:w-5 mr-2" />
+                        Enroll Now
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

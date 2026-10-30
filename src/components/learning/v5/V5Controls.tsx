@@ -8,7 +8,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import { formatV5Time } from './utils';
+import { formatV5Time, V5_SPEEDS } from './utils';
 
 interface V5ControlsProps {
   isPlaying: boolean;
@@ -25,8 +25,6 @@ interface V5ControlsProps {
   onRateChange: (rate: number) => void;
   onAskAI?: () => void;
 }
-
-const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
 export function V5Controls({
   isPlaying,
@@ -98,7 +96,7 @@ export function V5Controls({
             onChange={(event) => onRateChange(Number(event.target.value))}
             value={playbackRate}
           >
-            {SPEEDS.map((speed) => (
+            {V5_SPEEDS.map((speed) => (
               <option key={speed} value={speed}>
                 {speed}x
               </option>

@@ -195,7 +195,7 @@ export const MobileHomeContent = () => {
                 <Button 
                   size="sm"
                   className="bg-white text-primary hover:bg-white/90 text-xs h-8 px-3 font-semibold"
-                  onClick={() => navigate("/course/Class-10")}
+                  onClick={() => navigate("/course/class-10-sslc-karnataka")}
                 >
                   {slide.cta}
                   <ArrowRight className="ml-1 w-3 h-3" />
@@ -204,7 +204,7 @@ export const MobileHomeContent = () => {
                   size="sm"
                   variant="outline"
                   className="bg-white/10 text-white border border-white/40 hover:bg-white/20 hover:text-white text-xs h-8 px-2.5"
-                  onClick={() => navigate("/course/Class-10/preview")}
+                  onClick={() => navigate("/course/class-10-sslc-karnataka/preview")}
                 >
                   Free Preview
                 </Button>

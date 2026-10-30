@@ -383,6 +383,25 @@ const Enroll = () => {
     );
   }
 
+  // Enrollment and payment are not open for coming-soon courses.
+  if (course.is_coming_soon) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <SmartHeader minimal />
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center space-y-4 max-w-md">
+            <h1 className="text-3xl font-bold">{course.name}</h1>
+            <p className="text-muted-foreground">Enrollment for this course is not open yet.</p>
+            <Button asChild>
+              <Link to="/programs">Browse All Programs</Link>
+            </Button>
+          </div>
+        </main>
+        {!isMobile && <Footer />}
+      </div>
+    );
+  }
+
   const subjects = course.course_subjects?.map((cs: any) => cs.popular_subjects?.name).filter(Boolean) || [];
   const originalPrice = course.price_inr || 0;
   const priceAfterDiscount = calculatePriceAfterDiscount();

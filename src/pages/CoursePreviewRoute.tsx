@@ -21,6 +21,7 @@ interface PreviewCourseMeta {
   og_description: string | null;
   og_image_url: string | null;
   seo_canonical_url: string | null;
+  is_coming_soon: boolean | null;
 }
 
 const usePreviewCourseBySlug = (slug?: string) =>
@@ -32,7 +33,7 @@ const usePreviewCourseBySlug = (slug?: string) =>
       const { data, error } = await supabase
         .from("courses")
         .select(
-          "id, name, slug, short_description, thumbnail_url, seo_title, seo_description, seo_keywords, og_title, og_description, og_image_url, seo_canonical_url"
+          "id, name, slug, short_description, thumbnail_url, seo_title, seo_description, seo_keywords, og_title, og_description, og_image_url, seo_canonical_url, is_coming_soon"
         )
         .eq("slug", slug!)
         .eq("is_active", true)
@@ -165,6 +166,7 @@ export default function CoursePreviewRoute() {
         previewCourseId={course.id}
         previewCourseSlug={course.slug}
         previewCourseName={course.name}
+        previewCourseComingSoon={!!course.is_coming_soon}
         previewSeo={previewSeo}
       />
     </>

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Languages, LoaderCircle, Play } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { V5AskContext, V5Language, V5Presentation, V5SubtitleData } from './types';
 import {
   buildAskContext,
   buildSectionTimeline,
   getMergedVideoCandidates,
-  getPresentationUrl,
   getSubtitlesUrl,
   getTimelinePosition,
   hasMergedVideo,
@@ -34,6 +34,9 @@ interface V5PlayerProps {
   /** Whether that assistant is open. When it closes, the lecture resumes if
    * it was playing when "Ask AI" was pressed. */
   askAIOpen?: boolean;
+  /** Speed the video actually plays at until the viewer picks one from the menu.
+   * The menu still shows 1x while this is set (e.g. 0.9 plays, shown as 1x). */
+  defaultPlaybackRate?: number;
 }
 
 export function V5Player({
@@ -44,6 +47,7 @@ export function V5Player({
   onVideoEnded,
   onAskAI,
   askAIOpen,
+  defaultPlaybackRate,
 }: V5PlayerProps) {
   const stageRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -62,6 +66,8 @@ export function V5Player({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
+  // Until the viewer picks a speed, the video plays at defaultPlaybackRate while the menu shows 1x.
+  const speedPickedRef = useRef(false);
   const [needsTap, setNeedsTap] = useState(false);
   const [keyPointsHidden, setKeyPointsHidden] = useState(false);
   const [fullscreenControlsVisible, setFullscreenControlsVisible] = useState(false);
@@ -74,22 +80,33 @@ export function V5Player({
     setPresentation(null);
     setSubtitleData(null);
 
-    Promise.all([
-      fetch(getPresentationUrl(jobId)).then(async (response) => {
-        if (!response.ok) throw new Error(`Presentation request failed (${response.status})`);
-        return response.json() as Promise<V5Presentation>;
-      }),
-      fetch(getSubtitlesUrl(jobId))
-        .then((response) => (response.ok ? response.json() : null))
-        .catch(() => null),
-    ])
-      .then(([nextPresentation, nextSubtitles]) => {
+    // Presentation comes from the job row in the database (presentation_json), not the origin server.
+    const presentationRequest = (async (): Promise<V5Presentation> => {
+      const { data, error: dbError } = await supabase
+        .from('video_generation_jobs')
+        .select('presentation_json')
+        .eq('external_job_id', jobId)
+        .maybeSingle();
+      if (dbError) throw new Error(`Presentation request failed (${dbError.message})`);
+      if (!data?.presentation_json) throw new Error('Presentation not found for this lecture.');
+      return data.presentation_json as unknown as V5Presentation;
+    })();
+
+    // Subtitles are optional and load on their own, so they never hold up the player.
+    fetch(getSubtitlesUrl(jobId))
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null)
+      .then((nextSubtitles) => {
+        if (!cancelled) setSubtitleData(nextSubtitles);
+      });
+
+    presentationRequest
+      .then((nextPresentation) => {
         if (cancelled) return;
         if (!Array.isArray(nextPresentation.sections) || nextPresentation.sections.length === 0) {
           throw new Error('This job has no presentation sections.');
         }
         setPresentation(nextPresentation);
-        setSubtitleData(nextSubtitles);
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load V5 presentation.');
@@ -253,7 +270,7 @@ export function V5Player({
     const video = videoRef.current;
     if (!video) return;
     setDuration(video.duration || 0);
-    video.playbackRate = playbackRate;
+    video.playbackRate = speedPickedRef.current ? playbackRate : (defaultPlaybackRate ?? playbackRate);
 
     // A source fallback can remount the video while the assistant is open —
     // it must not start the lecture under the overlay (the mic would hear it).
@@ -278,7 +295,7 @@ export function V5Player({
         })
         .catch(() => setNeedsTap(true));
     }
-  }, [playbackRate]);
+  }, [playbackRate, defaultPlaybackRate]);
 
   if (isLoading) {
     return (
@@ -336,6 +353,7 @@ export function V5Player({
     isMuted,
     isPlaying,
     onRateChange: (rate: number) => {
+      speedPickedRef.current = true;
       setPlaybackRate(rate);
       if (videoRef.current) videoRef.current.playbackRate = rate;
     },

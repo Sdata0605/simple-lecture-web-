@@ -2,9 +2,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
 // Dynamic imports for lazy loading - paths resolved by Vite at build time
-const aiTeacher1 = new URL("@/assets/ai-teacher-1.png", import.meta.url).href;
-const aiTeacher2 = new URL("@/assets/ai-teacher-2.png", import.meta.url).href;
-const aiTeacher3 = new URL("@/assets/ai-teacher-3.png", import.meta.url).href;
+const aiTeacher1 = new URL("@/assets/ai-teacher-1.webp", import.meta.url).href;
+const aiTeacher2 = new URL("@/assets/ai-teacher-2.webp", import.meta.url).href;
+const aiTeacher3 = new URL("@/assets/ai-teacher-3.webp", import.meta.url).href;
 
 const teachers = [
   {

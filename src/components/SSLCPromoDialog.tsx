@@ -30,7 +30,7 @@ export const SSLCPromoDialog = () => {
 
   const handleJoin = () => {
     handleDismiss();
-    navigate("/course/Class-10");
+    navigate("/course/class-10-sslc-karnataka");
   };
 
   return (

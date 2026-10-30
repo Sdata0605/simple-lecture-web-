@@ -73,7 +73,7 @@ export const Hero = (_props: HeroProps) => {
   }));
 
   const handleCtaClick = () => {
-    navigate("/course/Class-10");
+    navigate("/programs");
   };
 
   return (
@@ -187,7 +187,7 @@ export const Hero = (_props: HeroProps) => {
                       size="lg"
                       variant="outline"
                       className="border-white/30 bg-white/5 text-white hover:bg-white/10 text-base px-6 py-6 h-auto rounded-xl"
-                      onClick={() => navigate("/course/Class-10/preview")}
+                      onClick={() => navigate("/course/class-10-sslc-karnataka/preview")}
                     >
                       Explore Free Lessons
                     </Button>

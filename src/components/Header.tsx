@@ -263,8 +263,8 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-background">
                     <div className="p-2 space-y-1">
-                      <a href="#how-it-works" className="block px-3 py-2 text-sm hover:bg-muted rounded-md">How it works</a>
-                      <a href="#contact" className="block px-3 py-2 text-sm hover:bg-muted rounded-md">Contact</a>
+                      <Link to="/how-it-works" className="block px-3 py-2 text-sm hover:bg-muted rounded-md">How it works</Link>
+                      <Link to="/contact" className="block px-3 py-2 text-sm hover:bg-muted rounded-md">Contact</Link>
                     </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -345,12 +345,12 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
                 </>
               ) : (
                 <>
-                  <a href="#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">
+                  <Link to="/how-it-works" className="text-sm font-medium hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>
                     How it works
-                  </a>
-                  <a href="#contact" className="text-sm font-medium hover:text-primary transition-colors">
+                  </Link>
+                  <Link to="/contact" className="text-sm font-medium hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>
                     Contact
-                  </a>
+                  </Link>
                   <div className="flex gap-2 pt-4">
                     <Link to="/auth?tab=login" className="flex-1" onClick={() => setIsMenuOpen(false)}>
                       <Button variant="outline" className="w-full border-primary text-primary">

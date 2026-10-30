@@ -110,9 +110,11 @@ interface RecordedVideosProps {
   restrictToLanguage?: string | null;
   /** Chapter number — controls whether V4 player is eligible (Chapter 1 only). */
   chapterNumber?: number | null;
+  /** Speed the V5 video plays at until the viewer picks one (menu still shows 1x). */
+  v5DefaultPlaybackRate?: number;
 }
 
-export const RecordedVideos = ({ 
+export const RecordedVideos = ({
   topicId, 
   chapterId,
   subjectId,
@@ -130,6 +132,7 @@ export const RecordedVideos = ({
   quickActions,
   onRequireAuth,
   restrictToLanguage,
+  v5DefaultPlaybackRate,
   chapterNumber,
 }: RecordedVideosProps) => {
   const navigate = useNavigate();
@@ -824,6 +827,7 @@ export const RecordedVideos = ({
             onVideoEnded={teacherSubject ? () => openAssistant("end") : undefined}
             onAskAI={teacherSubject ? (context) => openAssistant("mid", context) : undefined}
             askAIOpen={assistant !== null}
+            defaultPlaybackRate={v5DefaultPlaybackRate}
           />
         ) : watchingLecture.external_job_id && isV4EligibleChapter(chapterNumber) ? (
           <V4PlayerDialog
@@ -866,6 +870,16 @@ export const RecordedVideos = ({
           subject={teacherSubject}
           topicTitle={topicTitle}
           lectureLanguage={activeAILanguage ?? selectedAILanguage}
+        />
+      )}
+      {notesOpen && notesTarget && (
+        <V4Notes
+          notesId={notesTarget.jobId}
+          subjectId={subjectId || undefined}
+          chapterId={chapterId || undefined}
+          topicId={topicId || undefined}
+          open={notesOpen}
+          onOpenChange={setNotesOpen}
         />
       )}
     </div>
@@ -1299,16 +1313,6 @@ const LegacyAILectureCard = ({
           </DialogContent>
         </Dialog>
       ) : null}
-    {notesOpen && notesTarget && (
-      <V4Notes
-        notesId={notesTarget.jobId}
-        subjectId={subjectId || undefined}
-        chapterId={chapterId || undefined}
-        topicId={topicId || undefined}
-        open={notesOpen}
-        onOpenChange={setNotesOpen}
-      />
-    )}
     </>
   );
 };

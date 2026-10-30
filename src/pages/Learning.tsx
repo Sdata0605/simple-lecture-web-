@@ -72,6 +72,7 @@ interface LearningProps {
   previewCourseId?: string;
   previewCourseSlug?: string;
   previewCourseName?: string;
+  previewCourseComingSoon?: boolean;
   previewSeo?: PreviewSeoOverride;
 }
 
@@ -117,6 +118,7 @@ export default function Learning({
   previewCourseId,
   previewCourseSlug,
   previewCourseName,
+  previewCourseComingSoon = false,
   previewSeo,
 }: LearningProps = {}) {
   const params = useParams();
@@ -563,6 +565,11 @@ export default function Learning({
     : allSubjects;
   const course = learningData?.course;
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
+  // Class 10 SSLC (Karnataka) Maths: V5 videos play at 0.9 but the speed menu shows 1x.
+  const isSslcKarnatakaMaths =
+    courseId === '4c10bc8e-acbc-4b76-b7f5-54376c030cb0' &&
+    /^math(s|ematics)?$/i.test(selectedSubject?.name?.trim() ?? '');
+  const v5DefaultPlaybackRate = isSslcKarnatakaMaths ? 0.9 : undefined;
 
   const handleSubjectChange = (subjectId: string) => {
     setSelectedSubjectId(subjectId);
@@ -629,6 +636,7 @@ export default function Learning({
               quickActions={mobileQuickActions}
               onRequireAuth={() => requireAuthForTopic(selectedTopic.id)}
               restrictToLanguage={getPreviewLanguageForChapter(selectedTopic.chapter_id)}
+              v5DefaultPlaybackRate={v5DefaultPlaybackRate}
               chapterNumber={(chapters as any[] | undefined)?.find((c) => c.id === selectedTopic.chapter_id)?.chapter_number ?? null}
 
             />
@@ -728,6 +736,7 @@ export default function Learning({
               quickActions={mobileQuickActions}
               onRequireAuth={() => requireAuthForTopic(selectedChapter.id)}
               restrictToLanguage={getPreviewLanguageForChapter(selectedChapter.id)}
+              v5DefaultPlaybackRate={v5DefaultPlaybackRate}
               chapterNumber={selectedChapter.chapter_number ?? null}
 
             />
@@ -805,9 +814,13 @@ export default function Learning({
           </span>
           <Badge variant="secondary" className="shrink-0 text-[10px] sm:text-xs">Free Preview</Badge>
         </div>
-        <Button size="sm" className="text-xs sm:text-sm h-8 shrink-0" onClick={() => safeNavigate(courseSlugForBuy ? `/course/${courseSlugForBuy}` : "/programs")}>
-          Buy course
-        </Button>
+        {previewCourseComingSoon ? (
+          <Badge className="shrink-0 bg-amber-500 text-white text-[10px] sm:text-xs">Coming Soon</Badge>
+        ) : (
+          <Button size="sm" className="text-xs sm:text-sm h-8 shrink-0" onClick={() => safeNavigate(courseSlugForBuy ? `/course/${courseSlugForBuy}` : "/programs")}>
+            Buy course
+          </Button>
+        )}
       </div>
     </div>
   ) : null;

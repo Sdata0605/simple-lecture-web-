@@ -27,6 +27,8 @@ interface V5PlayerDialogProps {
   /** Pass-throughs for the mid-lecture "Ask AI" button — see V5Player. */
   onAskAI?: (context: V5AskContext) => void;
   askAIOpen?: boolean;
+  /** Pass-through to V5Player: the speed the video plays at until the viewer picks one. */
+  defaultPlaybackRate?: number;
 }
 
 const toV5Language = (value?: string | null): V5Language =>
@@ -40,6 +42,7 @@ export const V5PlayerDialog = ({
   onVideoEnded,
   onAskAI,
   askAIOpen,
+  defaultPlaybackRate,
 }: V5PlayerDialogProps) => {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
@@ -64,6 +67,7 @@ export const V5PlayerDialog = ({
       onVideoEnded={onVideoEnded}
       onAskAI={onAskAI}
       askAIOpen={askAIOpen}
+      defaultPlaybackRate={defaultPlaybackRate}
     />,
     document.body,
   );

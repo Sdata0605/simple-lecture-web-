@@ -123,6 +123,41 @@ const ProgramDetail = () => {
   const { data: freeChapters } = useCourseFreeAccess(course?.id);
   const freeChapterCount = freeChapters?.length || 0;
 
+  // Must stay above the early returns below: hooks have to run on every render.
+  const courseStructuredData = useMemo(() => {
+    if (!course) return undefined;
+    const subjectOrder = new Map<string, number>(
+      (course.course_subjects || []).map((cs: any) => [cs.popular_subjects?.id || cs.subject_id, cs.display_order ?? 0])
+    );
+    const subjectNames = (course.course_subjects || [])
+      .map((cs: any) => cs.popular_subjects)
+      .filter(Boolean)
+      .sort((a: any, b: any) => (subjectOrder.get(a.id) ?? 0) - (subjectOrder.get(b.id) ?? 0))
+      .map((s: any) => s.name);
+    const courseFaqs = [...(course.course_faqs || [])].sort((a: any, b: any) => a.display_order - b.display_order);
+    return {
+      "@context": "https://schema.org",
+      "@graph": [
+        generateCourseSchema({
+          name: course.name,
+          description: course.short_description || course.detailed_description || `Learn ${course.name} with AI`,
+          rating: course.rating,
+          studentCount: course.student_count,
+          duration: course.duration_months,
+          price: course.price_inr,
+          originalPrice: course.original_price_inr,
+          subjects: subjectNames,
+        }),
+        generateBreadcrumbSchema([
+          { name: "Home", url: "https://simplelecture.com/" },
+          { name: "Programs", url: "https://simplelecture.com/programs" },
+          { name: course.name, url: `https://simplelecture.com/course/${course.slug}` },
+        ]),
+        ...(courseFaqs.length > 0 ? [generateFAQSchema(courseFaqs.map((f: any) => ({ question: f.question, answer: f.answer })))] : []),
+      ],
+    };
+  }, [course?.id, course?.slug, course?.course_faqs?.length]);
+
   if (isLoading) {
     if (isMobile) {
       return (
@@ -238,28 +273,6 @@ const ProgramDetail = () => {
     `${course.name} — online coaching with live classes, recorded video lectures, AI doubt solver & mock tests${subjectListForMeta ? ` covering ${subjectListForMeta}` : ''}${course.price_inr ? `. Starting at ₹${course.price_inr.toLocaleString()}` : ''}${course.student_count ? `. Joined by ${course.student_count.toLocaleString()}+ students.` : '.'} Enroll today.`;
   const courseSeoTitle = `${course.name} | Online Coaching & Live Classes`;
   const courseKeywords = `${course.name}, ${course.name} online coaching, ${course.name} online classes, ${subjectListForMeta ? subjectListForMeta + ' online classes, ' : ''}online lectures, live classes, mock test series, AI doubt solver, video lectures, online learning India`;
-
-  const courseStructuredData = useMemo(() => ({
-    "@context": "https://schema.org",
-    "@graph": [
-      generateCourseSchema({
-        name: course.name,
-        description: course.short_description || course.detailed_description || `Learn ${course.name} with AI`,
-        rating: course.rating,
-        studentCount: course.student_count,
-        duration: course.duration_months,
-        price: course.price_inr,
-        originalPrice: course.original_price_inr,
-        subjects: subjects.map((s: any) => s.name),
-      }),
-      generateBreadcrumbSchema([
-        { name: "Home", url: "https://simplelecture.com/" },
-        { name: "Programs", url: "https://simplelecture.com/programs" },
-        { name: course.name, url: `https://simplelecture.com/course/${course.slug}` },
-      ]),
-      ...(faqs.length > 0 ? [generateFAQSchema(faqs.map((f: any) => ({ question: f.question, answer: f.answer })))] : []),
-    ],
-  }), [course.id, course.slug, faqs.length]);
 
   // ============ MOBILE LAYOUT ============
   if (isMobile) {
@@ -518,7 +531,7 @@ const ProgramDetail = () => {
                      <div className="flex flex-col items-center gap-2">
                        <Badge className="bg-amber-500 text-white py-2 px-4 text-sm font-semibold">Coming Soon</Badge>
                        <Button size="sm" variant="outline" className="text-xs" asChild>
-                         <Link to="/course/Class-10">Explore SSLC Program →</Link>
+                         <Link to="/course/class-10-sslc-karnataka">Explore SSLC Program →</Link>
                        </Button>
                      </div>
                   ) : (
@@ -876,7 +889,7 @@ const ProgramDetail = () => {
                   )}
                   <div className="flex items-center justify-between py-3 border-b">
                     <span className="text-muted-foreground">Students</span>
-                    <span className="font-semibold text-lg">1,00,000+</span>
+                    <span className="font-semibold text-lg">{course.student_count?.toLocaleString() ?? 0}</span>
                   </div>
                   {course.rating > 0 && (
                     <div className="flex items-center justify-between py-3">
@@ -926,15 +939,17 @@ const ProgramDetail = () => {
               Join thousands of students who have achieved their goals with {course.name}
             </p>
             {isEnrolled ? (
-              <Button 
-                size="lg" 
-                variant="secondary" 
+              <Button
+                size="lg"
+                variant="secondary"
                 className="text-lg px-8 shadow-xl bg-green-500 hover:bg-green-600 text-white"
                 onClick={() => navigate(`/learning/${course.id}`)}
               >
                 <CheckCircle className="h-5 w-5 mr-2" />
                 Continue Learning
               </Button>
+            ) : course.is_coming_soon ? (
+              <Badge className="bg-amber-500 text-white py-3 px-6 text-lg font-semibold">Coming Soon</Badge>
             ) : (
               <Button size="lg" variant="secondary" className="text-lg px-8 shadow-xl" asChild>
                 <Link to={`/enroll/${course.slug}`}>
