@@ -39,15 +39,16 @@ export function getMergedVideoCandidates(
       ? presentation.kannada_final_video
       : presentation.final_video_path;
 
+  // Our own server first; Vimeo is the fallback if the server fails or does not respond in time.
   return Array.from(
     new Set(
       [
-        direct,
         path
           ? path.startsWith('http://') || path.startsWith('https://')
             ? path
             : getCdnMediaUrl(jobId, path)
           : '',
+        direct,
       ].filter((value): value is string => Boolean(value)),
     ),
   );

@@ -18,6 +18,9 @@ import './v5-player.css';
 /** Order the player falls back through when the requested language has no merged video. */
 const V5_LANGUAGE_PREFERENCE: V5Language[] = ['english', 'kannada'];
 
+/** How long a source may take to become playable before the player moves to the next one. */
+const V5_SOURCE_TIMEOUT_MS = 20_000;
+
 interface V5PlayerProps {
   jobId: string;
   initialLanguage?: V5Language;
@@ -129,6 +132,27 @@ export function V5Player({
     [presentation, jobId, language],
   );
   const source = sources[sourceIndex] || '';
+
+  // A server that never answers raises no error, so move on to the next source if no data
+  // arrives within the timeout. Data arriving (progress) counts as the server responding.
+  const sourceTimerRef = useRef<number | null>(null);
+  const clearSourceTimer = useCallback(() => {
+    if (sourceTimerRef.current !== null) {
+      window.clearTimeout(sourceTimerRef.current);
+      sourceTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    clearSourceTimer();
+    if (!source || sourceIndex >= sources.length - 1) return;
+    sourceTimerRef.current = window.setTimeout(() => {
+      console.warn(`[V5Player] ${source} not playable after ${V5_SOURCE_TIMEOUT_MS / 1000}s; trying next source.`);
+      setSourceIndex((index) => index + 1);
+    }, V5_SOURCE_TIMEOUT_MS);
+    return clearSourceTimer;
+  }, [source, sourceIndex, sources.length, clearSourceTimer]);
+
   const position = useMemo(
     () => getTimelinePosition(timeline, currentTime, duration),
     [timeline, currentTime, duration],
@@ -428,7 +452,10 @@ export function V5Player({
             setIsPlaying(false);
             onVideoEnded?.();
           }}
+          onProgress={clearSourceTimer}
+          onCanPlay={clearSourceTimer}
           onError={() => {
+            clearSourceTimer();
             if (sourceIndex < sources.length - 1) {
               setSourceIndex((index) => index + 1);
               return;
