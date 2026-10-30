@@ -49,7 +49,7 @@ interface AITeacherPlanModalProps {
 export function AITeacherPlanModal({
   open,
   onOpenChange,
-  defaultPlanId = "admin_1000",
+  defaultPlanId = "byok_500",
 }: AITeacherPlanModalProps) {
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
@@ -341,77 +341,6 @@ export function AITeacherPlanModal({
                     onClick={() => handleSelectPlan("byok_500")}
                   >
                     Select ₹{plans.byok_500.price?.toLocaleString("en-IN")} Plan
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Plan 2: Pro Plan */}
-              <div
-                className={cn(
-                  "relative rounded-2xl border-2 p-5 transition-all flex flex-col justify-between hover:shadow-xl bg-card",
-                  selectedPlanId === "admin_1000"
-                    ? "border-amber-500 ring-2 ring-amber-500/20 shadow-amber-500/10"
-                    : "border-border hover:border-amber-500/50"
-                )}
-              >
-                <div className="absolute -top-3 right-4">
-                  <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 shadow-md text-[11px] px-2.5 py-0.5">
-                    <Sparkles className="h-3 w-3 mr-1" />
-                    BEST VALUE · ALL-INCLUSIVE
-                  </Badge>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge variant="secondary" className="text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                      All-Inclusive · Zero Setup
-                    </Badge>
-                    <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
-                      <Zap className="h-3.5 w-3.5 text-amber-500" />
-                      Zero Setup Needed
-                    </span>
-                  </div>
-
-                  <h3 className="text-xl font-bold text-foreground">
-                    {plans.admin_1000.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-1 min-h-[32px]">
-                    {plans.admin_1000.tagline}
-                  </p>
-
-                  <div className="mt-4 mb-4 flex items-baseline gap-1">
-                    <span className="text-3xl font-extrabold text-foreground">₹{plans.admin_1000.price?.toLocaleString("en-IN")}</span>
-                    <span className="text-xs text-muted-foreground font-medium">/ one-time access</span>
-                  </div>
-
-                  {/* Highlights */}
-                  <div className="rounded-xl bg-gradient-to-r from-emerald-500/10 to-primary/10 border border-emerald-500/20 p-2.5 mb-4 text-xs text-emerald-950 dark:text-emerald-100">
-                    <p className="font-semibold flex items-center gap-1.5 mb-1 text-emerald-800 dark:text-emerald-300">
-                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      Built-in High-Speed Server Quota
-                    </p>
-                    <p className="text-[11px] leading-relaxed text-muted-foreground">
-                      Powered by SimpleLecture's high-speed servers. No key needed! Adding your own key in Settings is optional for higher rate limits.
-                    </p>
-                  </div>
-
-                  <ul className="space-y-2 text-xs text-muted-foreground">
-                    {plans.admin_1000.features.map((feat, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                        <span className={cn(i === 4 && "font-semibold text-foreground")}>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="pt-6">
-                  <Button
-                    className="w-full rounded-xl text-sm font-bold h-11 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-lg shadow-amber-500/20"
-                    onClick={() => handleSelectPlan("admin_1000")}
-                  >
-                    Select ₹{plans.admin_1000.price?.toLocaleString("en-IN")} Plan
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 </div>

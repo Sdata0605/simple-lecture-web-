@@ -212,14 +212,6 @@ export function AITeacherGuideModal({
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <div className="p-2.5 rounded-lg border bg-card space-y-1">
-                  <span className="font-bold text-emerald-800 dark:text-emerald-300 block">
-                    Pro Plan (₹1,000)
-                  </span>
-                  <p className="text-muted-foreground">
-                    All-inclusive AI Teacher powered by SimpleLecture's high-speed servers. <strong>Zero setup required</strong>. Adding your own key in Settings is optional for higher rate limits.
-                  </p>
-                </div>
-                <div className="p-2.5 rounded-lg border bg-card space-y-1">
                   <span className="font-bold text-amber-800 dark:text-amber-300 block">
                     Plus Plan (₹500)
                   </span>

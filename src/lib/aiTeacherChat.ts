@@ -121,7 +121,7 @@ export async function teacherChat(
 ): Promise<ChatResult> {
   const sub = loadSubscription();
   if (!sub) {
-    throw new TeacherApiError("Please purchase an AI Teacher plan (Plus Plan ₹500 or Pro Plan ₹1000) to chat with your personal AI teacher.");
+    throw new TeacherApiError("Please purchase an AI Teacher plan (Plus Plan ₹500) to chat with your personal AI teacher.");
   }
 
   const enrolledList = enrolledSubjects || "your enrolled subjects";

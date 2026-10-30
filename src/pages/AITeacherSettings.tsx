@@ -169,7 +169,7 @@ export default function AITeacherSettings() {
                     "px-2 py-0.5 text-xs font-semibold rounded-full border",
                     isPlan1000 ? "border-emerald-300 bg-emerald-100 text-emerald-800" : "border-amber-300 bg-amber-100 text-amber-900"
                   )}>
-                    {isPlan1000 ? "Pro Plan (₹1,000)" : "Plus Plan (₹500)"}
+                    {isPlan1000 ? "Plan Active" : "Plus Plan (₹500)"}
                   </span>
                 )}
               </div>

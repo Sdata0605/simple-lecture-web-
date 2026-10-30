@@ -281,72 +281,6 @@ function AITeacherPaywall({
             </div>
           </div>
 
-          {/* Plan 2: Pro Managed Plan */}
-          <div className="relative rounded-2xl border-2 border-emerald-500 bg-gradient-to-b from-emerald-50/50 to-card dark:from-emerald-950/20 p-6 flex flex-col justify-between shadow-lg ring-1 ring-emerald-500/20">
-            <div className="absolute -top-3 right-6 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1">
-              <Sparkles className="h-3 w-3" />
-              Most Popular · Zero Setup
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                  Admin Powered
-                </span>
-                <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700">
-                  <Zap className="h-5 w-5" />
-                </span>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-foreground">{plans.admin_1000.name}</h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {plans.admin_1000.tagline}
-                </p>
-              </div>
-
-              <div className="pt-2">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl sm:text-4xl font-extrabold text-emerald-700 dark:text-emerald-400">₹{plans.admin_1000.price?.toLocaleString("en-IN")}</span>
-                  <span className="text-xs text-muted-foreground font-medium">one-time access</span>
-                </div>
-              </div>
-
-              <div className="space-y-2.5 pt-4 border-t text-xs text-muted-foreground">
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span className="font-semibold text-foreground">Works on SimpleLecture Admin's Managed Gemini API Key</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span className="font-semibold text-foreground">Zero setup required — start learning in 1 click!</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>1-to-1 Interactive AI Voice Teacher with low latency</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Interactive 24/7 AI Chat with notes & visual slides</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Priority server speed and dedicated tutor support</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-6">
-              <Button
-                size="lg"
-                className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-md"
-                onClick={() => onSelectPlan("admin_1000")}
-              >
-                <Sparkles className="h-4 w-4 mr-1.5" />
-                Unlock Pro Plan - ₹{plans.admin_1000.price?.toLocaleString("en-IN")}
-              </Button>
-            </div>
-          </div>
         </div>
 
         {/* Quick Guide Options */}
@@ -544,7 +478,7 @@ function AITeacherActive() {
               {isPlan1000 ? (
                 <>
                   <Sparkles className="h-3 w-3 text-emerald-700" />
-                  <span>Pro Plan</span>
+                  <span>Plan Active</span>
                 </>
               ) : (
                 <>

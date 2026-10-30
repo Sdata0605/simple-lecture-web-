@@ -510,7 +510,7 @@ export function useLiveTeacher({
     try {
       const sub = loadSubscription();
       if (!sub) {
-        setError("Please purchase an AI Teacher plan (Plus Plan ₹500 or Pro Plan ₹1000) to start your 1-to-1 voice class.");
+        setError("Please purchase an AI Teacher plan (Plus Plan ₹500) to start your 1-to-1 voice class.");
         setStatusBoth("error");
         return;
       }
