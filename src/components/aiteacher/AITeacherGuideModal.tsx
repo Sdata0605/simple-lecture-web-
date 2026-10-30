@@ -76,13 +76,13 @@ export function AITeacherGuideModal({
 
   const handleSaveKey = () => {
     const cleanKey = apiKey.trim();
-    savePrefs({ apiKey: cleanKey });
+    savePrefs({ ...loadPrefs(), apiKey: cleanKey });
     setSaveSuccess(true);
     setTestResult(null);
   };
 
   const handleRemoveKey = () => {
-    savePrefs({ apiKey: "" });
+    savePrefs({ ...loadPrefs(), apiKey: "" });
     setApiKey("");
     setSaveSuccess(false);
     setTestResult(null);

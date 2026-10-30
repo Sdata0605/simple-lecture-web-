@@ -134,7 +134,7 @@ export function MarketingPayloadConfigCard({ subjectId, subjectName, onChange }:
         .eq("setting_key", settingKey)
         .maybeSingle();
       if (error) console.error("Error fetching ai_settings:", error);
-      return data?.setting_value as MarketingPayloadConfig | null;
+      return data?.setting_value as unknown as MarketingPayloadConfig | null;
     },
     enabled: !!subjectId,
   });

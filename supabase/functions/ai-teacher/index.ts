@@ -658,8 +658,23 @@ async function listSubjects() {
   return (subs ?? []).map((s) => ({ id: s.id, name: String(s.name).trim(), topics: counts.get(s.id) ?? 0 }));
 }
 
-async function handleSubjects() {
-  return json({ subjects: await listSubjects() });
+/** Indexed subjects that belong to a course the signed-in student is actively enrolled in. Anonymous callers get none. */
+async function listSubjectsForUser(token: string) {
+  if (!token) return [] as Awaited<ReturnType<typeof listSubjects>>;
+  const { data: u } = await sb.auth.getUser(token);
+  if (!u?.user) return [] as Awaited<ReturnType<typeof listSubjects>>;
+  const { data: enrolled } = await sb.from("enrollments").select("course_id, expires_at").eq("student_id", u.user.id).eq("is_active", true);
+  const now = Date.now();
+  const courseIds = (enrolled ?? []).filter((e) => !e.expires_at || Date.parse(e.expires_at) > now).map((e) => e.course_id);
+  if (!courseIds.length) return [] as Awaited<ReturnType<typeof listSubjects>>;
+  const { data: links } = await sb.from("course_subjects").select("subject_id").in("course_id", courseIds);
+  const allowed = new Set((links ?? []).map((l) => l.subject_id));
+  return (await listSubjects()).filter((s) => allowed.has(s.id));
+}
+
+async function handleSubjects(req: Request) {
+  const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  return json({ subjects: await listSubjectsForUser(token) });
 }
 
 // ---------------------------------------------------------------- syllabus catalog
@@ -968,7 +983,7 @@ Deno.serve(async (req) => {
     if (body.topicId && !uuid.test(String(body.topicId))) return json({ error: "Invalid topicId" }, 400);
 
     switch (action) {
-      case "subjects": return await handleSubjects();
+      case "subjects": return await handleSubjects(req);
       case "outline": return await handleOutline(body.subjectId);
       case "session": return await handleSession(body, await ipHash(req));
       case "chat": return await handleChat(body, await ipHash(req));

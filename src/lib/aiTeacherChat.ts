@@ -132,6 +132,7 @@ export async function teacherChat(
     const topicName = extractExternalTopicName(question);
     return {
       found: false,
+      topics: [],
       answer: `I am your personal AI tutor for your enrolled syllabus (${enrolledList}). I cannot answer questions about external topics like ${topicName}. Which of your enrolled subjects would you like to study today?`,
     };
   }

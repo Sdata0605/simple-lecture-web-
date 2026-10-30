@@ -103,7 +103,7 @@ export const useDashboardStudyPlanStrip = () => {
     queryFn: async () => {
       const [subs, chaps, tops] = await Promise.all([
         subjectIds.length
-          ? supabase.from('course_subjects').select('subject_id, subjects:subjects(id, name)').in('subject_id', subjectIds)
+          ? supabase.from('course_subjects').select('subject_id, subjects:popular_subjects(id, name)').in('subject_id', subjectIds)
           : Promise.resolve({ data: [] as any[] }),
         chapterIds.length
           ? supabase.from('subject_chapters').select('id, title').in('id', chapterIds)

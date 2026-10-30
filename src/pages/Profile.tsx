@@ -139,7 +139,7 @@ const Profile = () => {
                 <Camera className="h-4 w-4" />
               </Button>
             </div>
-            <h2 className="text-white text-xl font-bold mt-3">{userData.profile?.full_name || 'User'}</h2>
+            <h2 className="text-white text-xl font-bold mt-3">{userData.profile?.full_name || userData.email?.split('@')[0] || 'User'}</h2>
             <p className="text-white/80 text-sm">{userData.email}</p>
           </div>
         </div>
@@ -266,7 +266,7 @@ const Profile = () => {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <h1 className="text-3xl font-bold">{userData.profile?.full_name || 'User'}</h1>
+                    <h1 className="text-3xl font-bold">{userData.profile?.full_name || userData.email?.split('@')[0] || 'User'}</h1>
                     <p className="text-muted-foreground">{userData.email}</p>
                   </div>
                 </div>

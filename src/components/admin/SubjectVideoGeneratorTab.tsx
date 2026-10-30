@@ -673,6 +673,12 @@ export function SubjectVideoGeneratorTab({ subjectId, subjectName, serverIp = '2
         },
       };
 
+      const { data: subjectData } = await supabase
+        .from('popular_subjects')
+        .select('avatar_id')
+        .eq('id', subjectId)
+        .maybeSingle();
+
       if (subjectData?.avatar_id) {
         payload.avatar_id = subjectData.avatar_id;
       }

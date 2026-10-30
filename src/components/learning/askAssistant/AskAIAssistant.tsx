@@ -249,6 +249,7 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
   }, []);
 
   const onOrbClick = () => {
+    console.log("[AskAI] orb tapped", { orbAction: view.orbAction, status: live.status, speaking: live.speaking, micAvailable: live.micAvailable, muted: live.muted });
     if (view.orbAction === "interrupt") live.interrupt();
     else if (view.orbAction === "mute") live.toggleMute();
     else if (view.orbAction === "restart") {

@@ -2452,9 +2452,11 @@ export const EducationalVideoPlayer = ({
         return;
       }
       try {
-        if (screen?.orientation?.lock) {
+        // `lock` is missing from the TS DOM typings and from iOS Safari.
+        const orientation = screen?.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
+        if (orientation?.lock) {
           console.log('[Fullscreen] Calling orientation.lock(landscape)...');
-          await screen.orientation.lock('landscape');
+          await orientation.lock('landscape');
           console.log('[Fullscreen] orientation.lock SUCCESS');
         }
       } catch (err) {

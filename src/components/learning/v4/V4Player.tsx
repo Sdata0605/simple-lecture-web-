@@ -455,8 +455,10 @@ export const V4Player = ({ jobId, onClose, topicId, chapterId, subjectId, course
         }
       } else {
         await playerRef.current.requestFullscreen();
-        if (isMobile && screen.orientation) {
-          try { await screen.orientation.lock('landscape'); } catch (err) { console.debug('[V4Player] orientation lock failed', err); }
+        // `lock` is missing from the TS DOM typings and from iOS Safari.
+        const orientation = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
+        if (isMobile && orientation?.lock) {
+          try { await orientation.lock('landscape'); } catch (err) { console.debug('[V4Player] orientation lock failed', err); }
         }
       }
     } catch (err) {

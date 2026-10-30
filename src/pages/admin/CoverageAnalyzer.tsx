@@ -645,8 +645,8 @@ function CoverageDistribution({
   onBucketClick?: (f: "full" | "partial" | "low" | "nodata") => void;
 }) {
   const total = results.length;
-  if (!total) return null;
   const counts = useMemo(() => computeDistribution(results), [results]);
+  if (!total) return null;
   const pct = (n: number) => (total ? Math.round((n / total) * 100) : 0);
   const rows: { key: DistBucket; label: string; count: number; filter?: "full" | "partial" | "low" | "nodata" }[] = [
     { key: "b90", label: "90–100%", count: counts.b90, filter: "full" },

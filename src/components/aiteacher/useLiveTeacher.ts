@@ -548,7 +548,9 @@ export function useLiveTeacher({
           audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         });
         setMicAvailable(true);
-      } catch {
+        if (debugOn()) console.log("[teacher] mic: getUserMedia OK", stream?.getAudioTracks().map((t) => t.label));
+      } catch (micErr) {
+        if (debugOn()) console.log("[teacher] mic: getUserMedia FAILED", micErr);
         setMicAvailable(false);
         setNotice("Microphone is blocked, so you can type your questions and the teacher will answer by voice.");
       }
@@ -635,14 +637,30 @@ export function useLiveTeacher({
         URL.revokeObjectURL(url);
         const node = new AudioWorkletNode(ctx, "pcm-capture");
         workletRef.current = node;
+        // Debug trail (aiteacher.debug=1): logs when the mic is shut or reopened, and how many chunks were sent.
+        let lastGateClosed: boolean | null = null;
+        let chunksSent = 0;
+        let chunksDropped = 0;
         node.port.onmessage = (ev) => {
           // Only re-render when the level visibly changes (this state lives in the page component).
           setMicLevel((prev) => { const next = prev * 0.6 + Math.min(1, ev.data.rms * 6) * 0.4; return Math.abs(next - prev) < 0.08 ? prev : Math.round(next * 10) / 10; });
-          if (mutedRef.current || !sessionRef.current || statusRef.current !== "live") return;
-          if (echoGuardRef.current && gateRef.current.micClosed(performance.now())) return; // do not let the mic hear the teacher
+          const now = performance.now();
+          const gateClosed = echoGuardRef.current && gateRef.current.micClosed(now);
+          if (debugOn() && gateClosed !== lastGateClosed) {
+            console.log(`[teacher] mic ${gateClosed ? "CLOSED (not sent)" : "OPEN (sent)"}`, { teacherBusy: gateRef.current.busy(now), speaking: playingRef.current.size > 0, muted: mutedRef.current, status: statusRef.current });
+            lastGateClosed = gateClosed;
+          }
+          if (mutedRef.current || !sessionRef.current || statusRef.current !== "live") {
+            if (debugOn() && ++chunksDropped % 200 === 1) console.log("[teacher] mic chunk dropped", { muted: mutedRef.current, hasSession: !!sessionRef.current, status: statusRef.current });
+            return;
+          }
+          if (gateClosed) return; // do not let the mic hear the teacher
           try {
             sessionRef.current.sendRealtimeInput({ audio: { data: b64FromBuffer(ev.data.pcm), mimeType: "audio/pcm;rate=16000" } });
-          } catch { /* socket closing */ }
+            if (debugOn() && ++chunksSent % 100 === 0) console.log(`[teacher] mic: ${chunksSent} audio chunks sent (~${Math.round(chunksSent * 0.1)}s of speech)`);
+          } catch (sendErr) {
+            if (debugOn()) console.log("[teacher] mic: sendRealtimeInput threw", sendErr);
+          }
         };
         ctx.createMediaStreamSource(stream).connect(node);
       }

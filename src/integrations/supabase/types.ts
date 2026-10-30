@@ -8571,6 +8571,15 @@ export type Database = {
       }
     }
     Views: {
+      public_profiles: {
+        Row: {
+          avatar_url: string | null
+          email_name: string | null
+          full_name: string | null
+          id: string | null
+        }
+        Relationships: []
+      }
       student_analytics: {
         Row: {
           avg_score: number | null

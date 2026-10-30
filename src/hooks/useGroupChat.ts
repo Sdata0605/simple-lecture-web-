@@ -1,3 +1,4 @@
+import { withDisplayName } from '@/lib/displayName';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -129,11 +130,11 @@ export function useGroupMessages(groupId: string) {
       // Fetch sender profiles
       const senderIds = [...new Set((data || []).map(m => m.sender_id))];
       const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url')
+        .from('public_profiles')
+        .select('id, full_name, avatar_url, email_name')
         .in('id', senderIds);
       
-      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+      const profileMap = new Map(profiles?.map(p => [p.id, withDisplayName(p)]) || []);
       
       // Fetch reply_to messages
       const replyIds = (data || []).filter(m => m.reply_to_id).map(m => m.reply_to_id as string);
@@ -214,11 +215,11 @@ export function useGroupMembers(groupId: string) {
       // Fetch profiles separately
       const userIds = (data || []).map(m => m.user_id);
       const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url')
+        .from('public_profiles')
+        .select('id, full_name, avatar_url, email_name')
         .in('id', userIds);
       
-      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+      const profileMap = new Map(profiles?.map(p => [p.id, withDisplayName(p)]) || []);
       
       return (data || []).map(m => ({
         ...m,
@@ -361,7 +362,7 @@ export function useAddMember() {
       // Send system message
       const { data: user } = await supabase.auth.getUser();
       const { data: newMember } = await supabase
-        .from('profiles')
+        .from('public_profiles')
         .select('full_name')
         .eq('id', userId)
         .single();

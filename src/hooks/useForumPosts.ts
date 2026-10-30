@@ -1,3 +1,4 @@
+import { withDisplayName } from '@/lib/displayName';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -63,11 +64,11 @@ export function useForumPosts(categorySlug?: string) {
       // Fetch author profiles separately
       const authorIds = [...new Set((data || []).map(p => p.author_id))];
       const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url')
+        .from('public_profiles')
+        .select('id, full_name, avatar_url, email_name')
         .in('id', authorIds);
 
-      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+      const profileMap = new Map(profiles?.map(p => [p.id, withDisplayName(p)]) || []);
 
       return (data || []).map(post => ({
         ...post,
@@ -94,8 +95,8 @@ export function useForumPost(postId: string) {
 
       // Fetch author profile
       const { data: author } = await supabase
-        .from('profiles')
-        .select('full_name, avatar_url')
+        .from('public_profiles')
+        .select('full_name, avatar_url, email_name')
         .eq('id', data.author_id)
         .single();
 
@@ -105,7 +106,7 @@ export function useForumPost(postId: string) {
         .update({ view_count: (data.view_count || 0) + 1 })
         .eq('id', postId);
 
-      return { ...data, author } as ForumPost;
+      return { ...data, author: author ? withDisplayName(author) : author } as ForumPost;
     },
     enabled: !!postId,
   });

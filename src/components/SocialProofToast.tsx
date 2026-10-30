@@ -75,7 +75,7 @@ export const SocialProofToast = () => {
         const nameMap = new Map<string, string>();
         if (studentIds.length > 0) {
           const { data: profiles } = await supabase
-            .from('profiles')
+            .from('public_profiles')
             .select('id, full_name')
             .in('id', studentIds);
           (profiles || []).forEach(p => {

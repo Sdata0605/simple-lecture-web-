@@ -74,7 +74,7 @@ export function AITeacherPlanModal({
       if (user?.email) {
         setName(user.profile?.full_name || "");
         setEmail(user.email);
-        setPhone(user.profile?.phone || "");
+        setPhone(user.profile?.phone_number || "");
       } else {
         setName("");
         setEmail("");

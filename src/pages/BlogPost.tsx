@@ -61,6 +61,23 @@ const BlogPost = () => {
     enabled: !!slug,
   });
 
+  // Must stay above the early returns below: hooks have to run on every render.
+  const structuredData = useMemo(() => (post ? {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": post.title,
+    "description": post.meta_description,
+    "image": post.featured_image_url || undefined,
+    "datePublished": post.published_at,
+    "author": { "@type": "Organization", "name": "SimpleLecture" },
+    "publisher": { "@type": "Organization", "name": "SimpleLecture" },
+    "keywords": post.keywords?.join(", "),
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": `${typeof window !== 'undefined' ? window.location.origin : 'https://simplelecture.com'}/blog/${post.slug}`,
+    },
+  } : undefined), [post?.slug, post?.title, post?.published_at, post?.featured_image_url, post?.meta_description, post?.keywords]);
+
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
@@ -113,22 +130,6 @@ const BlogPost = () => {
   const sections = (Array.isArray(post.sections) ? post.sections : []) as BlogSection[];
   const wordCount = sections.reduce((acc, s) => acc + (s.content?.split(/\s+/).length || 0), 0);
   const readingTime = Math.max(1, Math.ceil(wordCount / 200));
-
-  const structuredData = useMemo(() => ({
-    "@context": "https://schema.org",
-    "@type": "BlogPosting",
-    "headline": post.title,
-    "description": post.meta_description,
-    "image": post.featured_image_url || undefined,
-    "datePublished": post.published_at,
-    "author": { "@type": "Organization", "name": "SimpleLecture" },
-    "publisher": { "@type": "Organization", "name": "SimpleLecture" },
-    "keywords": post.keywords?.join(", "),
-    "mainEntityOfPage": {
-      "@type": "WebPage",
-      "@id": `${typeof window !== 'undefined' ? window.location.origin : 'https://simplelecture.com'}/blog/${post.slug}`,
-    },
-  }), [post.slug, post.title, post.published_at, post.featured_image_url, post.meta_description, post.keywords]);
 
   return (
     <>

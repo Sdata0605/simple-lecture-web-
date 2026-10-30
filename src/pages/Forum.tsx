@@ -161,12 +161,12 @@ const Forum = () => {
                           <CardTitle className="text-lg">{category.name}</CardTitle>
                           <ArrowRight className="w-5 h-5 text-muted-foreground" />
                         </div>
-                        <CardDescription className="flex items-center justify-between">
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
                           <span>{category.description}</span>
                           <Badge variant="secondary" className="ml-2">
                             {category.post_count || 0}
                           </Badge>
-                        </CardDescription>
+                        </div>
                       </CardHeader>
                     </Card>
                   ))}

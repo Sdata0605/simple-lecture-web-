@@ -64,7 +64,7 @@ export function useFlaggedContent() {
       // Fetch reporter profiles
       const reporterIds = [...new Set((data || []).map(f => f.flagged_by))];
       const { data: profiles } = await supabase
-        .from('profiles')
+        .from('public_profiles')
         .select('id, full_name')
         .in('id', reporterIds);
 

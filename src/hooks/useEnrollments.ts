@@ -12,13 +12,7 @@ export const useEnrollments = () => {
         .from('enrollments')
         .select(`
           *,
-          courses (
-            *,
-            programs (
-              name,
-              thumbnail_url
-            )
-          )
+          courses (*)
         `)
         .eq('student_id', user.id)
         .eq('is_active', true);

@@ -797,6 +797,15 @@ export function AITeachingAssistant({ topicId, chapterId, topicTitle, subjectNam
     }
   }, [transcript, listening]);
 
+  // Debug trail for the mic button: logs every listening change and the final transcript
+  useEffect(() => {
+    console.log('[Speech] listening changed:', listening, { micAvailable: isMicrophoneAvailable, supported: browserSupportsSpeechRecognition });
+  }, [listening, isMicrophoneAvailable, browserSupportsSpeechRecognition]);
+
+  useEffect(() => {
+    if (transcript) console.log('[Speech] transcript:', transcript);
+  }, [transcript]);
+
   // Show toast when microphone access is denied
   useEffect(() => {
     if (isMicrophoneAvailable === false) {
