@@ -47,7 +47,6 @@ import {
   Layers,
   Settings as SettingsIcon,
   IndianRupee,
-  Zap,
   Play,
   Loader2,
   Check,
@@ -422,17 +421,6 @@ export default function AdminAITeacher() {
             <span className="text-xs text-muted-foreground">one-time</span>
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">Uses student's personal key</p>
-        </Card>
-
-        <Card className="p-4 shadow-sm bg-card border">
-          <div className="text-xs font-medium text-muted-foreground">Pro Managed Plan</div>
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
-              ₹{local.plan_pricing?.admin_price ?? 1000}
-            </span>
-            <span className="text-xs text-muted-foreground">one-time</span>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Runs on Admin Key Pool</p>
         </Card>
       </div>
 
@@ -862,67 +850,6 @@ export default function AdminAITeacher() {
                   </div>
                 </div>
 
-                {/* Plan 2: Pro Plan (Admin Key) */}
-                <div className="rounded-2xl border-2 border-emerald-500 bg-gradient-to-b from-emerald-50/40 to-card p-5 space-y-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <Badge className="bg-emerald-700 text-white font-semibold text-xs">
-                      Admin Key Powered · Zero Setup
-                    </Badge>
-                    <span className="p-2 rounded-xl bg-emerald-100 text-emerald-700">
-                      <Zap className="h-4 w-4" />
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="font-bold text-base text-foreground">Plan 2: Pro Plan</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Runs completely on SimpleLecture's managed 100-key pool.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5 pt-2">
-                    <Label htmlFor="admin-price" className="text-xs font-semibold">
-                      Plan Price (₹ INR)
-                    </Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-sm font-bold text-emerald-700">
-                        ₹
-                      </span>
-                      <Input
-                        id="admin-price"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={local.plan_pricing?.admin_price ?? 1000}
-                        onChange={(e) =>
-                          patchLocal({
-                            plan_pricing: {
-                              byok_price: local.plan_pricing?.byok_price ?? 500,
-                              admin_price: Number(e.target.value),
-                            },
-                          })
-                        }
-                        className="pl-7 font-bold text-base text-emerald-700 dark:text-emerald-400 bg-background"
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">Default: ₹1,000</p>
-                  </div>
-
-                  <div className="rounded-xl border bg-muted/30 p-3 space-y-1.5 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5 font-medium text-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span>Works directly on SimpleLecture's 100-key pool</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 font-medium text-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span>Zero setup for student — 1-click learning access</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 font-medium text-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span>Automated failover if any key in pool hits limits</span>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               <div className="flex justify-end pt-2">
