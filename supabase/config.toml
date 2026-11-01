@@ -363,3 +363,6 @@ verify_jwt = false
 
 [functions.ai-teacher-index]
 verify_jwt = false
+
+[functions.reminder-call-audio]
+verify_jwt = true
