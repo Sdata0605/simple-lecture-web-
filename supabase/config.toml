@@ -370,3 +370,6 @@ verify_jwt = true
 # Auth is checked inside the function (user JWT, or x-cron-key for the scheduled job).
 [functions.reminder-prepare-next-day]
 verify_jwt = false
+
+[functions.delete-my-account]
+verify_jwt = true
