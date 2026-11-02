@@ -94,7 +94,7 @@ export async function ensureCallAudio(opts: {
   }
 
   // 2. Daily quota for new generations (same limit as reminder-call-audio).
-  const dailyLimit = Math.max(1, parseInt(Deno.env.get("REMINDER_TTS_DAILY_LIMIT") ?? "20", 10) || 20);
+  const dailyLimit = Math.max(1, parseInt(Deno.env.get("REMINDER_TTS_DAILY_LIMIT") ?? "40", 10) || 40);
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { count: usedCount, error: quotaErr } = await sb
     .from("reminder_tts_usage")
