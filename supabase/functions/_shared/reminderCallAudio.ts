@@ -93,18 +93,7 @@ export async function ensureCallAudio(opts: {
     return { status: "cached", audioPath, hash: primary.hash, engine: primary.engine };
   }
 
-  // 2. Daily quota for new generations (same limit as reminder-call-audio).
-  const dailyLimit = Math.max(1, parseInt(Deno.env.get("REMINDER_TTS_DAILY_LIMIT") ?? "40", 10) || 40);
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { count: usedCount, error: quotaErr } = await sb
-    .from("reminder_tts_usage")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("cached", false)
-    .eq("success", true)
-    .gte("created_at", since);
-  if (quotaErr) return { status: "failed" };
-  if ((usedCount ?? 0) >= dailyLimit) return { status: "quota" };
+  // 2. No daily cap (per product decision).
 
   // 3. Keys.
   const sarvamKey = Deno.env.get("SARVAM_API_KEY") ?? "";

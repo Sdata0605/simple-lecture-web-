@@ -253,20 +253,7 @@ serve(async (req) => {
     });
   }
 
-  // ── 5. Daily quota (non-cached generations only) ────────────────────────
-  const dailyLimit = Math.max(1, parseInt(Deno.env.get("REMINDER_TTS_DAILY_LIMIT") ?? "40", 10) || 40);
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { count: usedCount, error: quotaErr } = await sb
-    .from("reminder_tts_usage")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("cached", false)
-    .eq("success", true)
-    .gte("created_at", since);
-  if (quotaErr) return fail(500, "internal");
-  if ((usedCount ?? 0) >= dailyLimit) {
-    return json({ error: "daily_limit", fallback: true }, 429);
-  }
+  // ── 5. No daily cap: every student can generate as many reminder voices as needed ──
 
   // ── 6. Kill switch and keys ─────────────────────────────────────────────
   if (Deno.env.get("CALL_REMINDERS_ENABLED") === "false") {
