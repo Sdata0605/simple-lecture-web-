@@ -366,3 +366,7 @@ verify_jwt = false
 
 [functions.reminder-call-audio]
 verify_jwt = true
+
+# Auth is checked inside the function (user JWT, or x-cron-key for the scheduled job).
+[functions.reminder-prepare-next-day]
+verify_jwt = false
