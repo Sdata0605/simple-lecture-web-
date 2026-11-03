@@ -1,17 +1,19 @@
 // The Ask AI screen of the lecture player. Everything the student hears is the live AI Teacher's own voice;
 // this component only shows what is happening.
 //   - Laptops and tablets: the lesson board on the left (the question, then the explanation as steps, from
-//     the basics to the answer and a question to solve) and the teacher on the right (orb, captions, quick
-//     buttons, type box).
-//   - Phones: one step at a time with the orb docked small underneath; before the first step the orb is big.
+//     the basics to the answer and a question to solve) and the teacher on the right (robot, captions, quick
+//     buttons, type box). Once a presentation is on screen the teacher slides away and a robot in the top bar
+//     brings it back.
+//   - Phones: one step at a time with the teacher docked underneath; the teacher becomes a bottom sheet.
 // It is the content of the `.aa-overlay` grid below the top bar.
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type Dispatch, type FormEvent } from "react";
 import { Keyboard, Mic, MicOff, Send } from "lucide-react";
 import { QUICK_REQUESTS, type Lesson, type LectureView } from "@/lib/aiTeacherLecture";
 import type { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
+import type { FocusEvent, FocusState } from "@/lib/askPresentationFocus";
 import { LessonBoard } from "./LessonBoard";
 import type { CardActions } from "./LessonCards";
-import { VoiceOrb } from "./VoiceOrb";
+import { RobotFace } from "./RobotFace";
 import "./ask-assistant.css";
 import "./lesson-board.css";
 
@@ -28,28 +30,19 @@ export interface LectureOrbScreenProps {
   onSend: (text: string) => void;
   /** A quick button: the prompt goes to the teacher without showing up as the student's question. */
   onQuick: (prompt: string) => void;
+  /** Whether a presentation is on screen and whether the teacher panel is open over it. */
+  focus: FocusState;
+  dispatchFocus: Dispatch<FocusEvent>;
 }
 
-const WIDE = "(min-width: 900px)";
-
-/** True on laptops and tablets, where the board and the teacher sit side by side. */
-function useWide(): boolean {
-  const [wide, setWide] = useState(() => window.matchMedia?.(WIDE).matches ?? true);
-  useEffect(() => {
-    const query = window.matchMedia?.(WIDE);
-    if (!query) return;
-    const update = () => setWide(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  return wide;
-}
-
-export function LectureOrbScreen({ view, lesson, live, getLevel, onOrbClick, onSend, onQuick }: LectureOrbScreenProps) {
-  const wide = useWide();
+export function LectureOrbScreen({ view, lesson, live, onOrbClick, onSend, onQuick, focus, dispatchFocus }: LectureOrbScreenProps) {
   const [typed, setTyped] = useState("");
   const hasBoard = lesson.cards.length > 0;
+
+  // A presentation starts when the first card arrives and ends when the lesson board is cleared.
+  useEffect(() => {
+    dispatchFocus(hasBoard ? "PRESENTATION_START" : "PRESENTATION_END");
+  }, [hasBoard, dispatchFocus]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -59,30 +52,53 @@ export function LectureOrbScreen({ view, lesson, live, getLevel, onOrbClick, onS
     onSend(text);
   };
 
-  const problem = live.error || live.notice;
   const micLive = view.orbMode === "listening";
-  // Big in the split layout, and on a phone before the first step; docked small once the board is showing.
-  const orbSize = wide ? 170 : hasBoard ? 56 : 190;
+  const presenting = focus !== "lesson-full";
+  const panelOpen = focus === "presenting-with-panel";
+
+  const stageClass = ["aa-stage", hasBoard ? "has-board" : "", presenting ? "is-presenting" : "", panelOpen ? "is-panel-open" : ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <main className={`aa-stage${hasBoard ? " has-board" : ""}`}>
+    <main className={stageClass}>
       <section className="aa-board" aria-label="Lesson board">
         <LessonBoard lesson={lesson} actions={live} />
       </section>
 
+      <div
+        className="scrim"
+        aria-hidden="true"
+        onClick={() => {
+          if (focus === "presenting-with-panel") dispatchFocus("MINIMISE");
+        }}
+      />
+
       <aside className="aa-teacher" aria-label="Your teacher">
+        {hasBoard && (
+          <button
+            type="button"
+            className="aa-minimise"
+            onClick={() => dispatchFocus("MINIMISE")}
+            aria-label="Minimise teacher panel"
+          >
+            Minimise
+          </button>
+        )}
+
         <div className="aa-orb-wrap">
-          <VoiceOrb
-            mode={view.orbMode}
-            getLevel={getLevel}
-            size={orbSize}
+          <button
+            type="button"
+            className="aa-robot-btn"
             onClick={view.orbAction === "none" ? undefined : onOrbClick}
-            ariaLabel={view.orbLabel}
-          />
+            aria-label={view.orbLabel}
+          >
+            <RobotFace size={140} mode={view.orbMode} />
+          </button>
         </div>
 
         <div className="aa-text" aria-live="polite">
-          {problem && <p className="aa-notice">{problem}</p>}
+          {(live.error || live.notice) && <p className="aa-notice">{live.error || live.notice}</p>}
           {view.status && <p className={`aa-status${view.statusTone === "hearing" ? " is-hearing" : ""}`}>{view.status}</p>}
           {view.studentLine?.live && <p className="aa-transcript">{view.studentLine.text}</p>}
           {/* Once the board is up, the question sits at the top of it instead. */}

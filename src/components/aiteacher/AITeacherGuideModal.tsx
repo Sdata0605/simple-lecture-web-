@@ -8,8 +8,6 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Sparkles,
   KeyRound,
@@ -20,19 +18,10 @@ import {
   ExternalLink,
   HelpCircle,
   Copy,
-  Eye,
-  EyeOff,
-  Loader2,
-  XCircle,
   ShieldCheck,
-  Zap,
   GraduationCap,
   Layers,
 } from "lucide-react";
-import { loadPrefs, savePrefs } from "@/lib/aiTeacherPrefs";
-import { testOwnKey } from "@/lib/aiTeacherChat";
-import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
-import { cn } from "@/lib/utils";
 
 interface AITeacherGuideModalProps {
   open: boolean;
@@ -46,47 +35,10 @@ export function AITeacherGuideModal({
   defaultTab = "how-to-use",
 }: AITeacherGuideModalProps) {
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
-  const [apiKey, setApiKey] = useState("");
-  const [showKey, setShowKey] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const { isPlan1000, isPlan500 } = useAITeacherSubscription();
 
-  // Load existing key when modal opens
   useEffect(() => {
-    if (open) {
-      const prefs = loadPrefs();
-      setApiKey(prefs.apiKey || "");
-      setTestResult(null);
-      setSaveSuccess(false);
-      setActiveTab(defaultTab);
-    }
+    if (open) setActiveTab(defaultTab);
   }, [open, defaultTab]);
-
-  const handleTestKey = async () => {
-    const keyToTest = apiKey.trim();
-    if (!keyToTest) return;
-    setTesting(true);
-    setTestResult(null);
-    const result = await testOwnKey(keyToTest);
-    setTestResult(result);
-    setTesting(false);
-  };
-
-  const handleSaveKey = () => {
-    const cleanKey = apiKey.trim();
-    savePrefs({ ...loadPrefs(), apiKey: cleanKey });
-    setSaveSuccess(true);
-    setTestResult(null);
-  };
-
-  const handleRemoveKey = () => {
-    savePrefs({ ...loadPrefs(), apiKey: "" });
-    setApiKey("");
-    setSaveSuccess(false);
-    setTestResult(null);
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -97,11 +49,11 @@ export function AITeacherGuideModal({
               <GraduationCap className="h-5 w-5" />
             </span>
             <DialogTitle className="text-xl font-bold">
-              AI Teacher Guide & API Key Setup
+              AI Teacher Guide & Key Setup
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
-            Everything you need to know about using your 1-to-1 Personal AI Teacher and setting up your Google Gemini API key.
+            Everything you need to know about using your 1-to-1 AI Teacher and setting up your Google Gemini API key.
           </DialogDescription>
         </DialogHeader>
 
@@ -113,7 +65,7 @@ export function AITeacherGuideModal({
             </TabsTrigger>
             <TabsTrigger value="api-key" className="gap-2 text-xs sm:text-sm font-semibold py-2">
               <KeyRound className="h-4 w-4" />
-              Create & Set API Key
+              Create & Add Key
             </TabsTrigger>
           </TabsList>
 
@@ -204,24 +156,7 @@ export function AITeacherGuideModal({
               </div>
             </div>
 
-            {/* Plan Info box */}
-            <div className="rounded-xl border p-3.5 bg-muted/40 space-y-2 text-xs">
-              <h4 className="font-bold text-foreground flex items-center gap-1.5">
-                <Zap className="h-4 w-4 text-amber-600" />
-                Understanding Your AI Teacher Plan:
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                <div className="p-2.5 rounded-lg border bg-card space-y-1">
-                  <span className="font-bold text-amber-800 dark:text-amber-300 block">
-                    Plus Plan (₹500)
-                  </span>
-                  <p className="text-muted-foreground">
-                    Affordable plan using your own personal Google Gemini API key. See the next tab to get and set your key!
-                  </p>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
+                    </TabsContent>
 
           {/* TAB 2: CREATE & SET API KEY */}
           <TabsContent value="api-key" className="space-y-5 pt-1">
@@ -293,7 +228,7 @@ export function AITeacherGuideModal({
                     5
                   </span>
                   <span>
-                    Paste the key in the input box below and click <strong>"Save Key"</strong>.
+                    Add the key in your AI Teacher settings (up to 10 keys). Use <strong>"Test"</strong> to check it works.
                   </span>
                 </div>
               </div>
@@ -313,131 +248,12 @@ export function AITeacherGuideModal({
               </div>
             </div>
 
-            {/* Set & Test API Key Form */}
-            <div className="rounded-xl border p-4 bg-card shadow-sm space-y-3.5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-bold text-foreground">
-                    Set Your Gemini API Key
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Paste your key here to activate it for your 1-to-1 classes.
-                  </p>
-                </div>
-                {apiKey.trim() ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-300">
-                    <CheckCircle2 className="h-3 w-3" /> Key Set
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-300">
-                    Key Not Set
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="guide-api-key" className="text-xs font-semibold">
-                  Google Gemini API Key
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="guide-api-key"
-                    type={showKey ? "text" : "password"}
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="AIzaSy..."
-                    value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      setSaveSuccess(false);
-                      setTestResult(null);
-                    }}
-                    className="font-mono text-xs bg-background"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0"
-                    onClick={() => setShowKey((v) => !v)}
-                    aria-label={showKey ? "Hide key" : "Show key"}
-                  >
-                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <Button
-                  size="sm"
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs"
-                  disabled={!apiKey.trim()}
-                  onClick={handleSaveKey}
-                >
-                  Save Key
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs font-semibold"
-                  disabled={!apiKey.trim() || testing}
-                  onClick={handleTestKey}
-                >
-                  {testing ? (
-                    <>
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      Testing...
-                    </>
-                  ) : (
-                    "Test Key"
-                  )}
-                </Button>
-                {apiKey.trim() && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs text-destructive hover:text-destructive"
-                    onClick={handleRemoveKey}
-                  >
-                    Remove Key
-                  </Button>
-                )}
-              </div>
-
-              {/* Feedback messages */}
-              {saveSuccess && (
-                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 p-2.5 rounded-lg border border-emerald-300">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span>API Key saved successfully! Your AI Teacher is ready to connect.</span>
-                </div>
-              )}
-
-              {testResult && (
-                <div
-                  className={cn(
-                    "flex items-center gap-2 text-xs font-medium p-2.5 rounded-lg border",
-                    testResult.ok
-                      ? "text-emerald-800 bg-emerald-50 border-emerald-300"
-                      : "text-destructive bg-destructive/10 border-destructive/30"
-                  )}
-                >
-                  {testResult.ok ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  ) : (
-                    <XCircle className="h-4 w-4 shrink-0 text-destructive" />
-                  )}
-                  <span>{testResult.message}</span>
-                </div>
-              )}
-
-              {/* Security info */}
-              <div className="flex items-start gap-2 pt-1 text-[11px] text-muted-foreground leading-relaxed">
-                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span>
-                  <strong>100% Private & Secure:</strong> Your API key is stored only inside your browser's local storage and used directly to communicate with Google. Our backend servers never receive, store, or log your personal key.
-                </span>
-              </div>
+            {/* Security info */}
+            <div className="flex items-start gap-2 pt-1 text-[11px] text-muted-foreground leading-relaxed">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span>
+                <strong>Private:</strong> Your keys are saved to your account and used only for your AI Teacher. They are shown masked after you save them.
+              </span>
             </div>
           </TabsContent>
         </Tabs>

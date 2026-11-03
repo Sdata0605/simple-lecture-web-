@@ -40,15 +40,13 @@ export interface ChatResult {
   quiz?: QuizData;
   bigq?: BigQuestionData;
 }
-/** With the student's own key the server only prepares the request; the browser calls Gemini. */
-export interface PreparedChat extends Omit<ChatResult, "answer" | "quiz" | "bigq"> {
-  mode: string;
-  prepare: { system: string; contents: unknown[]; json: boolean; models: string[] };
-}
 export interface LiveSession {
-  /** Absent when the student uses their own API key. */
-  token?: string;
-  byok?: boolean;
+  /** One-use token minted with the student's own Gemini key. */
+  token: string;
+  /** The saved key this session runs on (used for display and failover reporting). */
+  keyId: string;
+  keyLabel: string;
+  keyMasked: string;
   apiVersion: string;
   lockLevel?: string;
   model: string;
@@ -63,7 +61,9 @@ export interface LiveSession {
 
 export class TeacherApiError extends Error {
   status?: number;
-  constructor(message: string, status?: number) { super(message); this.status = status; }
+  /** Machine-readable server code (e.g. KEY_LIMIT, INVALID_KEY), when the server sent one. */
+  code?: string;
+  constructor(message: string, status?: number, code?: string) { super(message); this.status = status; this.code = code; }
 }
 
 /** Calls the public `ai-teacher` edge function. No login needed. */
@@ -73,17 +73,18 @@ export async function teacherApi<T>(action: string, body: Record<string, unknown
   for (let attempt = 1; ; attempt++) {
     const { data, error } = await supabase.functions.invoke("ai-teacher", { body: { action, ...body } });
     if (!error) {
-      if (data?.error) throw new TeacherApiError(String(data.error));
+      if (data?.error) throw new TeacherApiError(String(data.error), undefined, data.code ? String(data.code) : undefined);
       return data as T;
     }
     let message = "";
     let status: number | undefined;
+    let code: string | undefined;
     const res = (error as any).context as Response | undefined;
     if (res && typeof res.json === "function") {
       status = res.status;
-      try { const j = await res.json(); if (j?.error) message = String(j.error); } catch { /* not JSON */ }
+      try { const j = await res.json(); if (j?.error) message = String(j.error); if (j?.code) code = String(j.code); } catch { /* not JSON */ }
     }
-    if (message) throw new TeacherApiError(message, status);   // an answer from the function itself
+    if (message) throw new TeacherApiError(message, status, code);   // an answer from the function itself
     if (attempt < 2) { await new Promise((r) => setTimeout(r, 800)); continue; }
     throw new TeacherApiError(
       status ? "The teacher is not responding right now. Please try again." : "Connection problem. Please check your internet and try again.",

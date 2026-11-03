@@ -17,7 +17,6 @@ import { useSearchCourses } from "@/hooks/usePaginatedCourses";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import { openAskAI } from "@/lib/askAIStore";
 import logo from "@/assets/website-logo.png";
 
@@ -30,7 +29,6 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
 
   // Use centralized auth context instead of duplicate listeners
   const { user } = useAuth();
-  const { hasActivePlan } = useAITeacherSubscription();
   const { data: currentUserData } = useCurrentUser();
   const userProfile = currentUserData?.profile;
 
@@ -239,12 +237,10 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
                         My Recordings
                       </Link>
                     </DropdownMenuItem>
-                    {hasActivePlan && (
-                      <DropdownMenuItem onClick={() => openAskAI()} className="cursor-pointer">
-                        <GraduationCap className="mr-2 h-4 w-4" />
-                        AI Teacher
-                      </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem onClick={() => openAskAI()} className="cursor-pointer">
+                      <GraduationCap className="mr-2 h-4 w-4" />
+                      AI Teacher
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
                       <LogOut className="mr-2 h-4 w-4" />
@@ -327,18 +323,16 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
                   <Link to="/my-courses" className="text-sm font-medium hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>
                     My Courses
                   </Link>
-                  {hasActivePlan && (
-                    <button
-                      type="button"
-                      className="text-left text-sm font-medium hover:text-primary transition-colors"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        openAskAI();
-                      }}
-                    >
-                      AI Teacher
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="text-left text-sm font-medium hover:text-primary transition-colors"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      openAskAI();
+                    }}
+                  >
+                    AI Teacher
+                  </button>
                   <Button variant="destructive" onClick={handleLogout} className="w-full">
                     Logout
                   </Button>

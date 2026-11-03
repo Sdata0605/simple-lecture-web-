@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { mcLog, getNavType } from "@/lib/debug/myCoursesLogger";
 import { HelmetProvider } from 'react-helmet-async';
 import { queryClient } from "@/lib/queryClient";
@@ -20,7 +20,7 @@ import { RouteNoIndex } from "@/components/SEO";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { AIAssistantJobProvider } from "@/contexts/AIAssistantJobContext";
 import { AIAssistantBackgroundUI } from "@/components/ai-assistant/AIAssistantBackgroundUI";
-import { closeAskAI, useAskAIRequest } from "@/lib/askAIStore";
+import { closeAskAI, openAskAI, useAskAIRequest } from "@/lib/askAIStore";
 
 // Essential pages loaded immediately
 import Index from "./pages/Index";
@@ -149,6 +149,7 @@ const V5PlayerPage = lazyWithRetry(() => import("./pages/V5PlayerPage"));
 const V3TrialPage = lazyWithRetry(() => import("./pages/V3TrialPage"));
 const AITeacher = lazyWithRetry(() => import("./pages/AITeacher"));
 const AITeacherSettings = lazyWithRetry(() => import("./pages/AITeacherSettings"));
+const AITeacherPlus = lazyWithRetry(() => import("./pages/AITeacherPlus"));
 
 // Forum & Support pages
 const Forum = lazyWithRetry(() => import("./pages/Forum"));
@@ -299,9 +300,19 @@ const VisitorTracker = () => { useVisitorTracking(); return null; };
 const AskAIHost = lazyWithRetry(() => import("@/components/learning/askAssistant/AskAIHost"));
 const AskAILayer = () => {
   const request = useAskAIRequest();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { pathname } = location;
   // Going to another page (browser Back, a link) ends the lesson, so the microphone never stays on behind it.
   useEffect(() => closeAskAI, [pathname]);
+  // A redirect (e.g. /aiteacher) can ask for Ask AI to open on arrival. Runs after the close above, so it stays open.
+  useEffect(() => {
+    const pending = (location.state as { askAI?: { subjectName?: string } } | null)?.askAI;
+    if (!pending) return;
+    openAskAI({ subjectName: pending.subjectName });
+    navigate(location.pathname + location.search, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
   if (!request) return null;
   return (
     <Suspense fallback={null}>
@@ -373,6 +384,7 @@ const App = () => (
                 <Route path="/v3-trial" element={<V3TrialPage />} />
                 <Route path="/aiteacher" element={<AITeacher />} />
                 <Route path="/aiteacher/settings" element={<AITeacherSettings />} />
+                <Route path="/aiteacher/plus" element={<AITeacherPlus />} />
                 <Route path="/aiteacher-1-to-1" element={<AITeacher />} />
                 <Route path="/watch/:recordingId" element={<WatchRecording />} />
                 

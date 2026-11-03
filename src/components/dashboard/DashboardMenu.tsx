@@ -7,7 +7,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/lib/queryClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
-import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import { openAskAI } from "@/lib/askAIStore";
 import { useMemo, type ComponentType } from "react";
 import { cn } from "@/lib/utils";
@@ -35,10 +34,7 @@ export const DashboardMenu = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: profile } = useUserProfile();
-  const { hasActivePlan } = useAITeacherSubscription();
-
   const menuItems = useMemo(() => {
-    if (!hasActivePlan) return items;
     const list: MenuItem[] = [...items];
     const myCoursesIdx = list.findIndex((i) => "to" in i && i.to === "/my-courses");
     // Opens the Ask AI screen (the one the lecture player has) instead of going to a page of its own.
@@ -49,7 +45,7 @@ export const DashboardMenu = () => {
       list.unshift(aiItem);
     }
     return list;
-  }, [hasActivePlan]);
+  }, []);
 
   const initials = (profile?.full_name || profile?.email || "U").slice(0, 2).toUpperCase();
 

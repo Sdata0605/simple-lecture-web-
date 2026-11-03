@@ -1,13 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import type { HeroVideoSettings } from "@/hooks/useHomepageData";
 import { HeroLecturePlayer } from "@/components/HeroLecturePlayer";
 import { HeroV4Launcher } from "@/components/HeroV4Launcher";
 import { HOMEPAGE_HERO_LECTURE } from "@/lib/homepageHeroLecture";
-import { AITeacherPlanModal } from "@/components/aiteacher/AITeacherPlanModal";
-import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
+import { usePlanState } from "@/lib/aiTeacherKeys";
+import { openAskAI } from "@/lib/askAIStore";
 
 // Only import first hero image statically - others loaded after first paint
 import heroBoardExams from "@/assets/hero-board-exams.jpg";
@@ -52,10 +52,15 @@ interface HeroProps {
 
 export const Hero = (_props: HeroProps) => {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [planModalOpen, setPlanModalOpen] = useState(false);
-  const { hasActivePlan } = useAITeacherSubscription();
+  const { state: planState } = usePlanState();
   const heroImages = [heroBoardExams, heroBoardExams, heroBoardExams];
   const navigate = useNavigate();
+  // Only a confirmed non-subscriber is sent to the purchase page. Loading and unknown open the overlay,
+  // which shows the plan check or the retry message.
+  const onAITeacherClick = () => {
+    if (planState === "inactive") navigate("/aiteacher/plus");
+    else openAskAI();
+  };
 
   // Auto-rotate slides - pause when tab is hidden (memory leak fix)
   useEffect(() => {
@@ -72,9 +77,6 @@ export const Hero = (_props: HeroProps) => {
     image: heroImages[index],
   }));
 
-  const handleCtaClick = () => {
-    navigate("/programs");
-  };
 
   return (
     <section className="relative min-h-[80vh] md:min-h-[90vh] lg:min-h-screen flex items-center overflow-clip pb-8">
@@ -163,25 +165,25 @@ export const Hero = (_props: HeroProps) => {
                   </div>
 
                   <div className="pt-4 flex flex-col sm:flex-row flex-wrap gap-3 justify-center lg:justify-start">
-                    {!hasActivePlan && (
-                      <Button
-                        size="lg"
-                        className="bg-gradient-to-r from-amber-400 via-amber-300 to-orange-400 hover:from-amber-300 hover:to-orange-500 text-slate-950 font-bold text-base md:text-lg px-6 py-5 h-auto rounded-xl shadow-xl shadow-amber-500/25 border border-amber-200/60 transition-all duration-300 hover:scale-[1.02] flex items-center gap-2.5"
-                        onClick={() => setPlanModalOpen(true)}
-                      >
-                        <Sparkles className="w-5 h-5 text-slate-950 shrink-0" />
-                        <span>Purchase Your Personal AI Teacher</span>
-                      </Button>
-                    )}
+                    <Button
+                      size="lg"
+                      className="bg-gradient-to-r from-amber-400 via-amber-300 to-orange-400 hover:from-amber-300 hover:to-orange-500 text-slate-950 font-bold text-base md:text-lg px-6 py-5 h-auto rounded-xl shadow-xl shadow-amber-500/25 border border-amber-200/60 transition-all duration-300 hover:scale-[1.02] flex items-center gap-2.5"
+                      onClick={onAITeacherClick}
+                    >
+                      <Sparkles className="w-5 h-5 text-slate-950 shrink-0" />
+                      <span>{planState === "inactive" ? "Purchase Your Personal AI Teacher" : "Open your AI Teacher"}</span>
+                    </Button>
                     <Button 
                       size="lg" 
                       className="relative overflow-hidden bg-white/95 backdrop-blur-sm text-primary hover:bg-white shadow-2xl shadow-purple-500/30 border border-white/50 text-base md:text-lg px-6 py-5 h-auto rounded-xl group transition-all duration-300 hover:shadow-purple-500/40 hover:scale-[1.02] whitespace-normal text-left"
-                      onClick={handleCtaClick}
+                      asChild
                     >
-                      <span className="relative z-10 flex items-center gap-2 font-semibold">
-                        {slide.cta}
-                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1.5 transition-transform duration-300" />
-                      </span>
+                      <Link to="/programs">
+                        <span className="relative z-10 flex items-center gap-2 font-semibold">
+                          {slide.cta}
+                          <ArrowRight className="w-5 h-5 group-hover:translate-x-1.5 transition-transform duration-300" />
+                        </span>
+                      </Link>
                     </Button>
                     <Button
                       size="lg"
@@ -254,7 +256,6 @@ export const Hero = (_props: HeroProps) => {
           </div>
         </div>
       </div>
-      <AITeacherPlanModal open={planModalOpen} onOpenChange={setPlanModalOpen} />
     </section>
   );
 };

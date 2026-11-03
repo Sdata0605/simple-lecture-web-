@@ -1,19 +1,36 @@
 // Public backend for the "AI Teacher 1-to-1" page (/aiteacher). No login required, so:
 //  - the Gemini API key (ai_settings.ai_teacher_1to1_config) never leaves this function;
 //    the browser only receives a short-lived, single-use Live API token (ephemeral token),
-//  - every public action is rate-limited per IP (table ai_teacher_usage),
+//  - voice and chat use the signed-in student's own Gemini keys (table ai_teacher_user_keys, see
+//    _shared/studentKeys.ts); the admin key pool is no longer used for students,
+//  - session and chat are rate-limited per user (table ai_teacher_usage, ip_hash holds a hash of the user id),
+//    search is rate-limited per IP,
 //  - answers are grounded in the knowledge index (knowledge_chunks / topic_routing_cards).
 //
 // POST { action, ... }
 //   subjects                          -> subjects that have an index
 //   outline   { subjectId }           -> chapters/topics available for the subject
-//   session   { subjectId }           -> ephemeral Live API token + voice config
+//   session   { subjectId }           -> ephemeral Live API token + voice config (signed-in user)
 //   search    { subjectId, query | topicId } -> references, documents, practice questions
-//   chat      { subjectId, question, messages?, topicId? } -> text answer + references
+//   chat      { subjectId, question, messages?, topicId? } -> text answer + references (signed-in user)
 //   test      { apiKey?, liveModel?, chatModel? } (admin only) -> key / model checks
+//
+// Errors carry { error, code } for session and chat: UNAUTHORIZED 401, PLAN_REQUIRED 402 (no Plus plan
+// or Pro plan in sales_leads), NO_KEYS 409 (the student has no usable key), ALL_KEYS_FAILED 429 (every
+// key failed), RATE_LIMITED 429.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GoogleGenAI } from "npm:@google/genai@2.28.0";
+import {
+  classifyGeminiError,
+  loadStudentKeys,
+  markKey,
+  setActiveKey,
+  sha256Hex,
+  touchKey,
+  type StudentKey,
+} from "../_shared/studentKeys.ts";
+import { hasPlusPlan } from "../_shared/plusPlan.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -26,18 +43,23 @@ const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
   auth: { persistSession: false },
 });
 
-// ---------------------------------------------------------------- config
-interface KeyPoolItem {
-  id?: string;
-  key: string;
-  label?: string;
-  status?: "active" | "rate_limited" | "invalid" | "untested";
+/** An error with an HTTP status and a stable code, returned as { error, code }. */
+class TeacherError extends Error {
+  constructor(public status: number, public code: string, message: string) {
+    super(message);
+  }
 }
 
+/** A key reference: the student's key (StudentKey) or the admin test key (id null). */
+interface KeyRef {
+  id: string | null;
+  key: string;
+}
+
+// ---------------------------------------------------------------- config
 interface TeacherConfig {
   enabled: boolean;
   google_api_key: string;
-  key_pool?: KeyPoolItem[];
   live_model: string;
   chat_model: string;
   voice_name: string;
@@ -46,29 +68,11 @@ interface TeacherConfig {
 const DEFAULT_CONFIG: TeacherConfig = {
   enabled: false,
   google_api_key: "",
-  key_pool: [],
   live_model: "gemini-3.8-live",
   chat_model: "gemini-3.1-flash-lite",
   voice_name: "Kore",
   teacher_name: "AI Teacher",
 };
-
-function getCandidateKeys(cfg: TeacherConfig): string[] {
-  const keys: string[] = [];
-  if (cfg.google_api_key && cfg.google_api_key.trim()) {
-    keys.push(cfg.google_api_key.trim());
-  }
-  if (Array.isArray(cfg.key_pool)) {
-    for (const item of cfg.key_pool) {
-      const k = typeof item === "string" ? item : item?.key;
-      const status = typeof item === "object" ? item?.status : undefined;
-      if (k && typeof k === "string" && k.trim() && status !== "invalid") {
-        keys.push(k.trim());
-      }
-    }
-  }
-  return [...new Set(keys)];
-}
 
 async function loadConfig(): Promise<TeacherConfig> {
   const { data } = await sb.from("ai_settings").select("setting_value").eq("setting_key", "ai_teacher_1to1_config").maybeSingle();
@@ -77,7 +81,6 @@ async function loadConfig(): Promise<TeacherConfig> {
   return {
     enabled: !!v.enabled,
     google_api_key: clean(v.google_api_key, ""),
-    key_pool: Array.isArray((v as any).key_pool) ? (v as any).key_pool : [],
     live_model: clean(v.live_model, DEFAULT_CONFIG.live_model),
     // "gemini-flash-latest" was the first default and is a slow thinking model (8-45 s): treat it as "not chosen".
     chat_model: v.chat_model === "gemini-flash-latest" ? DEFAULT_CONFIG.chat_model : clean(v.chat_model, DEFAULT_CONFIG.chat_model),
@@ -89,8 +92,6 @@ async function loadConfig(): Promise<TeacherConfig> {
 // ---------------------------------------------------------------- rate limiting
 const LIMITS: Record<string, { perHour: number; perDay: number }> = {
   session: { perHour: 60, perDay: 300 },
-  session_byok: { perHour: 200, perDay: 1000 },
-  chat_byok: { perHour: 500, perDay: 2000 },
   chat: { perHour: 200, perDay: 1000 },
   search: { perHour: 500, perDay: 2000 },
 };
@@ -102,8 +103,13 @@ async function ipHash(req: Request): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
 }
 
-/** Returns true when the request is allowed (and records it). */
-async function allow(action: string, ip: string, subjectId?: string): Promise<boolean> {
+/** Per-user bucket for session and chat: a hash of the user id, stored in ai_teacher_usage.ip_hash. */
+async function userBucket(userId: string): Promise<string> {
+  return (await sha256Hex(`user:${userId}`)).slice(0, 32);
+}
+
+/** Returns true when the request is allowed (and records it). `bucket` is an ip hash or a user bucket. */
+async function allow(action: string, bucket: string, subjectId?: string): Promise<boolean> {
   const lim = LIMITS[action];
   if (!lim) return true;
   const now = Date.now();
@@ -111,12 +117,12 @@ async function allow(action: string, ip: string, subjectId?: string): Promise<bo
     const { count: c } = await sb
       .from("ai_teacher_usage")
       .select("id", { count: "exact", head: true })
-      .eq("ip_hash", ip).eq("action", action)
+      .eq("ip_hash", bucket).eq("action", action)
       .gte("created_at", new Date(now - sinceMs).toISOString());
     return c ?? 0;
   };
   if ((await count(3600_000)) >= lim.perHour || (await count(86400_000)) >= lim.perDay) return false;
-  await sb.from("ai_teacher_usage").insert({ ip_hash: ip, action, subject_id: subjectId ?? null });
+  await sb.from("ai_teacher_usage").insert({ ip_hash: bucket, action, subject_id: subjectId ?? null });
   if (Math.random() < 0.02) await sb.from("ai_teacher_usage").delete().lt("created_at", new Date(now - 2 * 86400_000).toISOString());
   return true;
 }
@@ -414,24 +420,33 @@ In 4 to 6 short sentences: give a score out of 5, say what the student got right
  * Fast answers matter for a tutor: thinking is switched off (it adds 4-8 s), each attempt has a
  * 20 s limit, and an overloaded/slow/retired model falls through to the next one.
  */
-async function geminiGenerate(cfg: TeacherConfig, system: string, contents: any[], opts: { json?: boolean } = {}) {
-  const chain = [...new Set([cfg.chat_model, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"])];
-  const candidateKeys = getCandidateKeys(cfg);
-  if (candidateKeys.length === 0) {
-    const err: any = new Error("No Gemini API key available in settings or pool");
-    err.status = 503;
-    throw err;
+/** After a call succeeds: record the use, and make this key the active one if it was not the first tried. */
+async function noteKeySuccess(userId: string | null, used: KeyRef) {
+  if (!used.id || !userId) return;
+  await touchKey(sb, used.id);
+  try {
+    await setActiveKey(sb, userId, used.id);
+  } catch {
+    console.error("[ai-teacher] could not store the active key");
   }
+}
 
-  let lastStatus = 0;
-  for (const apiKey of candidateKeys) {
-    for (const model of chain) {
+/**
+ * Fast answers matter for a tutor: thinking is switched off (it adds 4-8 s), each attempt has a
+ * 20 s limit, and an overloaded/slow/retired model falls through to the next one.
+ * Keys are tried in order. A key that Google says is rate-limited or invalid is marked and skipped.
+ */
+async function geminiGenerate(cfg: TeacherConfig, userId: string, keys: StudentKey[], system: string, contents: any[], opts: { json?: boolean } = {}) {
+  const chain = [...new Set([cfg.chat_model, "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"])];
+
+  for (const key of keys) {
+    modelLoop: for (const model of chain) {
       for (const noThinking of [true, false]) {
         try {
           const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
             method: "POST",
             signal: AbortSignal.timeout(20_000),
-            headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+            headers: { "x-goog-api-key": key.key, "Content-Type": "application/json" },
             body: JSON.stringify({
               systemInstruction: { parts: [{ text: system }] },
               contents,
@@ -441,27 +456,29 @@ async function geminiGenerate(cfg: TeacherConfig, system: string, contents: any[
           const body = await r.json().catch(() => ({}));
           if (r.ok) {
             const text = (body.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("").trim();
-            if (text) return text;
+            if (text) {
+              await noteKeySuccess(userId, key);
+              return text;
+            }
             break; // empty reply: try the next model
           }
-          lastStatus = r.status;
-          console.error(`[ai-teacher] generateContent ${model} failed with key ${apiKey.slice(0, 8)}...`, r.status, JSON.stringify(body).slice(0, 300));
-          if (r.status === 400 && noThinking) continue;
-          if (r.status === 429 || r.status === 403) {
-            // Key exhausted / rate-limited: break out to failover to next key in pool!
-            break;
+          console.error(`[ai-teacher] generateContent ${model} failed (key ${key.id}, HTTP ${r.status}, ${String(body?.error?.status ?? "")})`);
+          const kind = classifyGeminiError(r.status, JSON.stringify(body));
+          if (kind) {
+            // Rate-limited or invalid key: record it and fail over to the next key.
+            await markKey(sb, key.id, kind, `HTTP ${r.status} ${String(body?.error?.status ?? "")}`.trim());
+            break modelLoop;
           }
+          if (r.status === 400 && noThinking) continue;
           break; // 404 / 5xx: next model
         } catch (e) {
-          console.error(`[ai-teacher] generateContent ${model} error with key ${apiKey.slice(0, 8)}...`, String((e as any)?.message ?? e));
+          console.error(`[ai-teacher] generateContent ${model} error (key ${key.id})`, String((e as any)?.message ?? e).slice(0, 200));
           break; // timeout / network: next model
         }
       }
     }
   }
-  const e: any = new Error("AI request failed across all pool keys");
-  e.status = lastStatus;
-  throw e;
+  throw new TeacherError(429, "ALL_KEYS_FAILED", "The teacher is busy. Please try again in a moment.");
 }
 
 /**
@@ -604,8 +621,8 @@ const LIVE_TOOLS = [{
   ],
 }];
 
-async function mintLiveToken(cfg: TeacherConfig, apiKeyOrKeys: string | string[], systemInstruction: string) {
-  const candidateKeys = Array.isArray(apiKeyOrKeys) ? apiKeyOrKeys : [apiKeyOrKeys];
+/** Mints a single-use Live token. Keys are tried in order; a key Google rejects or rate-limits is marked and skipped. */
+async function mintLiveToken(cfg: TeacherConfig, userId: string | null, keys: KeyRef[], systemInstruction: string) {
   const now = Date.now();
   const expireTime = new Date(now + 20 * 60_000).toISOString();
   const newSessionExpireTime = new Date(now + 90_000).toISOString();
@@ -620,24 +637,37 @@ async function mintLiveToken(cfg: TeacherConfig, apiKeyOrKeys: string | string[]
     { level: "model-only", versions: ["v1alpha", "v1beta"], constraints: { model: cfg.live_model, config: { responseModalities: ["AUDIO"] } } },
   ];
   let lastErr: unknown = null;
-  for (const apiKey of candidateKeys) {
+  for (const k of keys) {
+    let dead = false; // this key was rejected or rate-limited: skip its remaining attempts
     for (const a of attempts) {
+      if (dead) break;
       for (const apiVersion of a.versions) {
         try {
-          const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion } });
+          const ai = new GoogleGenAI({ apiKey: k.key, httpOptions: { apiVersion } });
           const tok = await ai.authTokens.create({
             config: { uses: 1, expireTime, newSessionExpireTime, liveConnectConstraints: a.constraints, httpOptions: { apiVersion } },
           });
-          if (tok?.name) return { token: tok.name, apiVersion, lockLevel: a.level, expireTime };
+          if (tok?.name) {
+            await noteKeySuccess(userId, k);
+            return { token: tok.name, apiVersion, lockLevel: a.level, expireTime };
+          }
         } catch (e) {
           lastErr = e;
-          console.error(`[ai-teacher] token mint failed with key ${apiKey.slice(0, 8)}... (${a.level}/${apiVersion}):`, String((e as any)?.message ?? e).slice(0, 300));
+          const status = Number((e as any)?.status ?? 0);
+          const message = String((e as any)?.message ?? e);
+          console.error(`[ai-teacher] token mint failed (key ${k.id ?? "admin-test"}, ${a.level}/${apiVersion}, HTTP ${status || "?"})`);
+          const kind = classifyGeminiError(status, message);
+          if (kind) {
+            if (k.id && userId) await markKey(sb, k.id, kind, `Token mint HTTP ${status || "?"}`);
+            dead = true;
+            break;
+          }
         }
       }
     }
   }
-  const err: any = new Error("Could not create a voice session token");
-  err.cause = lastErr;
+  const err = new TeacherError(429, "ALL_KEYS_FAILED", "Could not create a voice session. Please try again soon.");
+  (err as any).cause = lastErr;
   throw err;
 }
 
@@ -761,16 +791,12 @@ async function handleOutline(subjectId: string) {
   });
 }
 
-async function handleSession(body: any, ip: string) {
+async function handleSession(body: any, userId: string) {
   const cfg = await loadConfig();
-  // "Bring your own key": the student's own Gemini key is used directly in their browser, so no
-  // token is minted and the admin key is not needed. The on/off switch still applies.
-  const byok = body?.byok === true;
-  const candidateKeys = getCandidateKeys(cfg);
   if (!cfg.enabled) return json({ error: "AI Teacher is switched off. An admin can turn it on in Admin > AI Teacher." }, 503);
-  if (!byok && candidateKeys.length === 0) return json({ error: "AI Teacher has no API key in the pool. An admin can add keys in Admin > AI Teacher." }, 503);
-  const isTesting = body?.isTesting === true || String(body?.email ?? "").toLowerCase().trim() === "pramod0605@gmail.com";
-  if (!isTesting && !(await allow(byok ? "session_byok" : "session", ip))) return json({ error: "Too many voice sessions. Please try again later." }, 429);
+  const keys = await loadStudentKeys(sb, userId);
+  if (keys.length === 0) return json({ error: "Add a Gemini API key in AI Teacher settings to start a voice lesson.", code: "NO_KEYS" }, 409);
+  if (!(await allow("session", await userBucket(userId)))) return json({ error: "Too many voice sessions. Please try again later.", code: "RATE_LIMITED" }, 429);
 
   const persona = readPersona(body?.persona, cfg);
   const voiceName = persona.voice ?? cfg.voice_name;
@@ -782,16 +808,9 @@ async function handleSession(body: any, ip: string) {
   const systemInstruction = voicePrompt(cfg, catalog, persona, enrolledSubjects, askMode);
   const base = { model: cfg.live_model, voiceName, teacherName: persona.name, systemInstruction, subjects, catalog, tools: LIVE_TOOLS };
 
-  if (byok) return json({ ...base, byok: true, apiVersion: "v1beta" });
-  try {
-    const t = await mintLiveToken({ ...cfg, voice_name: voiceName }, candidateKeys, systemInstruction);
-    return json({ ...base, token: t.token, apiVersion: t.apiVersion, lockLevel: t.lockLevel, expireTime: t.expireTime });
-  } catch (e) {
-    return json({ error: "Voice teacher is temporarily unavailable. Please use chat mode or try again soon." }, 503);
-  }
+  const t = await mintLiveToken({ ...cfg, voice_name: voiceName }, userId, keys, systemInstruction);
+  return json({ ...base, token: t.token, apiVersion: t.apiVersion, lockLevel: t.lockLevel, expireTime: t.expireTime });
 }
-
-const FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
 
 /** Pulls a JSON object out of a model reply (it may be wrapped in a code fence or extra words). */
 function parseJsonObject(text: string): any | null {
@@ -837,22 +856,20 @@ function finishChat(mode: string, text: string, out: Record<string, unknown>) {
  * mode "quiz"  : one MCQ as JSON       (context: topicId and/or the last question)
  * mode "bigq"  : one long question + model answer as JSON
  * mode "grade" : mark the student's long answer
- * byok:true    : only prepare the request (prompt + notes); the browser calls Gemini with the
- *                student's own key, which therefore never reaches this server.
+ * Gemini is called with the signed-in student's own keys (loadStudentKeys), in order, with failover.
  */
-async function handleChat(body: any, ip: string) {
+async function handleChat(body: any, userId: string) {
   const { subjectId, question, messages, topicId } = body;
   const mode: string = ["quiz", "bigq", "grade"].includes(body.mode) ? body.mode : "ask";
-  const byok = body.byok === true;
   if (!subjectId || typeof question !== "string" || !question.trim()) return json({ error: "subjectId and question are required" }, 400);
   if (question.length > 1500) return json({ error: "Question is too long" }, 400);
   const cfg = await loadConfig();
-  const candidateKeys = getCandidateKeys(cfg);
   if (!cfg.enabled) return json({ error: "AI Teacher is switched off. An admin can turn it on in Admin > AI Teacher." }, 503);
-  if (!byok && candidateKeys.length === 0) return json({ error: "AI Teacher has no API key in the pool. An admin can add keys in Admin > AI Teacher." }, 503);
+  const keys = await loadStudentKeys(sb, userId);
+  if (keys.length === 0) return json({ error: "Add a Gemini API key in AI Teacher settings to continue.", code: "NO_KEYS" }, 409);
   const subject = await getSubject(subjectId);
   if (!subject) return json({ error: "Unknown subject" }, 400);
-  if (!(await allow(byok ? "chat_byok" : "chat", ip, subjectId))) return json({ error: "Too many questions. Please try again in a while." }, 429);
+  if (!(await allow("chat", await userBucket(userId), subjectId))) return json({ error: "Too many questions. Please try again in a while.", code: "RATE_LIMITED" }, 429);
   const persona = readPersona(body.persona, cfg);
 
   let system = "";
@@ -922,16 +939,12 @@ async function handleChat(body: any, ip: string) {
     }
   }
 
-  if (byok) {
-    return json({ ...out, mode, prepare: { system, contents, json: asJson, models: [...new Set([cfg.chat_model, ...FALLBACK_MODELS])] } });
-  }
+  // geminiGenerate throws TeacherError (ALL_KEYS_FAILED) when no key answers; the entry point maps it.
+  const text = await geminiGenerate(cfg, userId, keys, system, contents, { json: asJson });
   try {
-    const text = await geminiGenerate(cfg, system, contents, { json: asJson });
     return json(finishChat(mode, text, out));
-  } catch (e: any) {
-    if (e?.message === "bad_quiz" || e?.message === "bad_bigq") return json({ error: "I could not make that question this time. Please try again." }, 502);
-    const status = e?.status === 429 ? 429 : 503;
-    return json({ error: status === 429 ? "The teacher is busy. Please try again in a moment." : "The teacher could not answer right now. Please try again." }, status);
+  } catch {
+    return json({ error: "I could not make that question this time. Please try again." }, 502);
   }
 }
 
@@ -961,7 +974,7 @@ async function handleTest(req: Request, body: any) {
   let token_check: any = { ok: false, skipped: true };
   if (liveModel.ok || liveModel.status === 404) {
     try {
-      const t = await mintLiveToken(cfg, cfg.google_api_key, voicePrompt(cfg, [], readPersona({}, cfg)));
+      const t = await mintLiveToken(cfg, null, [{ id: null, key: cfg.google_api_key }], voicePrompt(cfg, [], readPersona({}, cfg)));
       token_check = { ok: true, lockLevel: t.lockLevel, apiVersion: t.apiVersion };
     } catch (e) {
       token_check = { ok: false, message: String((e as any)?.cause?.message ?? (e as any)?.message ?? e).slice(0, 200) };
@@ -971,6 +984,14 @@ async function handleTest(req: Request, body: any) {
 }
 
 // ---------------------------------------------------------------- entry
+/** The signed-in user's id from the Bearer token, or null (anonymous callers, including the anon key). */
+async function requireUserId(req: Request): Promise<string | null> {
+  const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return null;
+  const { data } = await sb.auth.getUser(token);
+  return data?.user?.id ?? null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -985,8 +1006,15 @@ Deno.serve(async (req) => {
     switch (action) {
       case "subjects": return await handleSubjects(req);
       case "outline": return await handleOutline(body.subjectId);
-      case "session": return await handleSession(body, await ipHash(req));
-      case "chat": return await handleChat(body, await ipHash(req));
+      case "session":
+      case "chat": {
+        const userId = await requireUserId(req);
+        if (!userId) return json({ error: "Sign in to use the AI Teacher.", code: "UNAUTHORIZED" }, 401);
+        if (!(await hasPlusPlan(sb, userId))) {
+          return json({ error: "Buy the Plus plan (Rs 500) to use the AI Teacher.", code: "PLAN_REQUIRED" }, 402);
+        }
+        return action === "session" ? await handleSession(body, userId) : await handleChat(body, userId);
+      }
       case "search": {
         const query = String(body.query || "").slice(0, 500).trim();
         if (!query && !body.topicId) return json({ error: "query or topicId required" }, 400);
@@ -997,7 +1025,8 @@ Deno.serve(async (req) => {
       default: return json({ error: "Unknown action" }, 400);
     }
   } catch (e) {
-    console.error("[ai-teacher] unhandled", e);
-    return json({ error: "Something went wrong. Please try again." }, 500);
+    if (e instanceof TeacherError) return json({ error: e.message, code: e.code }, e.status);
+    console.error("[ai-teacher] unhandled", String((e as any)?.message ?? e).slice(0, 300));
+    return json({ error: "Something went wrong. Please try again.", code: "INTERNAL" }, 500);
   }
 });

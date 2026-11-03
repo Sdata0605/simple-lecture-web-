@@ -1,72 +1,8 @@
-import { teacherApi, TeacherApiError, type ChatResult, type PreparedChat, type QuizData, type BigQuestionData } from "./aiTeacherApi";
+import { teacherApi, TeacherApiError, type ChatResult } from "./aiTeacherApi";
 import { personaPayload, type TeacherPrefs } from "./aiTeacherPrefs";
 import { loadSubscription } from "./aiTeacherSubscription";
 
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta/models";
-
-/** Pulls a JSON object out of a model reply (it may be wrapped in a code fence or extra words). */
-function parseJsonObject(text: string): any | null {
-  const a = text.indexOf("{");
-  const b = text.lastIndexOf("}");
-  if (a < 0 || b <= a) return null;
-  try { return JSON.parse(text.slice(a, b + 1)); } catch { return null; }
-}
-
-function validQuiz(j: any): QuizData | null {
-  if (!j || typeof j.question !== "string" || !Array.isArray(j.options) || j.options.length !== 4) return null;
-  const ci = Number(j.correct_index);
-  if (!Number.isInteger(ci) || ci < 0 || ci > 3) return null;
-  return { question: j.question.trim(), options: j.options.map((o: unknown) => String(o).trim()), correct_index: ci, explanation: typeof j.explanation === "string" ? j.explanation.trim() : null };
-}
-
-function validBigQ(j: any): BigQuestionData | null {
-  if (!j || typeof j.question !== "string" || typeof j.model_answer !== "string") return null;
-  return { question: j.question.trim(), model_answer: j.model_answer.trim() };
-}
-
-/** Calls Gemini straight from the browser with the visitor's own key (same model fallback as the server). */
-async function generateWithOwnKey(apiKey: string, prep: PreparedChat["prepare"]): Promise<string> {
-  let lastStatus = 0;
-  for (const model of prep.models) {
-    for (const noThinking of [true, false]) {
-      try {
-        const r = await fetch(`${GEMINI}/${encodeURIComponent(model)}:generateContent`, {
-          method: "POST",
-          signal: AbortSignal.timeout(25_000),
-          headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: prep.system }] },
-            contents: prep.contents,
-            generationConfig: {
-              temperature: prep.json ? 0.7 : 0.3,
-              maxOutputTokens: 2048,
-              ...(prep.json ? { responseMimeType: "application/json" } : {}),
-              ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
-            },
-          }),
-        });
-        const body = await r.json().catch(() => ({}));
-        if (r.ok) {
-          const text = (body.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("").trim();
-          if (text) return text;
-          break;
-        }
-        lastStatus = r.status;
-        if (r.status === 400 && noThinking) {
-          // an invalid key is a 400 too: stop right away instead of trying other models
-          if (/api key/i.test(body?.error?.message ?? "")) throw new TeacherApiError("Your API key was not accepted by Google. Check it in Settings.", 400);
-          continue;
-        }
-        if (r.status === 401 || r.status === 403) throw new TeacherApiError("Your API key was not accepted by Google. Check it in Settings.", r.status);
-        break;
-      } catch (e) {
-        if (e instanceof TeacherApiError) throw e;
-        break; // timeout / network: next model
-      }
-    }
-  }
-  throw new TeacherApiError(lastStatus === 429 ? "Your API key has hit its limit. Please try again in a moment." : "The teacher could not answer right now. Please try again.", lastStatus || undefined);
-}
 
 const KNOWN_EXTERNAL_TOPICS = [
   "computer fundamentals",
@@ -111,8 +47,8 @@ export function extractExternalTopicName(query: string): string {
 }
 
 /**
- * One call for every chat mode. With the student's own key, our server only finds the notes and
- * writes the prompt; the answer comes straight from Google and the key never touches our server.
+ * One call for every chat mode. The server answers with the student's own saved Gemini key
+ * (it picks the active key and fails over on its own).
  */
 export async function teacherChat(
   body: Record<string, unknown>,
@@ -138,39 +74,13 @@ export async function teacherChat(
   }
 
   const common = { ...body, enrolledSubjects: enrolledList, persona: personaPayload(prefs) };
-  const ownKey = prefs.apiKey?.trim();
-
-  // Plus Plan (₹500): user must provide their own Gemini API key
-  if (sub.planId === "byok_500" && !ownKey) {
-    throw new TeacherApiError("Your Plus Plan requires your own Google Gemini API key. Please add your key in Settings to chat.");
-  }
-
-  // Plus Plan users always use their own key.
-  // Pro Plan users use their own key if apiMode is 'own' and key is provided; otherwise Admin key.
-  const shouldUseOwnKey = sub.planId === "byok_500" || (prefs.apiMode === "own" && !!ownKey);
-
-  if (shouldUseOwnKey && ownKey) {
-    const prep = await teacherApi<PreparedChat>("chat", { ...common, byok: true });
-    const text = await generateWithOwnKey(ownKey, prep.prepare);
-    const out: ChatResult = { found: prep.found, topics: prep.topics };
-    if (prep.mode === "quiz") {
-      const quiz = validQuiz(parseJsonObject(text));
-      if (!quiz) throw new TeacherApiError("I could not make that question this time. Please try again.");
-      return { ...out, quiz };
-    }
-    if (prep.mode === "bigq") {
-      const bigq = validBigQ(parseJsonObject(text));
-      if (!bigq) throw new TeacherApiError("I could not make that question this time. Please try again.");
-      return { ...out, bigq };
-    }
-    return { ...out, answer: text };
-  }
-
-  // Pro Plan (admin_1000) without own key: runs on Admin's managed API key
   return teacherApi<ChatResult>("chat", common);
 }
 
-/** Quick check used by the Settings page. */
+/**
+ * Quick check of a Gemini key typed in the browser. Used by the guide and settings screens.
+ * Kept for those screens; the keys themselves are now saved and tested on the server (aiTeacherKeys.ts).
+ */
 export async function testOwnKey(apiKey: string): Promise<{ ok: boolean; message: string }> {
   try {
     const r = await fetch(`${GEMINI}/gemini-3.1-flash-lite`, { headers: { "x-goog-api-key": apiKey }, signal: AbortSignal.timeout(15_000) });

@@ -30,11 +30,40 @@
 }
 
 .aa-topbar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: max(12px, env(safe-area-inset-top)) 18px 10px;
+}
+
+/* The small robot at the top centre: brings the teacher panel back while a presentation is on screen. */
+.aa-topbar__robot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  line-height: 0;
+  cursor: pointer;
+  transition: filter 160ms ease;
+}
+
+.aa-topbar__robot:hover {
+  filter: drop-shadow(0 0 8px rgba(124, 224, 195, 0.5));
+}
+
+.aa-topbar__robot:focus-visible {
+  outline: 2px solid var(--aa-mint);
+  outline-offset: 4px;
+}
+
+.aa-accent {
+  color: var(--aa-mint);
 }
 
 .aa-topbar__title {
@@ -390,17 +419,122 @@
 
 /* Subject chooser shown when Ask AI is opened without a subject. */
 .aa-picker {
-  max-width: 460px;
+  max-width: min(920px, 100%);
   width: 100%;
 }
 
+/* A horizontal row of subject cards that scrolls sideways when there are many. */
 .aa-picker__list {
   width: 100%;
-  max-height: 46vh;
+  display: flex;
+  gap: 14px;
+  justify-content: safe center;
+  overflow-x: auto;
+  padding: 6px 4px 14px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.aa-subject-card {
+  position: relative;
+  flex: 0 0 220px;
+  width: 220px;
+  height: 160px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 18px;
+  overflow: hidden;
+  color: #eef6f4;
+  font-family: "Aptos", "Segoe UI", sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.aa-subject-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+}
+
+.aa-subject-card:focus-visible {
+  outline: 2px solid var(--aa-mint);
+  outline-offset: 3px;
+}
+
+.aa-subject-card__icon {
+  position: absolute;
+  right: 10px;
+  bottom: 46px;
+  opacity: 0.4;
+  color: #ffffff;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.aa-subject-card__icon svg {
+  width: 84px;
+  height: 84px;
+}
+
+.aa-subject-card__name {
+  max-width: 100%;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.aa-subject-card__course {
+  max-width: 100%;
+  color: rgba(238, 246, 244, 0.8);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.aa-subject-card__topics {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #eef6f4;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.aa-subject-card__go {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 34px;
+  height: 34px;
   display: grid;
-  gap: 8px;
-  overflow-y: auto;
-  padding: 2px;
+  place-items: center;
+  border-radius: 50%;
+}
+
+/* Short screens (landscape phones, small laptops): smaller cards and robot so the picker still fits. */
+@media (max-height: 520px) {
+  .aa-subject-card {
+    flex-basis: 180px;
+    width: 180px;
+    height: 132px;
+  }
+
+  .aa-subject-card__icon svg {
+    width: 64px;
+    height: 64px;
+  }
+
+  .aa-picker .aa-robot {
+    width: 104px !important;
+    height: 104px !important;
+  }
 }
 
 .aa-picker__item {
@@ -456,4 +590,191 @@
   font-size: 11px;
   font-weight: 400;
   line-height: 1.35;
+}
+
+/* Teacher settings shown inside the overlay: a scrollable, app-themed panel instead of the centred orb layout. */
+.aa-settings {
+  justify-content: flex-start;
+  overflow-y: auto;
+  padding: 16px 16px 40px;
+}
+
+.aa-settings__inner {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+  border-radius: 16px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* ---- robot (RobotFace). Sizes are in em: the root's font-size is its own size, so children scale with it. ---- */
+
+.aa-robot {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.aa-robot__antenna {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 0.05em;
+  height: 0.16em;
+  transform: translateX(-50%);
+  border-radius: 0.03em;
+  background: linear-gradient(#d6e0e1, #9fb3b6);
+}
+
+.aa-robot__antenna::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -0.05em;
+  width: 0.1em;
+  height: 0.1em;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #7ce0c3;
+  box-shadow: 0 0 0.08em #7ce0c3;
+}
+
+.aa-robot__head {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 14%;
+  bottom: 2%;
+  border-radius: 0.36em;
+  background: linear-gradient(135deg, #fff, #f2f6f6 38%, #d6e0e1 80%, #aebfc2);
+  box-shadow: inset 0 -0.04em 0 rgba(0, 0, 0, 0.08), 0 0.06em 0.12em rgba(0, 0, 0, 0.35);
+}
+
+.aa-robot__screen {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 18%;
+  bottom: 18%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.07em;
+  border-radius: 0.24em;
+  background: #03070a;
+}
+
+.aa-robot__eyes {
+  display: flex;
+  gap: 0.16em;
+}
+
+.aa-robot__eye {
+  width: 0.13em;
+  height: 0.18em;
+  border-radius: 50%;
+  background: #7ce0c3;
+  box-shadow: 0 0 0.1em rgba(124, 224, 195, 0.7);
+}
+
+.aa-robot__smile {
+  width: 0.2em;
+  height: 0.09em;
+  border-style: solid;
+  border-color: #7ce0c3;
+  border-width: 0 0.025em 0.025em;
+  border-radius: 0 0 0.2em 0.2em;
+  box-shadow: 0 0 0.06em rgba(124, 224, 195, 0.6);
+}
+
+/* Top-bar badge: no antenna, smaller eyes. */
+.aa-robot.is-badge .aa-robot__head {
+  top: 12%;
+  bottom: 4%;
+}
+
+.aa-robot.is-badge .aa-robot__eyes {
+  gap: 0.12em;
+}
+
+.aa-robot.is-badge .aa-robot__eye {
+  width: 0.09em;
+  height: 0.12em;
+}
+
+.aa-robot.is-badge .aa-robot__smile {
+  width: 0.16em;
+}
+
+/* Modes. */
+.aa-robot.is-listening .aa-robot__eye {
+  height: 0.24em;
+  box-shadow: 0 0 0.16em #7ce0c3;
+}
+
+.aa-robot.is-thinking .aa-robot__eye {
+  opacity: 0.6;
+}
+
+.aa-robot.is-error .aa-robot__eye {
+  background: #fb7185;
+  box-shadow: 0 0 0.1em rgba(251, 113, 133, 0.7);
+}
+
+.aa-robot.is-error .aa-robot__smile {
+  border-color: #fb7185;
+  border-width: 0.025em 0.025em 0;
+  border-radius: 0.2em 0.2em 0 0;
+  box-shadow: 0 0 0.06em rgba(251, 113, 133, 0.6);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .aa-robot {
+    animation: aa-float 2.4s ease-in-out infinite;
+  }
+
+  .aa-robot__eye {
+    animation: aa-blink 4s infinite;
+  }
+
+  .aa-robot.is-speaking .aa-robot__smile {
+    animation: aa-talk 320ms ease-in-out infinite alternate;
+  }
+
+  .aa-robot.is-thinking .aa-robot__eyes {
+    animation: aa-think 1.6s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-robot,
+  .aa-robot__eye,
+  .aa-robot__eyes,
+  .aa-robot__smile {
+    animation: none;
+  }
+}
+
+@keyframes aa-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes aa-blink {
+  0%, 96%, 98%, 100% { transform: scaleY(1); }
+  97% { transform: scaleY(0.1); }
+}
+
+@keyframes aa-talk {
+  from { height: 0.05em; }
+  to { height: 0.16em; }
+}
+
+@keyframes aa-think {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(0.05em); }
 }

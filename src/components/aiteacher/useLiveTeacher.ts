@@ -6,6 +6,8 @@ import {
   type RetrievalResult,
   type TeacherSubject,
 } from "@/lib/aiTeacherApi";
+import { keysApi, TEACHER_SETTINGS_KEY, type TeacherSettings } from "@/lib/aiTeacherKeys";
+import { queryClient } from "@/lib/queryClient";
 import { matchSubjectByName } from "@/lib/aiTeacherSubjects";
 import { personaPayload, type TeacherPrefs } from "@/lib/aiTeacherPrefs";
 import { loadSubscription } from "@/lib/aiTeacherSubscription";
@@ -103,6 +105,15 @@ const GREETING = "Hello! I have just joined the class. Greet me with: 'Namaste! 
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** Words in a Gemini Live close/error message that mean the saved key is over quota or was refused. */
+const KEY_FAILURE = /quota|resource.?exhausted|rate.?limit|429|api.?key|invalid key|not valid|permission|unauthori[sz]ed|401|403|expired/i;
+
+/** How many saved keys to try in one class before giving up (the number of keys the student has, at least 1). */
+const keyBudget = () => {
+  const cached = queryClient.getQueryData<TeacherSettings>(TEACHER_SETTINGS_KEY);
+  return Math.max(1, cached?.keys?.length ?? 1);
+};
+
 export function useLiveTeacher({
   subject,
   subjects,
@@ -179,6 +190,11 @@ export function useLiveTeacher({
   const pendingTextRef = useRef<string | null>(null);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
+  /** The saved key the current session runs on, and how many failovers are still allowed in this class. */
+  const keyIdRef = useRef<string | null>(null);
+  const failoverLeftRef = useRef(0);
+  const connectRef = useRef<((firstMessage?: string, isRetry?: boolean) => Promise<void>) | null>(null);
+  const [activeKey, setActiveKey] = useState<{ label: string; masked: string } | null>(null);
   const enrolledSubjectsRef = useRef(enrolledSubjects);
   enrolledSubjectsRef.current = enrolledSubjects;
 
@@ -500,13 +516,36 @@ export function useLiveTeacher({
     [],
   );
 
-  const connect = useCallback(async (firstMessage?: string) => {
+  /**
+   * Moves to the student's next saved key after a quota or invalid-key failure: reports the failed key to the
+   * server, then connects again. Returns false when there is no key to report or no failover left.
+   */
+  const tryFailover = useCallback((reason: string): boolean => {
+    const failedKeyId = keyIdRef.current;
+    if (!failedKeyId || failoverLeftRef.current <= 0) return false;
+    failoverLeftRef.current -= 1;
+    keyIdRef.current = null;
+    setNotice("Your Gemini key is over its limit or was refused. Switching to your next saved key...");
+    setStatusBoth("idle");
+    void keysApi("reportFailure", { id: failedKeyId, error: reason.slice(0, 300) })
+      .catch(() => { /* the reconnect still runs */ })
+      .then(() => {
+        // Only reconnect if the student has not left or restarted the class in the meantime.
+        if (statusRef.current === "idle") void connectRef.current?.(undefined, true);
+      });
+    return true;
+  }, []);
+
+  const connect = useCallback(async (firstMessage?: string, isRetry = false) => {
     if (statusRef.current === "connecting" || statusRef.current === "live") return;
     setError(null); setNotice(null); setStatusBoth("connecting");
     if (firstMessage) pendingTextRef.current = firstMessage;
+    if (!isRetry) failoverLeftRef.current = keyBudget();
     const epoch = ++epochRef.current;
     /** True once this attempt has been replaced or torn down (the screen was closed while it was connecting). */
     const stale = () => epoch !== epochRef.current;
+    /** The last error the socket reported, used to recognise a key failure when it closes. */
+    let lastSocketError = "";
     try {
       const sub = loadSubscription();
       if (!sub) {
@@ -515,25 +554,15 @@ export function useLiveTeacher({
         return;
       }
 
-      const isByok500 = sub.planId === "byok_500";
-      const own = prefsRef.current.apiKey.trim();
-
-      if (isByok500 && !own) {
-        setError("Your Plus Plan requires your own Google Gemini API key. Please add your key in Settings to start the class.");
-        setStatusBoth("error");
-        return;
-      }
-
-      // Plus Plan users always use their own key (byok: true).
-      // Pro Plan users use their own key if apiMode is 'own' and key is provided; otherwise they use the Admin key.
-      const shouldUseOwnKey = isByok500 || (prefsRef.current.apiMode === "own" && !!own);
+      // The server picks the student's active saved key and returns a one-use token made with it.
       const s = await teacherApi<LiveSession>("session", {
         persona: personaPayload(prefsRef.current),
-        byok: shouldUseOwnKey,
         enrolledSubjects: enrolledSubjectsRef.current,
         mode: sessionModeRef.current,
       });
       if (stale()) return;
+      keyIdRef.current = s.keyId ?? null;
+      setActiveKey(s.keyId ? { label: s.keyLabel, masked: s.keyMasked } : null);
       setTeacherName(s.teacherName);
       if (s.subjects?.length) subjectsRef.current = s.subjects;
       catalogRef.current = s.catalog ?? [];
@@ -558,10 +587,8 @@ export function useLiveTeacher({
       if (stale()) { stream?.getTracks().forEach((t) => t.stop()); return; }
       const { GoogleGenAI, Modality } = await import("@google/genai");
       if (stale()) { stream?.getTracks().forEach((t) => t.stop()); return; }
-      // If student provided their own key, connect straight to Google; otherwise use one-use token from Admin key.
-      const ai = shouldUseOwnKey
-        ? new GoogleGenAI({ apiKey: own })
-        : new GoogleGenAI({ apiKey: s.token, httpOptions: { apiVersion: s.apiVersion } });
+      // The one-use token was made with the student's saved key on the server.
+      const ai = new GoogleGenAI({ apiKey: s.token, httpOptions: { apiVersion: s.apiVersion } });
 
       const session = await ai.live.connect({
         model: s.model,
@@ -601,13 +628,17 @@ export function useLiveTeacher({
           },
           onerror: (e: any) => {
             if (stale()) return;
+            lastSocketError = String(e?.message ?? "");
             setError(e?.message || "The voice connection had a problem.");
           },
           onclose: (e: any) => {
             // Closing the old connection (a restart, or leaving the screen) must not tear down the new one.
             if (stale()) return;
             const wasLive = statusRef.current === "live";
+            const reason = String(e?.reason || lastSocketError || "");
             cleanup();
+            // Quota or a refused key: move to the next saved key instead of ending the class.
+            if (KEY_FAILURE.test(reason) && tryFailover(reason)) return;
             if (statusRef.current === "connecting") { setError(e?.reason || "Could not start the voice session."); setStatusBoth("error"); }
             else if (wasLive) { setNotice(e?.reason ? `Session ended: ${e.reason}` : "Session ended."); setStatusBoth("ended"); }
           },
@@ -665,11 +696,17 @@ export function useLiveTeacher({
         ctx.createMediaStreamSource(stream).connect(node);
       }
     } catch (e) {
+      const msg = errMsg(e);
+      const current = !stale(); // cleanup() below moves the epoch on
       cleanup();
-      setError(errMsg(e));
+      // The socket could fail before it opens with a key error: same failover as a closed session.
+      if (current && KEY_FAILURE.test(msg) && tryFailover(msg)) return;
+      setError(msg);
       setStatusBoth("error");
     }
-  }, [appendTranscript, cleanup, closeOpenBubbles, enqueueAudio, handleToolCalls, sendText, stopPlayback]);
+  }, [appendTranscript, cleanup, closeOpenBubbles, enqueueAudio, handleToolCalls, sendText, stopPlayback, tryFailover]);
+
+  connectRef.current = connect;
 
   const toggleMute = useCallback(() => {
     mutedRef.current = !mutedRef.current;
@@ -707,6 +744,7 @@ export function useLiveTeacher({
 
   return {
     status, error, notice, speaking, micLevel, muted, micAvailable, teacherName,
+    activeKey,
     transcript,
     turnsCompleted,
     connect, disconnect, toggleMute, interrupt, sendText, isTeacherBusy, reportQuizAnswer, answerBigQuestion, reportUnderstanding, reset,

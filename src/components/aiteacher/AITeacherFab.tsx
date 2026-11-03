@@ -4,19 +4,17 @@ import { safeSessionStorage } from "@/lib/safeStorage";
 import "./ai-teacher-promo.css";
 
 // The glowing AI button that floats over the home page. It carries the same orb as the Ask AI screen, so the
-// student recognises it when they get there. It only reports the click: the promo decides whether that opens the
-// AI Teacher (student has a plan) or the plans (they don't).
+// student recognises it when they get there. It only reports the click; the promo opens the Ask AI overlay.
 
 const LABEL_SEEN_KEY = "aiteacher.fab.label.seen";
 const LABEL_DELAY_MS = 1500;
 const LABEL_SHOWN_MS = 6000;
 
 interface AITeacherFabProps {
-  hasActivePlan: boolean;
   onClick: () => void;
 }
 
-export function AITeacherFab({ hasActivePlan, onClick }: AITeacherFabProps) {
+export function AITeacherFab({ onClick }: AITeacherFabProps) {
   const [labelVisible, setLabelVisible] = useState(false);
 
   // The label introduces the button once per visit, then gets out of the way (it also shows on hover).
@@ -36,14 +34,14 @@ export function AITeacherFab({ hasActivePlan, onClick }: AITeacherFabProps) {
   return (
     <div className="atp-fab">
       <span className="atp-fab__label" data-visible={labelVisible} aria-hidden="true">
-        {hasActivePlan ? "Ask AI Teacher" : "Meet your AI Teacher"}
+        Ask AI Teacher
       </span>
       <div className="atp-fab__bob">
         <button
           type="button"
           className="atp-fab__button"
           onClick={onClick}
-          aria-label={hasActivePlan ? "Open AI Teacher" : "See AI Teacher plans"}
+          aria-label="Open AI Teacher"
         >
           <span className="atp-fab__ring" aria-hidden="true" />
           <span className="atp-fab__orb">

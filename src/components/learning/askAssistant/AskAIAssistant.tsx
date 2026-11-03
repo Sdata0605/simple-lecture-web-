@@ -3,16 +3,18 @@
 // the knowledge index), and the teacher is told which lecture is paused and where. It explains every question
 // from the basics as steps on a lesson board next to the orb. There are no pre-recorded clips: every word the
 // student hears is the teacher speaking.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState, type Dispatch, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Lock, Settings, Sparkles, X } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
+import { useTeacherSettings, usePlanState } from "@/lib/aiTeacherKeys";
 import { usePrefs } from "@/lib/aiTeacherPrefs";
 import { teacherPlaybackRate } from "@/lib/aiTeacherVoice";
 import { safeLocalStorage } from "@/lib/safeStorage";
 import { silenceOtherAudio, voiceLock } from "@/lib/voiceLock";
 import type { TeacherSubject } from "@/lib/aiTeacherApi";
+import { focusReducer, type FocusEvent, type FocusState } from "@/lib/askPresentationFocus";
 import {
   buildLectureOpening,
   deriveLectureView,
@@ -24,8 +26,10 @@ import {
   type LectureAskContext,
 } from "@/lib/aiTeacherLecture";
 import { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
+import { AITeacherSettingsPanel } from "@/components/aiteacher/AITeacherSettingsPanel";
 import { LectureOrbScreen } from "./LectureOrbScreen";
 import { SubjectPicker } from "./SubjectPicker";
+import { RobotFace } from "./RobotFace";
 import { useAutoContinue, useTurnSinceCard } from "./useAutoContinue";
 import "./ask-assistant.css";
 
@@ -62,18 +66,35 @@ const STUDENT_PAUSE_MS = 1500;
 
 export function AskAIAssistant(props: AskAIAssistantProps) {
   const { onClose, topicTitle, choices } = props;
+  const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
-  const { hasActivePlan } = useAITeacherSubscription();
+  const { data: settings, isFetching: keysLoading } = useTeacherSettings();
+  const { state: planState, retry: retryPlan } = usePlanState();
   const [picked, setPicked] = useState<TeacherSubject | null>(null);
+  // The gear opens the settings inside this overlay; back returns to the subject picker.
+  const [view, setView] = useState<"teacher" | "settings">("teacher");
+  // While a presentation is on screen the teacher panel can slide away; the robot in the top bar brings it back.
+  const [focus, dispatchFocus] = useReducer(focusReducer, "lesson-full" as FocusState);
   const subject = props.subject ?? picked;
+  const hasKeys = settings.keys.length > 0;
+
+  // A new subject starts from the full lesson again.
+  const subjectId = subject?.id ?? null;
+  useEffect(() => {
+    dispatchFocus("RESET");
+  }, [subjectId]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      // Escape first folds the teacher panel away, and only a second press closes the overlay.
+      if (focus === "presenting-with-panel") dispatchFocus("MINIMISE");
+      else onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, focus]);
 
   let body: ReactNode;
   if (isLoading) {
@@ -87,17 +108,55 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
         action={{ label: "Log in", onClick: () => window.open("/auth?tab=login", "_blank", "noopener") }}
       />
     );
-  } else if (!hasActivePlan) {
+  } else if (view === "settings") {
+    body = (
+      <main className="aa-center aa-settings">
+        <div className="aa-settings__inner">
+          <AITeacherSettingsPanel onClose={() => setView("teacher")} />
+        </div>
+      </main>
+    );
+  } else if (planState === "loading") {
+    body = <Gate icon={<Loader2 size={16} className="animate-spin" />} title="Checking your plan…" />;
+  } else if (planState === "unknown") {
     body = (
       <Gate
         icon={<Lock size={16} />}
-        title="Voice doubts need an AI Teacher plan"
-        text="Talk to your AI teacher out loud and get answers from your own course notes, right in the lecture."
-        action={{ label: "See AI Teacher plans", onClick: () => window.open("/aiteacher", "_blank", "noopener") }}
+        title="Could not check your plan."
+        action={{ label: "Retry", onClick: retryPlan }}
+      />
+    );
+  } else if (planState === "inactive") {
+    body = (
+      <Gate
+        icon={<Lock size={16} />}
+        title="Buy AI Teacher Plus (Rs 500) to start"
+        text="Plus lets you use your own free Google Gemini keys with your personal AI teacher."
+        action={{
+          label: "See the Plus plan",
+          onClick: () =>
+            navigate("/aiteacher/plus", {
+              state: {
+                returnTo: location.pathname + location.search,
+                reopenAskAI: { subjectName: props.subject?.name },
+              },
+            }),
+        }}
+      />
+    );
+  } else if (keysLoading && !hasKeys) {
+    body = <Gate icon={<Loader2 size={16} className="animate-spin" />} title="Getting your teacher ready…" />;
+  } else if (!hasKeys) {
+    body = (
+      <Gate
+        icon={<Lock size={16} />}
+        title="Add your Gemini key to start"
+        text="Your teacher uses your own free Google Gemini key. Save one in settings, then ask away."
+        action={{ label: "Add your key", onClick: () => setView("settings") }}
       />
     );
   } else if (subject) {
-    body = <LiveLecture {...props} subject={subject} />;
+    body = <LiveLecture {...props} subject={subject} focus={focus} dispatchFocus={dispatchFocus} />;
   } else {
     body = (
       <SubjectPicker
@@ -117,25 +176,35 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
         <div className="aa-topbar__title">
           <Sparkles size={16} />
           <span>Ask AI</span>
-          {subject && (
+          {subject && view === "teacher" && (
             <span className="aa-topbar__subject">
               · {subject.name}
               {topicTitle ? ` · ${topicTitle}` : ""}
             </span>
           )}
         </div>
+        {subject && view === "teacher" && focus !== "lesson-full" && (
+          <button
+            type="button"
+            className="aa-topbar__robot"
+            onClick={() => dispatchFocus("OPEN_PANEL")}
+            aria-label="Show your teacher"
+            title="Show your teacher"
+          >
+            <RobotFace size={40} badge />
+          </button>
+        )}
         <div className="aa-topbar__actions">
-          {isAuthenticated && (
-            <a
-              href="/aiteacher/settings"
-              target="_blank"
-              rel="noopener"
+          {isAuthenticated && view === "teacher" && (
+            <button
+              type="button"
               className="aa-icon-btn"
-              aria-label="Teacher settings: your API key, voice and teacher style"
+              onClick={() => setView("settings")}
+              aria-label="Teacher settings: your Gemini keys, voice and teacher style"
               title="Teacher settings"
             >
               <Settings size={17} />
-            </a>
+            </button>
           )}
           <button type="button" className="aa-icon-btn" onClick={onClose} aria-label="Close and return to the lecture">
             <X size={18} />
@@ -149,7 +218,15 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
 }
 
 /** Starts the live call as soon as it opens and shows the teacher on the orb screen. */
-function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }: AskAIAssistantProps & { subject: TeacherSubject }) {
+function LiveLecture({
+  trigger,
+  subject,
+  topicTitle,
+  lectureLanguage,
+  context,
+  focus,
+  dispatchFocus,
+}: AskAIAssistantProps & { subject: TeacherSubject; focus: FocusState; dispatchFocus: Dispatch<FocusEvent> }) {
   const [prefs] = usePrefs();
   const [subjects] = useState(() => [subject]);
   const [opening] = useState(() =>
@@ -281,6 +358,8 @@ function LiveLecture({ trigger, subject, topicTitle, lectureLanguage, context }:
       onOrbClick={onOrbClick}
       onSend={onSend}
       onQuick={onQuick}
+      focus={focus}
+      dispatchFocus={dispatchFocus}
     />
   );
 }

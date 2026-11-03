@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/lib/queryClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import { openAskAI } from "@/lib/askAIStore";
 import { useMemo, type ComponentType } from "react";
 
@@ -40,7 +39,6 @@ export const HamburgerMenu = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { data: profile } = useUserProfile();
-  const { hasActivePlan } = useAITeacherSubscription();
 
   const initials = (profile?.full_name || profile?.email || "U").slice(0, 2).toUpperCase();
 
@@ -52,7 +50,6 @@ export const HamburgerMenu = () => {
 
   const menuItems = useMemo(() => {
     if (!isAuthenticated) return guestMenuItems;
-    if (!hasActivePlan) return authenticatedMenuItems;
     const list: MenuItem[] = [...authenticatedMenuItems];
     const myCoursesIdx = list.findIndex((i) => "path" in i && i.path === "/my-courses");
     // Opens the Ask AI screen (the one the lecture player has) instead of going to a page of its own.
@@ -63,7 +60,7 @@ export const HamburgerMenu = () => {
       list.unshift(aiItem);
     }
     return list;
-  }, [isAuthenticated, hasActivePlan]);
+  }, [isAuthenticated]);
 
   return (
     <Sheet>

@@ -60,7 +60,7 @@ export const AI_TEACHER_PLANS: Record<AITeacherPlanId, AITeacherPlanInfo> = {
   },
   admin_1000: {
     id: "admin_1000",
-    name: "Pro Plan",
+    name: "Plus Plan",
     price: initialPricing.admin_price,
     currency: "₹",
     tagline: "All-inclusive AI Teacher with built-in voice & chat, powered by SimpleLecture",

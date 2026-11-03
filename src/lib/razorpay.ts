@@ -41,15 +41,39 @@ export interface RazorpayCheckoutOptions {
 /**
  * Loads Razorpay checkout script on demand if not already loaded.
  */
+const LOAD_FAILED_MESSAGE = "Could not load Razorpay. Check your internet.";
+const LOAD_TIMEOUT_MS = 10000;
+
 export function ensureRazorpay(): Promise<boolean> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (typeof window === "undefined") return resolve(false);
     if ((window as any).Razorpay) return resolve(true);
 
     const existing = document.querySelector<HTMLScriptElement>('script[data-razorpay="true"]');
     if (existing) {
-      existing.addEventListener("load", () => resolve(true), { once: true });
-      existing.addEventListener("error", () => resolve(false), { once: true });
+      // A script from an earlier call is already in flight (or finished without
+      // exposing window.Razorpay). Wait for it, but never hang forever.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = () => {
+        if (timer !== undefined) clearTimeout(timer);
+        existing.removeEventListener("load", onLoad);
+        existing.removeEventListener("error", onError);
+      };
+      const onLoad = () => {
+        done();
+        if ((window as any).Razorpay) resolve(true);
+        else reject(new Error(LOAD_FAILED_MESSAGE));
+      };
+      const onError = () => {
+        done();
+        reject(new Error(LOAD_FAILED_MESSAGE));
+      };
+      existing.addEventListener("load", onLoad);
+      existing.addEventListener("error", onError);
+      timer = setTimeout(() => {
+        done();
+        reject(new Error(LOAD_FAILED_MESSAGE));
+      }, LOAD_TIMEOUT_MS);
       return;
     }
 
@@ -78,8 +102,12 @@ export async function openRazorpayCheckout(
     throw new Error("Razorpay SDK could not be loaded. Please check your internet connection.");
   }
 
+  if (!options.key) {
+    throw new Error("Razorpay key is missing. Payment cannot be started.");
+  }
+
   const rzp = new window.Razorpay({
-    key: options.key || "rzp_test_simplelecture",
+    key: options.key,
     amount: options.amount,
     currency: options.currency || "INR",
     name: options.name || "SimpleLecture",
@@ -106,4 +134,47 @@ export async function openRazorpayCheckout(
 
   rzp.open();
   return rzp;
+}
+
+export interface RazorpayPromiseResult {
+  success: boolean;
+  cancelled?: boolean;
+  error?: string;
+  data?: RazorpaySuccessPayload;
+}
+
+/**
+ * Promise wrapper around the Razorpay modal. Resolves exactly once:
+ * - success: the handler fired (payment captured by Razorpay)
+ * - cancelled: the user dismissed the modal
+ * - error: payment.failed or the SDK could not be opened
+ */
+export function openCheckoutAsPromise(
+  options: Omit<RazorpayCheckoutOptions, "handler" | "modal">
+): Promise<RazorpayPromiseResult> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result: RazorpayPromiseResult) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
+    openRazorpayCheckout(
+      {
+        ...options,
+        handler: (response) => finish({ success: true, data: response }),
+        modal: {
+          ondismiss: () => finish({ success: false, cancelled: true }),
+        },
+      },
+      (error) => {
+        const message =
+          error?.description || error?.reason || error?.message || "Payment failed. Please try again.";
+        finish({ success: false, error: String(message) });
+      }
+    ).catch((err: any) => {
+      finish({ success: false, error: err?.message || "Payment could not be started." });
+    });
+  });
 }

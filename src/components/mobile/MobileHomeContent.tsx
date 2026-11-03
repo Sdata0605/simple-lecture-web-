@@ -9,8 +9,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { MobileHomeSearch } from "./MobileHomeSearch";
-import { AITeacherPlanModal } from "@/components/aiteacher/AITeacherPlanModal";
-import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
+import { usePlanState } from "@/lib/aiTeacherKeys";
+import { openAskAI } from "@/lib/askAIStore";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHomepageData } from "@/hooks/useHomepageData";
@@ -74,8 +74,13 @@ export const MobileHomeContent = () => {
   const navigate = useNavigate();
   
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [planModalOpen, setPlanModalOpen] = useState(false);
-  const { hasActivePlan } = useAITeacherSubscription();
+  const { state: planState } = usePlanState();
+  // Only a confirmed non-subscriber is sent to the purchase page. Loading and unknown open the overlay,
+  // which shows the plan check or the retry message.
+  const onAITeacherClick = () => {
+    if (planState === "inactive") navigate("/aiteacher/plus");
+    else openAskAI();
+  };
   const heroImages = [heroBoardExams, heroBoardExams, heroBoardExams];
   
   const { data: user, isLoading: userLoading } = useCurrentUser();
@@ -208,16 +213,14 @@ export const MobileHomeContent = () => {
                 >
                   Free Preview
                 </Button>
-                {!hasActivePlan && (
-                  <Button
-                    size="sm"
-                    className="bg-gradient-to-r from-amber-400 to-orange-400 text-slate-950 font-bold hover:brightness-105 text-xs h-8 px-2.5 shadow border border-amber-200/60"
-                    onClick={() => setPlanModalOpen(true)}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 mr-1 text-slate-950" />
-                    Purchase AI Teacher
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  className="bg-gradient-to-r from-amber-400 to-orange-400 text-slate-950 font-bold hover:brightness-105 text-xs h-8 px-2.5 shadow border border-amber-200/60"
+                  onClick={onAITeacherClick}
+                >
+                  <Sparkles className="w-3.5 h-3.5 mr-1 text-slate-950" />
+                  {planState === "inactive" ? "Purchase AI Teacher" : "Open your AI Teacher"}
+                </Button>
               </div>
             </div>
           </div>
@@ -291,7 +294,6 @@ export const MobileHomeContent = () => {
         <HomepageFAQSection />
       </Suspense>
 
-      <AITeacherPlanModal open={planModalOpen} onOpenChange={setPlanModalOpen} />
     </div>
   );
 };
