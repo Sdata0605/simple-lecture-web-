@@ -13,7 +13,7 @@
 #   * mod_alias enabled (ErrorDocument)
 # ─────────────────────────────────────────────────────────────────────────────
 
-Options -Indexes +FollowSymLinks
+Options -Indexes +SymLinksIfOwnerMatch
 
 # ── SPA fallback ────────────────────────────────────────────────────────────
 # 1. If a real file or directory exists at the requested path, serve it.
