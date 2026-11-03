@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUpcomingClasses } from "@/hooks/useUpcomingClasses";
 import { format, isToday, isTomorrow } from "date-fns";
+import { safeHttpUrl } from "@/lib/safeUrl";
 
 const UpcomingClasses = () => {
   const { data: classes = [], isLoading } = useUpcomingClasses();
@@ -93,9 +94,9 @@ const UpcomingClasses = () => {
                   </div>
                 )}
               </div>
-              {classItem.meeting_link && (
+              {safeHttpUrl(classItem.meeting_link) && (
                 <Button size="sm" className="w-full" asChild>
-                  <a href={classItem.meeting_link} target="_blank" rel="noopener noreferrer">
+                  <a href={safeHttpUrl(classItem.meeting_link)} target="_blank" rel="noopener noreferrer">
                     <Video className="h-4 w-4 mr-2" />
                     Join Class
                   </a>

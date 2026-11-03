@@ -58,6 +58,9 @@ const SUPABASE_ANON =
   process.env.SUPABASE_ANON_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94d2hxdnNvZWxxcXNibG1xa3h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1MTU4NTgsImV4cCI6MjA3NTA5MTg1OH0.nZbWSb9AQK5uGAQmc7zXAceTHm9GRQJvqkg4-LNo_DM";
 
+/** Supabase fetch failures collected during dynamic route enumeration. */
+const fetchErrors = [];
+
 async function sbFetch(path) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
@@ -216,6 +219,72 @@ const ROUTES = [
     lead:
       "A community for SimpleLecture students — ask doubts, share notes, and learn together.",
   },
+  {
+    path: "/success-stories",
+    title: "Student Success Stories",
+    description:
+      "Real results from SimpleLecture students who scored 90+ in SSLC, PUC, NEET and JEE with AI tutors and affordable online courses.",
+    h1: "Student Success Stories",
+    lead:
+      "Read how SimpleLecture students improved their board and entrance exam scores with 24/7 AI tutors.",
+  },
+  {
+    path: "/how-it-works",
+    title: "How It Works",
+    description:
+      "See how SimpleLecture works: pick your course, enroll in minutes, learn with AI lectures and clear doubts instantly with an AI tutor.",
+    h1: "How SimpleLecture Works",
+    lead:
+      "Pick your course, enroll in minutes, learn with chapter-wise AI lectures and get your doubts cleared instantly.",
+  },
+  {
+    path: "/invention-disclosure",
+    title: "Invention Disclosure",
+    description:
+      "SimpleLecture invention disclosure information for the platform's AI teaching technology.",
+    h1: "Invention Disclosure",
+    lead: "Information about the technology behind the SimpleLecture AI teaching platform.",
+  },
+  {
+    path: "/reels",
+    title: "Learning Reels",
+    description:
+      "Short, bite-sized learning reels from SimpleLecture covering board and entrance exam topics.",
+    h1: "Learning Reels",
+    lead: "Short bite-sized lessons for board and entrance exam preparation.",
+  },
+  {
+    path: "/v3-trial",
+    title: "AI Teacher Trial",
+    description:
+      "Try a SimpleLecture AI teacher lesson for free before you enroll in a course.",
+    h1: "AI Teacher Trial",
+    lead: "Try a SimpleLecture AI teacher lesson before you enroll.",
+  },
+  {
+    path: "/v4-player",
+    title: "AI Lecture Player",
+    description:
+      "Watch SimpleLecture AI lectures with interactive player controls, chapter navigation and doubt support.",
+    h1: "AI Lecture Player",
+    lead: "Watch AI-powered lectures with interactive controls on SimpleLecture.",
+  },
+  {
+    path: "/v5-player",
+    title: "AI Lecture Player",
+    description:
+      "Watch SimpleLecture AI lectures with interactive player controls, chapter navigation and doubt support.",
+    h1: "AI Lecture Player",
+    lead: "Watch AI-powered lectures with interactive controls on SimpleLecture.",
+  },
+  {
+    path: "/aiteacher",
+    title: "Personal AI Teacher",
+    description:
+      "Get a personal AI teacher on SimpleLecture for board and entrance exams. Ask doubts 24/7 and learn at your own pace.",
+    h1: "Your Personal AI Teacher",
+    lead: "A personal AI teacher for board and entrance exams, available 24/7.",
+  },
 ];
 
 // ─── HTML rewriting helpers ──────────────────────────────────────────────
@@ -349,9 +418,9 @@ async function buildDynamicRoutes() {
       const keywords =
         (c.seo_keywords && String(c.seo_keywords).trim()) ||
         `${c.name}, ${c.name} online coaching, ${c.name} video lectures, ${c.name} mock test, SimpleLecture`;
-      const canonical =
-        (c.seo_canonical_url && String(c.seo_canonical_url).trim()) ||
-        `${SITE_URL}/course/${c.slug}`;
+      // Same rule as ProgramDetail.tsx: always /course/<slug>. The DB
+      // seo_canonical_url override is intentionally ignored.
+      const canonical = `${SITE_URL}/course/${c.slug}`;
       const ogImage =
         (c.og_image_url && String(c.og_image_url).trim()) ||
         c.thumbnail_url ||
@@ -395,6 +464,7 @@ async function buildDynamicRoutes() {
     console.log(`[prerender] courses: ${courses.length}`);
   } catch (e) {
     console.warn(`[prerender] skipping courses:`, e.message);
+    fetchErrors.push(`courses: ${e.message}`);
   }
 
   // Subjects → /subject/:slug
@@ -428,6 +498,7 @@ async function buildDynamicRoutes() {
     console.log(`[prerender] subjects: ${subjects.length}`);
   } catch (e) {
     console.warn(`[prerender] skipping subjects:`, e.message);
+    fetchErrors.push(`subjects: ${e.message}`);
   }
 
   // Blog posts → /blog/:slug
@@ -477,6 +548,7 @@ async function buildDynamicRoutes() {
     console.log(`[prerender] blog posts: ${posts.length}`);
   } catch (e) {
     console.warn(`[prerender] skipping blog:`, e.message);
+    fetchErrors.push(`blog: ${e.message}`);
   }
 
   // Explore-by-goal → /explore/:slug
@@ -498,25 +570,33 @@ async function buildDynamicRoutes() {
     console.log(`[prerender] explore goals: ${goals.length}`);
   } catch (e) {
     console.warn(`[prerender] skipping explore:`, e.message);
+    fetchErrors.push(`explore: ${e.message}`);
   }
 
   // Programmatic landing pages → /learn/:slug. We parse landingPages.ts with a
-  // light regex to avoid loading a TS file at Node runtime.
+  // light regex to avoid loading a TS file at Node runtime. Each LANDING_PAGES
+  // entry is split out first, so page-level fields are read per entry. Every
+  // entry lists h1/title/description before `features:`, and feature objects
+  // also have a `title:` field, so a file-wide match would pick the wrong one.
   try {
     const lpSrc = await readFile(
       join(ROOT, "src/lib/seo/landingPages.ts"),
       "utf8"
     );
-    const slugs = Array.from(lpSrc.matchAll(/slug:\s*["']([a-z0-9-]+)["']/g)).map((m) => m[1]);
-    const titles = Array.from(lpSrc.matchAll(/title:\s*["'`]([^"'`]+)["'`]/g)).map((m) => m[1]);
-    const descs = Array.from(lpSrc.matchAll(/description:\s*\n?\s*["'`]([^"'`]+)["'`]/g)).map((m) => m[1]);
-    const h1s = Array.from(lpSrc.matchAll(/h1:\s*["'`]([^"'`]+)["'`]/g)).map((m) => m[1]);
+    const STR = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/.source;
+    const field = (chunk, re) => {
+      const m = chunk.match(new RegExp(re.source.replace("__STR__", STR)));
+      return m ? m[1].slice(1, -1).replace(/\\(.)/g, "$1") : null;
+    };
+    const chunks = lpSrc.split(/(?=\bslug:\s*["'])/).slice(1);
 
-    for (let i = 0; i < slugs.length; i++) {
-      const slug = slugs[i];
-      const title = titles[i] || `${slug} | SimpleLecture`;
-      const desc = descs[i] || `${slug} — online coaching on SimpleLecture.`;
-      const h1 = h1s[i] || title;
+    for (const chunk of chunks) {
+      const slugMatch = chunk.match(/^slug:\s*["']([a-z0-9-]+)["']/);
+      if (!slugMatch) continue;
+      const slug = slugMatch[1];
+      const title = field(chunk, /\btitle:\s*(__STR__)/) || `${slug} | SimpleLecture`;
+      const desc = field(chunk, /\bdescription:\s*(__STR__)/) || `${slug} — online coaching on SimpleLecture.`;
+      const h1 = field(chunk, /\bh1:\s*(__STR__)/) || title;
       out.push({
         path: `/learn/${slug}`,
         title,
@@ -525,7 +605,7 @@ async function buildDynamicRoutes() {
         lead: truncate(desc, 240),
       });
     }
-    console.log(`[prerender] landing pages: ${slugs.length}`);
+    console.log(`[prerender] landing pages: ${out.filter((r) => r.path.startsWith("/learn/")).length}`);
   } catch (e) {
     console.warn(`[prerender] skipping landing pages:`, e.message);
   }
@@ -543,6 +623,13 @@ async function main() {
 
   const shell = await readFile(SHELL_PATH, "utf8");
   const dynamic = await buildDynamicRoutes();
+  // A Supabase fetch that failed means we would ship without course/blog/etc.
+  // pages. Fail the build instead of deploying that silently.
+  if (fetchErrors.length) {
+    throw new Error(
+      `Supabase fetch failed for ${fetchErrors.length} source(s): ${fetchErrors.join("; ")}`
+    );
+  }
   const allRoutes = [...ROUTES, ...dynamic];
   let wrote = 0;
 
@@ -562,13 +649,18 @@ async function main() {
     }
   }
 
-  // Copy .htaccess from public/ into dist/ if Vite didn't (it usually does,
-  // but belt-and-braces in case it's missed).
-  const srcHt = join(ROOT, "public", ".htaccess");
-  const dstHt = join(DIST, ".htaccess");
-  if (existsSync(srcHt) && !existsSync(dstHt)) {
-    await copyFile(srcHt, dstHt);
-    console.log(`[prerender] copied public/.htaccess → dist/.htaccess`);
+  // Always copy .htaccess and robots.txt from public/ into dist/, overwriting
+  // any stale copy, so the deployed files match the repo. sitemap.xml is
+  // intentionally not generated by this script.
+  for (const name of [".htaccess", "robots.txt"]) {
+    const src = join(ROOT, "public", name);
+    const dst = join(DIST, name);
+    if (!existsSync(src)) {
+      console.warn(`[prerender] public/${name} not found, skipping copy`);
+      continue;
+    }
+    await copyFile(src, dst);
+    console.log(`[prerender] copied public/${name} → dist/${name}`);
   }
 
   console.log(`[prerender] done — wrote ${wrote} pages.`);

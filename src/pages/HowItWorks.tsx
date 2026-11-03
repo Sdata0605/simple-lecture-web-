@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { SEOHead } from "@/components/SEO/SEOHead";
 import { Search, BookOpen, Brain, Trophy, MessageCircle, BarChart3, Sparkles } from "lucide-react";
 
 const steps = [
@@ -42,6 +43,11 @@ const steps = [
 const HowItWorks = () => {
   return (
     <div className="min-h-screen bg-background">
+      <SEOHead
+        title="How It Works"
+        description="See how SimpleLecture works: pick your course, enroll in minutes, learn with AI lectures and clear doubts instantly with an AI tutor."
+        canonicalUrl="https://simplelecture.com/how-it-works"
+      />
       <Header />
       <main className="container mx-auto px-4 py-16">
         <div className="text-center mb-12 max-w-3xl mx-auto">

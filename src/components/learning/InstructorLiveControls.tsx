@@ -10,6 +10,7 @@ import { useAddRecording } from '@/hooks/useAddRecording';
 import { useBBBMeeting, useBBBMeetingInfo } from '@/hooks/useBBBMeeting';
 import { useBBBConfigured } from '@/hooks/useBBBSettings';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { safeHttpUrl } from '@/lib/safeUrl';
 import { Radio, Video, VideoOff, Link as LinkIcon, Check, Users, Loader2 } from 'lucide-react';
 
 interface ScheduledClassForControls {
@@ -206,9 +207,9 @@ export const InstructorLiveControls = ({ scheduledClass, onStatusChange }: Instr
                     Paste a YouTube, Vimeo, or Google Drive link
                   </p>
                 </div>
-                {scheduledClass.recording_url && (
+                {safeHttpUrl(scheduledClass.recording_url) && (
                   <div className="text-sm text-muted-foreground">
-                    Current: <a href={scheduledClass.recording_url} target="_blank" rel="noopener noreferrer" className="text-primary underline">View Recording</a>
+                    Current: <a href={safeHttpUrl(scheduledClass.recording_url)} target="_blank" rel="noopener noreferrer" className="text-primary underline">View Recording</a>
                   </div>
                 )}
                 <Button

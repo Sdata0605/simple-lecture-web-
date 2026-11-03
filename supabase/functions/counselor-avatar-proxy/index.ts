@@ -27,6 +27,15 @@ const corsHeaders = {
 
 const DEFAULT_BASE = 'http://204.12.237.78:5004';
 const ALLOWED_PATH = /^\/[a-zA-Z0-9_\-\/]*$/;
+// Hard allowlist of upstream origins. The two avatar servers the admin page
+// offers (its default and the alternate) plus DEFAULT_BASE are always allowed;
+// extra origins can be added via COUNSELOR_AVATAR_ALLOWED_BASES.
+const ALLOWED_ORIGINS = new Set(
+  [DEFAULT_BASE, 'http://69.197.145.4:5004', ...(Deno.env.get('COUNSELOR_AVATAR_ALLOWED_BASES') || '').split(',')]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .flatMap((s) => { try { return [new URL(s).origin]; } catch { return []; } }),
+);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -57,6 +66,12 @@ Deno.serve(async (req) => {
       if (!/^https?:$/.test(upstreamBase.protocol)) throw new Error('bad proto');
     } catch {
       return new Response(JSON.stringify({ error: 'Invalid base URL' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!ALLOWED_ORIGINS.has(upstreamBase.origin)) {
+      return new Response(JSON.stringify({ error: 'Base URL not allowed' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

@@ -77,7 +77,7 @@ const Index = () => {
           title={SEO_TITLE}
           description={SEO_DESCRIPTION}
           keywords={SEO_KEYWORDS}
-          canonicalUrl="https://simplelecture.com"
+          canonicalUrl="https://simplelecture.com/"
           structuredData={structuredData}
         />
         <MobileHomeContent />
@@ -94,7 +94,7 @@ const Index = () => {
         title={SEO_TITLE}
         description={SEO_DESCRIPTION}
         keywords={SEO_KEYWORDS}
-        canonicalUrl="https://simplelecture.com"
+        canonicalUrl="https://simplelecture.com/"
         structuredData={structuredData}
         preloadImage={heroBoardExams}
       />

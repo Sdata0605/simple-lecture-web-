@@ -11,6 +11,42 @@ const corsHeaders = {
 // Default server IP - can be overridden per-request via server_ip parameter
 const DEFAULT_SERVER_IP = "204.12.237.78";
 
+// Allowed GPU server IPs for server_ip (the servers listed in the admin UI).
+// Extra IPs can be added via VIDEO_GEN_ALLOWED_SERVER_IPS (comma-separated).
+const ALLOWED_SERVER_IPS = new Set([
+  DEFAULT_SERVER_IP,
+  "69.197.145.4",
+  "63.141.249.82",
+  "173.208.218.77",
+  "38.247.187.26",
+  "38.247.185.28",
+  "38.247.187.18",
+  ...(Deno.env.get("VIDEO_GEN_ALLOWED_SERVER_IPS") || "").split(",").map((s) => s.trim()).filter(Boolean),
+]);
+
+// Absent server_ip falls back to DEFAULT_SERVER_IP, so only explicit values are checked.
+function isAllowedServerIp(ip: string | null | undefined): boolean {
+  return !ip || ALLOWED_SERVER_IPS.has(ip);
+}
+
+function isValidPort(port: unknown): boolean {
+  if (!port) return true;
+  const n = Number(port);
+  return Number.isInteger(n) && n > 0 && n < 65536;
+}
+
+// Reject traversal and absolute paths in values interpolated into upstream URLs.
+function isSafeRelativePath(p: string): boolean {
+  return !p.includes('..') && !p.startsWith('/') && !p.includes('\\');
+}
+
+function badRequest(message: string): Response {
+  return new Response(
+    JSON.stringify({ error: message }),
+    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
 // Helper to construct API base URL from server IP
 function getExternalApiBase(serverIp?: string): string {
   const ip = serverIp || DEFAULT_SERVER_IP;
@@ -116,8 +152,12 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Support dynamic server IP from query params
+        // Support dynamic server IP from query params (validated, see ALLOWED_SERVER_IPS)
         const server_ip = url.searchParams.get('server_ip');
+        if (!isAllowedServerIp(server_ip)) return badRequest('server_ip not allowed');
+        if (!isSafeRelativePath(file_path) || !isSafeRelativePath(job_id) || job_id.includes('/')) {
+          return badRequest('Invalid job_id or file_path');
+        }
         const dynamicApiBase = getExternalApiBase(server_ip || undefined);
         const mediaUrl = `${dynamicApiBase}/player/jobs/${job_id}/${file_path}`;
         const reqId = crypto.randomUUID().slice(0, 8);
@@ -689,6 +729,7 @@ Deno.serve(async (req) => {
         
         // Support dynamic server IP from query params
         const server_ip = url.searchParams.get('server_ip');
+        if (!isAllowedServerIp(server_ip)) return badRequest('server_ip not allowed');
         const chatterboxIp = server_ip || DEFAULT_SERVER_IP;
         
         // Port 5004 is the Chatterbox/HeyGem server for language avatars
@@ -762,6 +803,11 @@ Deno.serve(async (req) => {
       // Multilanguage dubbing fields
       languages, speaker, tts_engine, skip_section_merge, skip_final_merge,
     } = body;
+
+    // server_ip and target_port are interpolated into upstream URLs below.
+    if (!isAllowedServerIp(server_ip) || !isValidPort(target_port)) {
+      return badRequest('server_ip or target_port not allowed');
+    }
 
     // Get dynamic API base URLs from server_ip parameter
     const dynamicApiBase = getExternalApiBase(server_ip);

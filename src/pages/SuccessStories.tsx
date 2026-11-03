@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Star, Quote, User } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { SEOHead } from "@/components/SEO/SEOHead";
 
 interface Story {
   id: string;
@@ -81,6 +82,11 @@ const stories: Story[] = [
 const SuccessStories = () => {
   return (
     <div className="min-h-screen bg-background">
+      <SEOHead
+        title="Student Success Stories"
+        description="Real results from SimpleLecture students who scored 90+ in SSLC, PUC, NEET and JEE with AI tutors and affordable online courses."
+        canonicalUrl="https://simplelecture.com/success-stories"
+      />
       <Header />
       <main className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">

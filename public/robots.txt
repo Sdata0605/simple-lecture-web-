@@ -27,6 +27,16 @@ Disallow: /timetable
 Disallow: /enroll
 Disallow: /forum/group
 Disallow: /implementation
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 User-agent: Bingbot
 Allow: /
@@ -57,12 +67,42 @@ Disallow: /timetable
 Disallow: /enroll
 Disallow: /forum/group
 Disallow: /implementation
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 User-agent: Twitterbot
 Allow: /
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 User-agent: facebookexternalhit
 Allow: /
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 # AI Search Engine Crawlers
 User-agent: GPTBot
@@ -94,6 +134,16 @@ Disallow: /timetable
 Disallow: /enroll
 Disallow: /forum/group
 Disallow: /implementation
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 User-agent: ChatGPT-User
 Allow: /
@@ -124,6 +174,16 @@ Disallow: /timetable
 Disallow: /enroll
 Disallow: /forum/group
 Disallow: /implementation
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 User-agent: PerplexityBot
 Allow: /
@@ -154,6 +214,16 @@ Disallow: /timetable
 Disallow: /enroll
 Disallow: /forum/group
 Disallow: /implementation
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 User-agent: ClaudeBot
 Allow: /
@@ -184,6 +254,16 @@ Disallow: /timetable
 Disallow: /enroll
 Disallow: /forum/group
 Disallow: /implementation
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 User-agent: Applebot-Extended
 Allow: /
@@ -214,6 +294,16 @@ Disallow: /timetable
 Disallow: /enroll
 Disallow: /forum/group
 Disallow: /implementation
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 User-agent: *
 Allow: /
@@ -244,5 +334,15 @@ Disallow: /timetable
 Disallow: /enroll
 Disallow: /forum/group
 Disallow: /implementation
+Disallow: /my-tests
+Disallow: /my-notes
+Disallow: /practice-results
+Disallow: /tools
+Disallow: /aiteacher
+Disallow: /v4-player
+Disallow: /v5-player
+Disallow: /v3-trial
+Disallow: /reels
+Disallow: /invention-disclosure
 
 Sitemap: https://simplelecture.com/sitemap.xml

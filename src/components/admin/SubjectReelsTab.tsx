@@ -10,6 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { safeHttpUrl } from "@/lib/safeUrl";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -400,7 +401,7 @@ export function SubjectReelsTab({ subjectId }: Props) {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => window.open(d.source_url!, "_blank")}
+                            onClick={() => { const url = safeHttpUrl(d.source_url); if (url) window.open(url, "_blank"); }}
                           >
                             <Eye className="h-4 w-4 mr-1" /> View
                           </Button>

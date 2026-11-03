@@ -14,6 +14,14 @@ const corsHeaders = {
 
 const DEFAULT_BASE = 'http://116.202.230.124:8000';
 const ALLOWED_PATH = /^\/[a-zA-Z0-9_\-\/]*$/;
+// Hard allowlist of upstream origins. DEFAULT_BASE is always allowed; extra
+// origins can be added via AI_TEACHING_ALLOWED_BASES (comma-separated URLs).
+const ALLOWED_ORIGINS = new Set(
+  [DEFAULT_BASE, ...(Deno.env.get('AI_TEACHING_ALLOWED_BASES') || '').split(',')]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .flatMap((s) => { try { return [new URL(s).origin]; } catch { return []; } }),
+);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -44,6 +52,12 @@ Deno.serve(async (req) => {
       if (!/^https?:$/.test(upstreamBase.protocol)) throw new Error('bad proto');
     } catch {
       return new Response(JSON.stringify({ error: 'Invalid base URL' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!ALLOWED_ORIGINS.has(upstreamBase.origin)) {
+      return new Response(JSON.stringify({ error: 'Base URL not allowed' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

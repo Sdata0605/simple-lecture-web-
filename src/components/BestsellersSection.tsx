@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Star, Clock, Users, ChevronRight, GraduationCap, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useFeaturedCourses } from "@/hooks/useFeaturedCourses";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { CourseThumbnail } from "@/components/ui/course-thumbnail";
 
 interface BestsellersSectionProps {
@@ -120,9 +120,9 @@ export const BestsellersSection = ({ featuredCoursesData }: BestsellersSectionPr
               >
                 {bestsellerCourses.map((course) => (
                   <div key={course.id} className="w-full flex-shrink-0 px-2">
-                    <Card 
+                    <Link to={`/course/${course.slug}`} className="block">
+                    <Card
                       className="bg-white hover:shadow-2xl transition-all duration-300 group overflow-hidden cursor-pointer"
-                      onClick={() => navigate(`/course/${course.slug}`)}
                     >
                       {/* Course Image */}
                       <div className="relative h-48 overflow-hidden">
@@ -200,6 +200,7 @@ export const BestsellersSection = ({ featuredCoursesData }: BestsellersSectionPr
                         </div>
                       </CardContent>
                     </Card>
+                    </Link>
                   </div>
                 ))}
               </div>

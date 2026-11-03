@@ -1,5 +1,7 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 
+// The sitemap is public, read-only GET content, so the wildcard origin is kept as-is.
+// Do not add more permissive headers here.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -7,6 +9,9 @@ const corsHeaders = {
 
 const BASE_URL = "https://simplelecture.com";
 
+// Public, non-auth-gated routes from src/App.tsx. Static pages get no lastmod
+// because they have no stable modification date.
+// Auth-gated paths must not be added here (/reels is gated inside MobileReels, so it is excluded).
 const STATIC_PAGES = [
   { path: "/", changefreq: "daily", priority: "1.0" },
   { path: "/programs", changefreq: "weekly", priority: "0.9" },
@@ -16,9 +21,14 @@ const STATIC_PAGES = [
   { path: "/support", changefreq: "monthly", priority: "0.6" },
   { path: "/privacy", changefreq: "monthly", priority: "0.4" },
   { path: "/terms", changefreq: "monthly", priority: "0.4" },
+  { path: "/blog", changefreq: "weekly", priority: "0.7" },
+  { path: "/how-it-works", changefreq: "monthly", priority: "0.6" },
+  { path: "/success-stories", changefreq: "monthly", priority: "0.6" },
 ];
 
-// Programmatic SEO landing pages (/learn/:slug)
+// Programmatic SEO landing pages (/learn/:slug).
+// Source of truth: src/lib/seo/landingPages.ts (LANDING_PAGES[].slug).
+// The edge function cannot import from the frontend, so keep this list in sync by hand.
 const LANDING_SLUGS = [
   "jee-main-online-coaching",
   "neet-2026-online-coaching",
@@ -28,7 +38,64 @@ const LANDING_SLUGS = [
   "online-coaching-india",
 ];
 
-Deno.serve(async (req) => {
+// PostgREST caps a single response at 1000 rows.
+const PAGE_SIZE = 1000;
+
+// Reads every row of a query by paging with .range().
+// build() must return a fresh query with a deterministic .order() so pages do not overlap.
+// Any query error is thrown so the caller can return 503 instead of a partial sitemap.
+async function fetchAll(
+  build: (from: number, to: number) => PromiseLike<{ data: any[] | null; error: unknown }>
+): Promise<any[]> {
+  const rows: any[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await build(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+// Escapes the five XML special characters so slugs cannot break the document.
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+// Converts a timestamp to a YYYY-MM-DD date. Returns null when missing so lastmod is omitted.
+function dateOnly(value: string | null | undefined): string | null {
+  return value ? String(value).split("T")[0] : null;
+}
+
+function url(
+  loc: string,
+  lastmod: string | null,
+  changefreq: string,
+  priority: string
+): string {
+  const lastmodTag = lastmod ? `\n    <lastmod>${escapeXml(lastmod)}</lastmod>` : "";
+  return `  <url>\n    <loc>${escapeXml(loc)}</loc>${lastmodTag}\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
+}
+
+function unavailable(): Response {
+  return new Response("Sitemap temporarily unavailable. Please retry later.", {
+    status: 503,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Retry-After": "300",
+    },
+  });
+}
+
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -39,56 +106,71 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_ANON_KEY")!
     );
 
-    const { data: courses } = await supabase
-      .from("courses")
-      .select("slug, created_at")
-      .eq("is_active", true)
-      .order("sequence_order", { ascending: true });
-
-    const { data: subjects } = await supabase
-      .from("popular_subjects")
-      .select("slug, updated_at");
-
-    const { data: posts } = await supabase
-      .from("blog_posts")
-      .select("slug, created_at")
-      .eq("status", "published");
-
-    const { data: goals } = await supabase
-      .from("explore_by_goal")
-      .select("slug, updated_at")
-      .eq("is_active", true);
-
-    const today = new Date().toISOString().split("T")[0];
-    const day = (d) => (d ? String(d).split("T")[0] : today);
-
-    const url = (loc, lastmod, changefreq, priority) =>
-      `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
+    // courses has no updated_at column (only created_at), so its lastmod is omitted.
+    // popular_subjects and explore_by_goal have updated_at, which is used for lastmod.
+    // blog_posts has no updated_at column (only published_at and created_at), so its lastmod is omitted.
+    const [courses, subjects, posts, goals] = await Promise.all([
+      fetchAll((from, to) =>
+        supabase
+          .from("courses")
+          .select("slug")
+          .eq("is_active", true)
+          .order("sequence_order", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("popular_subjects")
+          .select("slug, updated_at")
+          .eq("is_active", true)
+          .order("slug", { ascending: true })
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("blog_posts")
+          .select("slug")
+          .eq("status", "published")
+          .order("slug", { ascending: true })
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("explore_by_goal")
+          .select("slug, updated_at")
+          .eq("is_active", true)
+          .order("slug", { ascending: true })
+          .range(from, to)
+      ),
+    ]);
 
     const staticUrls = STATIC_PAGES.map((p) =>
-      url(`${BASE_URL}${p.path}`, today, p.changefreq, p.priority)
+      url(`${BASE_URL}${p.path}`, null, p.changefreq, p.priority)
     ).join("\n");
 
     const landingUrls = LANDING_SLUGS.map((slug) =>
-      url(`${BASE_URL}/learn/${slug}`, today, "weekly", "0.85")
+      url(`${BASE_URL}/learn/${slug}`, null, "weekly", "0.85")
     ).join("\n");
 
-    const courseUrls = (courses || [])
-      .map((c) => url(`${BASE_URL}/course/${c.slug}`, day(c.created_at), "weekly", "0.8"))
+    const courseUrls = courses
+      .filter((c) => c.slug)
+      .map((c) => url(`${BASE_URL}/course/${c.slug}`, null, "weekly", "0.8"))
       .join("\n");
 
-    const subjectUrls = (subjects || [])
+    const subjectUrls = subjects
       .filter((s) => s.slug)
-      .map((s) => url(`${BASE_URL}/subject/${s.slug}`, day(s.updated_at), "weekly", "0.75"))
+      .map((s) => url(`${BASE_URL}/subject/${s.slug}`, dateOnly(s.updated_at), "weekly", "0.75"))
       .join("\n");
 
-    const blogUrls = (posts || [])
-      .map((p) => url(`${BASE_URL}/blog/${p.slug}`, day(p.created_at), "monthly", "0.6"))
+    const blogUrls = posts
+      .filter((p) => p.slug)
+      .map((p) => url(`${BASE_URL}/blog/${p.slug}`, null, "monthly", "0.6"))
       .join("\n");
 
-    const goalUrls = (goals || [])
+    const goalUrls = goals
       .filter((g) => g.slug)
-      .map((g) => url(`${BASE_URL}/explore/${g.slug}`, day(g.updated_at), "weekly", "0.7"))
+      .map((g) => url(`${BASE_URL}/explore/${g.slug}`, dateOnly(g.updated_at), "weekly", "0.7"))
       .join("\n");
 
     const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
@@ -110,9 +192,6 @@ ${blogUrls}
     });
   } catch (err) {
     console.error("Sitemap generation error:", err);
-    return new Response("Internal Server Error", {
-      status: 500,
-      headers: corsHeaders,
-    });
+    return unavailable();
   }
 });

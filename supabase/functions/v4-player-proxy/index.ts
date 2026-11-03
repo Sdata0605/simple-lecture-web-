@@ -3,8 +3,17 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // V4 player origin — default. Callers can override per-request via
 // __ip / __port query params so jobs on other servers (e.g. 69.197.145.4)
 // resolve to the right origin instead of returning 404 from the default.
+// Overrides are only honoured for "ip:port" entries listed in the
+// V4_PLAYER_ALLOWED_ORIGINS env var (comma-separated, e.g.
+// "204.12.237.78:5006,69.197.145.4:5006"). Anything else returns 400.
 const DEFAULT_ORIGIN_IP = "204.12.237.78";
 const DEFAULT_ORIGIN_PORT = "5006";
+const ALLOWED_ORIGINS = new Set(
+  (Deno.env.get("V4_PLAYER_ALLOWED_ORIGINS") || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
 const CDN_ORIGIN = "https://server1.simplelecture.com/video";
 const FUNCTION_PATH = "/v4-player-proxy";
 
@@ -90,6 +99,12 @@ serve(async (req) => {
     upstreamSearch.delete("__port");
     const originIp = overrideIp || DEFAULT_ORIGIN_IP;
     const originPort = overridePort || DEFAULT_ORIGIN_PORT;
+    if ((overrideIp || overridePort) && !ALLOWED_ORIGINS.has(`${originIp}:${originPort}`)) {
+      return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const origin = `http://${originIp}:${originPort}`;
     const upstreamQuery = upstreamSearch.toString();
     const upstreamSearchSuffix = upstreamQuery ? `?${upstreamQuery}` : "";

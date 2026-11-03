@@ -1,4 +1,5 @@
-import { useParams, Link, Navigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
+import NotFound from "./NotFound";
 import { SmartHeader } from "@/components/SmartHeader";
 import { Footer } from "@/components/Footer";
 import { BottomNav } from "@/components/mobile/BottomNav";
@@ -19,7 +20,7 @@ const SeoLanding = () => {
   const config = slug ? LANDING_PAGE_MAP[slug] : undefined;
 
   if (!config) {
-    return <Navigate to="/" replace />;
+    return <NotFound />;
   }
 
   const canonical = `https://simplelecture.com/learn/${config.slug}`;

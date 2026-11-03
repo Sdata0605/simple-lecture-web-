@@ -106,9 +106,9 @@ const Forum = () => {
                   <MessageSquare className="w-5 h-5" />
                   General Discussions
                 </h2>
-                <Card 
+                <Link to={`/forum/category/${generalCategory.slug}`} className="block">
+                <Card
                   className="cursor-pointer hover:border-primary transition-colors"
-                  onClick={() => navigate(`/forum/category/${generalCategory.slug}`)}
                 >
                   <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -128,6 +128,7 @@ const Forum = () => {
                     </div>
                   </CardHeader>
                 </Card>
+                </Link>
               </div>
             )}
 
@@ -151,10 +152,9 @@ const Forum = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {subjectCategories.map(category => (
-                    <Card 
-                      key={category.id}
+                    <Link key={category.id} to={`/forum/category/${category.slug}`} className="block">
+                    <Card
                       className="cursor-pointer hover:border-primary transition-colors"
-                      onClick={() => navigate(`/forum/category/${category.slug}`)}
                     >
                       <CardHeader>
                         <div className="flex items-center justify-between">
@@ -169,6 +169,7 @@ const Forum = () => {
                         </div>
                       </CardHeader>
                     </Card>
+                    </Link>
                   ))}
                 </div>
               )}
