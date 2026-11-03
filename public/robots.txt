@@ -245,4 +245,4 @@ Disallow: /enroll
 Disallow: /forum/group
 Disallow: /implementation
 
-Sitemap: https://oxwhqvsoelqqsblmqkxx.supabase.co/functions/v1/dynamic-sitemap
+Sitemap: https://simplelecture.com/sitemap.xml
