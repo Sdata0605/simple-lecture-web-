@@ -122,13 +122,8 @@ ErrorDocument 404 /404.html
 <FilesMatch "^\.">
   Require all denied
 </FilesMatch>
-<DirectoryMatch "/\.(git|svn|hg)(/|$)">
-  Require all denied
-</DirectoryMatch>
-# Re-allow .well-known/ which some tools need (Let's Encrypt etc.)
-<DirectoryMatch "/\.well-known/">
-  Require all granted
-</DirectoryMatch>
+# VCS folders: DirectoryMatch is not allowed in .htaccess (causes 500), so deny by URL.
+RedirectMatch 404 ^/(.*/)?\.(git|svn|hg)(/|$)
 
 # ── MIME types Apache sometimes misses ──────────────────────────────────────
 <IfModule mod_mime.c>
