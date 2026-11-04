@@ -14,6 +14,26 @@ import { teacherPlaybackRate } from "@/lib/aiTeacherVoice";
 import { safeLocalStorage } from "@/lib/safeStorage";
 import { silenceOtherAudio, voiceLock } from "@/lib/voiceLock";
 import type { TeacherSubject } from "@/lib/aiTeacherApi";
+import { teacherChat } from "@/lib/aiTeacherChat";
+import type { TeacherPrefs } from "@/lib/aiTeacherPrefs";
+
+const PHOTO_PROMPT = "Please read this photo of my question and solve it step by step.";
+
+/**
+ * Sends a question photo to the teacher (it reads the photo itself) and returns the instruction the live
+ * teacher follows: explain the written solution out loud. A failure becomes a kind spoken explanation.
+ */
+async function solvePhoto(subject: TeacherSubject, image: string, question: string, prefs: TeacherPrefs): Promise<string> {
+  try {
+    const r = await teacherChat({ subjectId: subject.id, question, image, messages: [] }, prefs, subject.name);
+    const solution = (r.answer ?? "").trim();
+    if (!solution) throw new Error("empty answer");
+    return `[Photo question] The student sent a photo of a question. Explain this worked solution to the student in your own teaching voice, step by step, short and clear, without reading any symbols or markdown aloud: ${solution.slice(0, 3000)}`;
+  } catch (e) {
+    const reason = e instanceof Error && e.message ? e.message : "please try again";
+    return `[Photo question] The student sent a photo, but it could not be solved: ${reason}. Tell the student kindly, and ask them to send a clearer, straight, well-lit photo or to type the question.`;
+  }
+}
 import { focusReducer, type FocusEvent, type FocusState } from "@/lib/askPresentationFocus";
 import {
   buildLectureOpening,
@@ -344,6 +364,19 @@ function LiveLecture({
     }
   };
 
+  // A photo of a question: the server reads it and writes the solution, then the live teacher explains it aloud.
+  const onSendPhoto = (image: string, text: string) => {
+    const wasLive = live.status === "live";
+    if (wasLive) live.sendText(text ? `📷 ${text}` : "📷 Photo of my question");
+    void solvePhoto(subject, image, text || PHOTO_PROMPT, prefs).then((instruction) => {
+      if (wasLive) live.sendText(instruction, { silent: true });
+      else {
+        live.reset();
+        void live.connect(withFirstQuestion(opening, instruction));
+      }
+    });
+  };
+
   // Quick buttons ("Explain simpler"...) are requests to the teacher, not questions: they stay off the board.
   const onQuick = (prompt: string) => {
     if (live.status === "live") live.sendText(prompt, { silent: true });
@@ -357,6 +390,7 @@ function LiveLecture({
       getLevel={getLevel}
       onOrbClick={onOrbClick}
       onSend={onSend}
+      onSendPhoto={onSendPhoto}
       onQuick={onQuick}
       focus={focus}
       dispatchFocus={dispatchFocus}

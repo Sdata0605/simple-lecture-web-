@@ -1,3 +1,4 @@
+import { signOutEverywhere } from "@/lib/signOut";
 import { NavLink, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -10,7 +11,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { toast } from "sonner";
 import { useLogInstructorActivity } from "@/hooks/useLogInstructorActivity";
@@ -33,7 +33,7 @@ export const InstructorSidebar = () => {
       action_type: "LOGOUT",
       metadata: {}
     });
-    await supabase.auth.signOut();
+    await signOutEverywhere();
     toast.success("Logged out successfully");
     window.location.href = "/auth";
   };

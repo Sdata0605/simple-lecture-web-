@@ -1,3 +1,4 @@
+import { signOutEverywhere } from "@/lib/signOut";
 import { Button } from "@/components/ui/button";
 import { Menu, Search, ChevronDown, Bell, User, LogOut, LayoutDashboard, X, Sparkles, GraduationCap } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
@@ -12,7 +13,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MegaMenu } from "@/components/MegaMenu";
-import { supabase } from "@/integrations/supabase/client";
 import { useSearchCourses } from "@/hooks/usePaginatedCourses";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useAuth } from "@/contexts/AuthContext";
@@ -48,7 +48,7 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOutEverywhere();
     navigate('/');
   };
 

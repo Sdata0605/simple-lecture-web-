@@ -1,14 +1,14 @@
+import { signOutEverywhere } from "@/lib/signOut";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { LogOut, ShieldCheck } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { NoIndex } from "@/components/SEO";
 
 export const CheckerLayout = () => {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOutEverywhere();
     navigate("/");
   };
 

@@ -1,3 +1,4 @@
+import { signOutEverywhere } from "@/lib/signOut";
 import { Outlet, useNavigate } from "react-router-dom";
 import { AdminSidebar } from "./AdminSidebar";
 import { VerificationNotificationBell } from "./VerificationNotificationBell";
@@ -5,7 +6,6 @@ import { Menu, Info, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { NoIndex } from "@/components/SEO";
 
@@ -16,7 +16,7 @@ export const AdminLayout = () => {
   const handleLogout = async () => {
     const { queryClient } = await import("@/lib/queryClient");
     queryClient.clear();
-    await supabase.auth.signOut();
+    await signOutEverywhere();
     navigate("/");
   };
 

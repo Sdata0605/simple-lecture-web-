@@ -6,9 +6,10 @@
 //     brings it back.
 //   - Phones: one step at a time with the teacher docked underneath; the teacher becomes a bottom sheet.
 // It is the content of the `.aa-overlay` grid below the top bar.
-import { useEffect, useState, type Dispatch, type FormEvent } from "react";
-import { Keyboard, Mic, MicOff, Send } from "lucide-react";
+import { useEffect, useRef, useState, type Dispatch, type FormEvent } from "react";
+import { ImagePlus, Keyboard, Loader2, Mic, MicOff, Send, X } from "lucide-react";
 import { QUICK_REQUESTS, type Lesson, type LectureView } from "@/lib/aiTeacherLecture";
+import { prepareQuestionImage, QuestionImageError } from "@/lib/aiTeacherImage";
 import type { useLiveTeacher } from "@/components/aiteacher/useLiveTeacher";
 import type { FocusEvent, FocusState } from "@/lib/askPresentationFocus";
 import { LessonBoard } from "./LessonBoard";
@@ -28,6 +29,8 @@ export interface LectureOrbScreenProps {
   getLevel: () => number;
   onOrbClick: () => void;
   onSend: (text: string) => void;
+  /** A photo of a question (JPEG data URL) with an optional typed note. */
+  onSendPhoto?: (image: string, text: string) => void;
   /** A quick button: the prompt goes to the teacher without showing up as the student's question. */
   onQuick: (prompt: string) => void;
   /** Whether a presentation is on screen and whether the teacher panel is open over it. */
@@ -35,7 +38,12 @@ export interface LectureOrbScreenProps {
   dispatchFocus: Dispatch<FocusEvent>;
 }
 
-export function LectureOrbScreen({ view, lesson, live, onOrbClick, onSend, onQuick, focus, dispatchFocus }: LectureOrbScreenProps) {
+export function LectureOrbScreen({ view, lesson, live, onOrbClick, onSend, onSendPhoto, onQuick, focus, dispatchFocus }: LectureOrbScreenProps) {
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [photoNote, setPhotoNote] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const [typed, setTyped] = useState("");
   const hasBoard = lesson.cards.length > 0;
 
@@ -47,9 +55,33 @@ export function LectureOrbScreen({ view, lesson, live, onOrbClick, onSend, onQui
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const text = typed.trim();
-    if (!text || !view.canType) return;
+    if (!view.canType || photoBusy) return;
+    if (pendingImage && onSendPhoto) {
+      const image = pendingImage;
+      setPendingImage(null);
+      setPhotoNote("");
+      setTyped("");
+      onSendPhoto(image, text);
+      return;
+    }
+    if (!text) return;
     setTyped("");
     onSend(text);
+  };
+
+  const pickPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setPhotoNote("");
+    setPhotoBusy(true);
+    try {
+      setPendingImage(await prepareQuestionImage(file));
+    } catch (e) {
+      setPendingImage(null);
+      setPhotoNote(e instanceof QuestionImageError ? e.message : "The photo could not be read. Please try another picture.");
+    } finally {
+      setPhotoBusy(false);
+      if (fileRef.current) fileRef.current.value = "";   // so the same photo can be picked again
+    }
   };
 
   const micLive = view.orbMode === "listening";
@@ -121,21 +153,60 @@ export function LectureOrbScreen({ view, lesson, live, onOrbClick, onSend, onQui
           </div>
         )}
 
+        {(pendingImage || photoNote) && (
+          <div className="aa-photo-row">
+            {pendingImage && (
+              <div className="aa-photo-thumb">
+                <img src={pendingImage} alt="Photo ready to send" />
+                <button type="button" className="aa-photo-remove" onClick={() => setPendingImage(null)} aria-label="Remove photo">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+            <p className={`aa-photo-note${photoNote ? " is-error" : ""}`} role={photoNote ? "alert" : undefined}>
+              {photoNote || "Photo added. Add a note if you like, then send. Your teacher will read it and explain the solution."}
+            </p>
+          </div>
+        )}
+
         <form className="aa-composer" onSubmit={submit}>
           <span className={`aa-mic-chip${micLive ? " is-live" : ""}`} aria-hidden="true">
             {micLive ? <Mic size={15} /> : !live.micAvailable || live.muted ? <MicOff size={15} /> : <Keyboard size={15} />}
           </span>
+          {onSendPhoto && (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="aa-file-input"
+                onChange={(event) => void pickPhoto(event.target.files?.[0])}
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+              <button
+                type="button"
+                className="aa-photo-btn"
+                onClick={() => fileRef.current?.click()}
+                disabled={!view.canType || photoBusy}
+                aria-label="Upload a photo of your question"
+                title="Upload a photo of your question"
+              >
+                {photoBusy ? <Loader2 size={16} className="aa-spin" /> : <ImagePlus size={16} />}
+              </button>
+            </>
+          )}
           <input
             className="aa-input"
             value={typed}
             onChange={(event) => setTyped(event.target.value)}
-            placeholder="Prefer typing? Ask your question here…"
+            placeholder={pendingImage ? "Add a note about the photo (optional)…" : "Prefer typing? Ask your question here…"}
             aria-label="Type your question"
             disabled={!view.canType}
             maxLength={500}
             enterKeyHint="send"
           />
-          <button type="submit" className="aa-send" disabled={!typed.trim() || !view.canType} aria-label="Send question">
+          <button type="submit" className="aa-send" disabled={(!typed.trim() && !pendingImage) || !view.canType || photoBusy} aria-label="Send question">
             <Send size={17} />
           </button>
         </form>

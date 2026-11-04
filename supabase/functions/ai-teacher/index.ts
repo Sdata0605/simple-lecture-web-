@@ -406,6 +406,27 @@ function bigQSystem(persona: Persona, subject: string) {
 Return ONLY a JSON object: {"question": "a why / explain / describe question that needs a paragraph", "model_answer": "a clear 4 to 6 sentence model answer using only the NOTES"}.`;
 }
 
+/** Extra rules when the student sends a photo of a question. They override the NOTES-only rule for photos. */
+function photoRules(enrolledList: string) {
+  return `
+PHOTO QUESTION RULES (the student sent a photo of a question, maybe a maths problem, a diagram or a worksheet item):
+1. Read the photo carefully. Start with one short line: "📷 I can see this question: ..." and restate the question in your own words with all its numbers, options and units.
+2. Small, plain or typed text (for example a worksheet or a printed question) is normal: read it carefully and solve it. Only if the photo has no readable question at all (blank, fully blurred, or cut off so the numbers are missing) do NOT guess: say politely that you cannot read the question, name what is missing, and ask for a clearer photo or for the question typed out. Then stop.
+3. If the question is not from the enrolled syllabus (${enrolledList}), refuse as the scope rule says.
+4. Otherwise give the complete solution: name the idea or formula first, then solve step by step with numbered steps and a short reason for each step, put the final answer in bold, and check it quickly. For multiple-choice questions, say which option is correct and why the others are wrong.
+5. The NOTES are a reference. You may use the standard textbook method for this subject even when the exact problem is not in the NOTES.
+6. Keep the persona's language and teaching style. End with one short check-in question.`;
+}
+
+/** Accepts a photo of any image type, sent as a base64 data URL. Returns null when there is none. */
+function parseQuestionImage(raw: unknown): { mimeType: string; data: string } | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string") throw new TeacherError(400, "BAD_IMAGE", "The photo could not be read. Please upload it again.");
+  const m = raw.match(/^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i);
+  if (!m) throw new TeacherError(400, "BAD_IMAGE", "The photo could not be read. Please upload it again.");
+  return { mimeType: m[1].toLowerCase(), data: m[2] };
+}
+
 function gradeSystem(persona: Persona, subject: string) {
   return `You are ${persona.name}, a teacher of "${subject}" marking a student's long answer.
 
@@ -871,6 +892,7 @@ async function handleChat(body: any, userId: string) {
   if (!subject) return json({ error: "Unknown subject" }, 400);
   if (!(await allow("chat", await userBucket(userId), subjectId))) return json({ error: "Too many questions. Please try again in a while.", code: "RATE_LIMITED" }, 429);
   const persona = readPersona(body.persona, cfg);
+  const image = mode === "ask" ? parseQuestionImage(body.image) : null;
 
   let system = "";
   let contents: any[] = [];
@@ -927,7 +949,12 @@ async function handleChat(body: any, userId: string) {
         .map((m: any) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: String(m.content).slice(0, 2000) }] }));
       const enrolledSubjects = typeof body?.enrolledSubjects === "string" ? body.enrolledSubjects.trim() : "";
       system = chatPrompt(cfg, subject.name, persona, enrolledSubjects);
-      contents = [...history, { role: "user", parts: [{ text: `${notesBlock}\n\nSTUDENT: ${question}` }] }];
+      const studentParts: any[] = [{ text: `${notesBlock}\n\nSTUDENT: ${question}` }];
+      if (image) {
+        system += photoRules(enrolledSubjects || subject.name);
+        studentParts.unshift({ inlineData: { mimeType: image.mimeType, data: image.data } });
+      }
+      contents = [...history, { role: "user", parts: studentParts }];
     } else {
       const avoid = (Array.isArray(body.avoid) ? body.avoid : []).slice(-5).map((s: unknown) => String(s).slice(0, 200)).join(" | ");
       asJson = true;

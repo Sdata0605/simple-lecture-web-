@@ -1,9 +1,9 @@
 /**
- * Central Supabase URL constant — hardcoded proxy to bypass ISP blocks.
- * Lovable auto-overwrites .env but cannot touch source files, so this is permanent.
- * Change the proxy URL here and it updates everywhere.
+ * Central Supabase URL constant. Every browser call (auth, data, functions) goes straight to Supabase.
+ * The Cloudflare proxy was removed on request; it is still available at
+ * https://supabase-proxy.utuberpraveen.workers.dev if it is needed again.
  */
-export const SUPABASE_URL = "https://supabase-proxy.utuberpraveen.workers.dev";
+export const SUPABASE_URL = "https://oxwhqvsoelqqsblmqkxx.supabase.co";
 
 /**
  * Direct Supabase URL — bypasses the Cloudflare Worker proxy.

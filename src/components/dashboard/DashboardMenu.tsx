@@ -1,10 +1,10 @@
+import { signOutEverywhere } from "@/lib/signOut";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LayoutDashboard, BookOpen, Video, Trophy, MessageSquare, HelpCircle, User, LogOut, Menu, Newspaper, CalendarClock, Grid3X3, FileText, NotebookPen, GraduationCap } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/lib/queryClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { openAskAI } from "@/lib/askAIStore";
@@ -51,7 +51,7 @@ export const DashboardMenu = () => {
 
   const handleLogout = async () => {
     queryClient.clear();
-    await supabase.auth.signOut();
+    await signOutEverywhere();
     navigate("/");
   };
 

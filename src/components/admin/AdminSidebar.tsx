@@ -1,3 +1,4 @@
+import { signOutEverywhere } from "@/lib/signOut";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -85,7 +86,7 @@ export const AdminSidebar = () => {
   const handleLogout = async () => {
     const { queryClient } = await import("@/lib/queryClient");
     queryClient.clear();
-    await supabase.auth.signOut();
+    await signOutEverywhere();
     navigate("/");
   };
 
