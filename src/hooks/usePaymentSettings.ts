@@ -24,7 +24,7 @@ export const usePaymentSettings = () => {
         .from("ai_settings")
         .select("*")
         .eq("setting_key", "payment_gateway")
-        .single();
+        .maybeSingle();
 
       if (error) {
         if (error.code === "PGRST116") {
@@ -49,7 +49,7 @@ export const useUpdatePaymentSettings = () => {
         .from("ai_settings")
         .select("id")
         .eq("setting_key", "payment_gateway")
-        .single();
+        .maybeSingle();
 
       if (existing) {
         const { error } = await supabase
