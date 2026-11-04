@@ -10,7 +10,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (!url.pathname.startsWith('/v4-media/')) return;
 
-  const proxyUrl = new URL(url.pathname.replace('/v4-media/', '/functions/v1/v4-player-proxy/player/jobs/'), 'https://supabase-proxy.utuberpraveen.workers.dev');
+  const proxyUrl = new URL(url.pathname.replace('/v4-media/', '/functions/v1/v4-player-proxy/player/jobs/'), 'https://oxwhqvsoelqqsblmqkxx.supabase.co');
   proxyUrl.search = url.search;
 
   const range = event.request.headers.get('Range');

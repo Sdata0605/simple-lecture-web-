@@ -17,7 +17,7 @@ const DEFAULT_PORT = 5006;
 
 // Public proxy that fronts 69.197.145.4:5006 over HTTPS (works in browser).
 const VIDEO_PROXY_BASE =
-  "https://supabase-proxy.utuberpraveen.workers.dev/functions/v1/v3-player-proxy";
+  "https://oxwhqvsoelqqsblmqkxx.supabase.co/functions/v1/v3-player-proxy";
 
 function storyVideoUrl(jobId: string) {
   return `${VIDEO_PROXY_BASE}/player/jobs/${jobId}/videos/presentation_final.mp4`;
