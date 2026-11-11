@@ -10,7 +10,6 @@ export const CourseTrustSection = ({ rating, studentCount }: CourseTrustSectionP
     ...(rating ? [{ icon: Star, label: `${rating}★ Rating` }] : []),
     ...(studentCount ? [{ icon: Users, label: `${studentCount.toLocaleString()}+ Students` }] : []),
     { icon: Shield, label: "AI-Powered" },
-    { icon: Award, label: "30-Day Guarantee" },
   ];
 
   return (

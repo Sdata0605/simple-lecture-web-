@@ -865,9 +865,6 @@ const ProgramDetail = () => {
                           Enroll Now
                         </Link>
                       </Button>
-                      <p className="text-xs text-muted-foreground">
-                        30-day money-back guarantee
-                      </p>
                     </>
                   )}
                 </CardContent>

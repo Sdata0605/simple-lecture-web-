@@ -163,13 +163,6 @@ const TermsAndConditions = () => {
                         All prices are displayed in Indian Rupees (INR) unless otherwise specified. Payment must be 
                         made at the time of purchase through our approved payment methods.
                       </p>
-                      <p><strong>Refund Policy:</strong></p>
-                      <ul className="list-disc pl-6 space-y-2">
-                        <li>Refund requests must be made within 7 days of purchase</li>
-                        <li>Refunds are subject to our review and approval</li>
-                        <li>Courses that have been substantially accessed may not be eligible for refunds</li>
-                        <li>Processing fees may be deducted from refund amounts</li>
-                      </ul>
                       <p>
                         We reserve the right to modify pricing at any time. Existing purchases will not be affected 
                         by price changes.

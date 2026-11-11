@@ -219,7 +219,6 @@ const Support = () => {
               { question: "How do I reset my password?", answer: "Go to the login page and click 'Forgot Password'. Enter your registered email and follow the reset link sent to your inbox." },
               { question: "How do I access my purchased course?", answer: "Log in to your SimpleLecture account, go to 'My Courses' in the dashboard, and click on the course to start learning." },
               { question: "What payment methods are accepted?", answer: "We accept UPI, credit/debit cards, net banking, and popular wallets through Razorpay and PhonePe." },
-              { question: "Can I get a refund?", answer: "Refund requests must be made within 7 days of purchase. Contact our support team with your order details for assistance." },
               { question: "How does the AI tutor work?", answer: "Our AI tutor provides personalized explanations, clears doubts instantly in English, Hindi, and Kannada, and generates practice questions tailored to your learning gaps." },
             ]),
           ]
