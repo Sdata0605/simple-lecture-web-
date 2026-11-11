@@ -77,6 +77,9 @@ export const CourseCard = ({
               {formatINR(originalPrice)}
             </span>
           )}
+          {price > 0 && (
+            <span className="text-xs text-muted-foreground">incl. 18% GST</span>
+          )}
         </div>
       </CardContent>
     </Card>

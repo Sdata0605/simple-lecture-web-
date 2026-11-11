@@ -29,6 +29,7 @@ import { EnrollAuthStep } from '@/components/enroll/EnrollAuthStep';
 import { EnrollStepIndicator } from '@/components/enroll/EnrollStepIndicator';
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { getCoursePriceBreakdown } from '@/lib/gst';
 
 declare global {
   interface Window {
@@ -191,24 +192,6 @@ const Enroll = () => {
     }
   };
 
-  const calculatePriceAfterDiscount = () => {
-    if (!course) return 0;
-    const basePrice = course.price_inr || 0;
-    
-    if (!discount) return basePrice;
-
-    if (discount.discount_percent) {
-      return basePrice - (basePrice * discount.discount_percent / 100);
-    } else if (discount.discount_amount) {
-      return Math.max(0, basePrice - discount.discount_amount);
-    }
-    
-    return basePrice;
-  };
-
-  const calculateGST = (amount: number) => Math.round(amount * 0.18);
-  const calculateTotalWithGST = (amount: number) => amount + calculateGST(amount);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -234,12 +217,11 @@ const Enroll = () => {
         return;
       }
 
-      const subtotal = calculatePriceAfterDiscount();
-      const gst = calculateGST(subtotal);
-      const finalAmount = subtotal + gst;
+      // course.price_inr is GST-inclusive; breakdown.total is the amount to charge (after promo)
+      const { total } = getCoursePriceBreakdown(course.price_inr || 0, discount);
 
       // Free course short-circuit: create enrollment via edge function, skip Razorpay
-      if (finalAmount <= 0) {
+      if (total <= 0) {
         const { data: freeData, error: freeErr } = await supabase.functions.invoke('enroll-free-course', {
           body: { courseId: course.id },
         });
@@ -256,8 +238,8 @@ const Enroll = () => {
       // Create payment order
       const { data: orderData, error: orderError } = await supabase.functions.invoke('create-payment-order', {
         body: {
-          amount: finalAmount,
-          courses: [{ id: course.id, name: course.name, price: finalAmount }],
+          amount: total,
+          courses: [{ id: course.id, name: course.name, price: total }],
           customerInfo: formData,
           promoCode: discount ? promoCode.toUpperCase() : null,
           userId: user.id
@@ -267,10 +249,13 @@ const Enroll = () => {
       if (orderError) throw orderError;
 
       // Open Razorpay checkout
+      // Charge the server-computed amount so the Razorpay order and checkout match
+      const payAmount = typeof orderData?.amount === 'number' ? orderData.amount : total;
+
       if (orderData.razorpayOrderId && orderData.razorpayKeyId && window.Razorpay) {
         const options = {
           key: orderData.razorpayKeyId,
-          amount: finalAmount * 100,
+          amount: payAmount * 100,
           currency: 'INR',
           name: 'SimpleLecture',
           description: `Payment for ${course.name}`,
@@ -293,7 +278,7 @@ const Enroll = () => {
                   razorpay_signature: response.razorpay_signature,
                   orderId: orderData.orderId,
                   userId: user.id,
-                  courses: [{ id: course.id, price: finalAmount }]
+                  courses: [{ id: course.id, price: total }]
                 }
               });
 
@@ -308,7 +293,7 @@ const Enroll = () => {
               navigate('/payment-success', {
                 state: {
                   orderId: orderData.orderId,
-                  amount: finalAmount,
+                  amount: total,
                   courses: [{ id: course.id, course_name: course.name }]
                 }
               });
@@ -318,7 +303,7 @@ const Enroll = () => {
               navigate('/payment-success', {
                 state: {
                   orderId: orderData.orderId,
-                  amount: finalAmount,
+                  amount: total,
                   courses: [{ id: course.id, course_name: course.name }]
                 }
               });
@@ -403,11 +388,8 @@ const Enroll = () => {
   }
 
   const subjects = course.course_subjects?.map((cs: any) => cs.popular_subjects?.name).filter(Boolean) || [];
-  const originalPrice = course.price_inr || 0;
-  const priceAfterDiscount = calculatePriceAfterDiscount();
-  const discountAmount = originalPrice - priceAfterDiscount;
-  const gstAmount = calculateGST(priceAfterDiscount);
-  const totalWithGST = calculateTotalWithGST(priceAfterDiscount);
+  const breakdown = getCoursePriceBreakdown(course.price_inr || 0, discount);
+  const { original: originalPrice, discount: discountAmount, base, gst, total } = breakdown;
 
   return (
     <div className="min-h-screen flex flex-col pb-20 md:pb-0">
@@ -549,7 +531,7 @@ const Enroll = () => {
                         className="w-full"
                         disabled={isProcessing || !agreedToTerms}
                       >
-                        {isProcessing ? 'Processing...' : (totalWithGST <= 0 ? 'Enroll Free' : `Pay ₹${totalWithGST.toLocaleString()}`)}
+                        {isProcessing ? 'Processing...' : (total <= 0 ? 'Enroll Free' : `Pay ₹${total.toLocaleString()}`)}
                       </Button>
                     </form>
                   </CardContent>
@@ -676,7 +658,7 @@ const Enroll = () => {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span>Course Price</span>
+                    <span>Course Price (incl. GST)</span>
                     <span>₹{originalPrice.toLocaleString()}</span>
                   </div>
                   
@@ -687,22 +669,24 @@ const Enroll = () => {
                     </div>
                   )}
 
-                  {discountAmount > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span>Subtotal</span>
-                      <span>₹{priceAfterDiscount.toLocaleString()}</span>
-                    </div>
-                  )}
+                  <div className="flex justify-between text-sm">
+                    <span>Subtotal (before GST)</span>
+                    <span>₹{base.toLocaleString()}</span>
+                  </div>
 
                   <div className="flex justify-between text-sm">
                     <span>GST (18%)</span>
-                    <span>₹{gstAmount.toLocaleString()}</span>
+                    <span>₹{gst.toLocaleString()}</span>
                   </div>
 
                   <div className="border-t pt-3 flex justify-between font-bold text-lg">
                     <span>Total Amount</span>
-                    <span className="text-primary">₹{totalWithGST.toLocaleString()}</span>
+                    <span className="text-primary">₹{total.toLocaleString()}</span>
                   </div>
+
+                  <p className="text-xs text-muted-foreground text-right">
+                    ₹{base.toLocaleString()} + ₹{gst.toLocaleString()} GST (18%) = ₹{total.toLocaleString()}
+                  </p>
                 </CardContent>
               </Card>
 

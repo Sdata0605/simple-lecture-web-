@@ -21,6 +21,7 @@ import { V4Notes } from "./v4/V4Notes";
 
 import { extractJobIdFromUrl } from "./player/utils/mediaResolver";
 import { useLanguageTopupStatus } from "@/hooks/useLanguageTopup";
+import { SHOW_LANGUAGE_TOPUP_BUTTONS } from "@/lib/languageTopupConfig";
 import { useAvailableLanguages, getLanguageInfo } from "@/hooks/useAvailableLanguages";
 import { usePublishedAILectures, useAILectureDetails, PublishedAILecture } from "@/hooks/usePublishedAILectures";
 import { useMarkVideoWatched, useUpdateVideoWatchTime } from "@/hooks/useMarkVideoWatched";
@@ -1033,8 +1034,8 @@ const AILectureCard = ({
             </div>
           )}
 
-          {/* Unlock More Languages Button — never shown in free-preview mode */}
-          {showUnlockButton && !isPreviewMode && (
+          {/* Unlock More Languages Button — never shown in free-preview mode. Hidden via SHOW_LANGUAGE_TOPUP_BUTTONS. */}
+          {SHOW_LANGUAGE_TOPUP_BUTTONS && showUnlockButton && !isPreviewMode && (
             <Button
               size="sm"
               onClick={(e) => {
@@ -1228,7 +1229,7 @@ const LegacyAILectureCard = ({
             </div>
           )}
 
-          {showUnlockButton && !isPreviewMode && (
+          {SHOW_LANGUAGE_TOPUP_BUTTONS && showUnlockButton && !isPreviewMode && (
 
             <Button
               size="sm"

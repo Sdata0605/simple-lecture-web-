@@ -3,6 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { splitInclusiveGST } from "@/lib/gst";
 
 interface CoursePricingTabProps {
   formData: any;
@@ -10,6 +11,8 @@ interface CoursePricingTabProps {
 }
 
 export const CoursePricingTab = ({ formData, onChange }: CoursePricingTabProps) => {
+  const priceBreakdown = splitInclusiveGST(Number(formData.price_inr) || 0);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -20,7 +23,7 @@ export const CoursePricingTab = ({ formData, onChange }: CoursePricingTabProps) 
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="price_inr">Current Price (₹)</Label>
+              <Label htmlFor="price_inr">Final Price (₹, incl. 18% GST)</Label>
               <Input
                 id="price_inr"
                 type="number"
@@ -28,9 +31,14 @@ export const CoursePricingTab = ({ formData, onChange }: CoursePricingTabProps) 
                 onChange={(e) => onChange("price_inr", parseInt(e.target.value))}
                 placeholder="2000"
               />
+              {priceBreakdown.total > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Base ₹{priceBreakdown.base} + GST (18%) ₹{priceBreakdown.gst}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="original_price_inr">Original Price (₹)</Label>
+              <Label htmlFor="original_price_inr">Original Price (₹, incl. GST) — strikethrough</Label>
               <Input
                 id="original_price_inr"
                 type="number"
@@ -125,7 +133,7 @@ export const CoursePricingTab = ({ formData, onChange }: CoursePricingTabProps) 
         <CardContent>
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Base Course:</span>
+              <span className="text-sm text-muted-foreground">Final Price (incl. GST):</span>
               <span className="font-semibold">₹{formData.price_inr?.toLocaleString() || 0}</span>
             </div>
             {formData.ai_tutoring_enabled && (

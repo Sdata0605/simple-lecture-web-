@@ -176,6 +176,9 @@ const ExploreByGoal = () => {
                                   ₹{course.original_price_inr}
                                 </span>
                               )}
+                              {course.price_inr > 0 && (
+                                <span className="text-xs text-muted-foreground">incl. 18% GST</span>
+                              )}
                             </div>
                             <Button size="sm" className="text-xs md:text-sm">View Details</Button>
                           </div>

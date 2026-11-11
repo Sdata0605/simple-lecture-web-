@@ -159,7 +159,7 @@ export const CourseAIContentSection = ({
               {
                 label: "Cost",
                 traditional: "₹30,000–₹1,00,000/year",
-                ours: price ? `₹${price.toLocaleString()}/year${savings ? ` (${savings}% off)` : ""}` : "Affordable pricing",
+                ours: price ? `₹${price.toLocaleString()}/year${savings ? ` (${savings}% off)` : ""} incl. GST` : "Affordable pricing",
               },
               {
                 label: "Doubt Clearing",

@@ -75,7 +75,7 @@ export const TopCourses = ({ featuredCoursesData }: TopCoursesProps) => {
             Top <span className="text-primary">Courses</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Most popular courses for Indian students - All at ₹1000 + GST
+            Most popular courses for Indian students - All at ₹2,950 incl. GST
           </p>
         </div>
 

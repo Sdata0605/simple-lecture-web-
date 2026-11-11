@@ -13,7 +13,7 @@ const faqs = [
   },
   {
     q: "How much does SimpleLecture cost?",
-    a: "Our AI-powered courses start at just ₹1000 + GST per course for 1-year access — far less than traditional coaching centres. Live classes and language add-ons are available at affordable top-up prices.",
+    a: "Our AI-powered courses start at just ₹2,950 incl. GST per course for 1-year access — far less than traditional coaching centres. Live classes and language add-ons are available at affordable top-up prices.",
   },
   {
     q: "Is SimpleLecture available in Kannada and Hindi?",

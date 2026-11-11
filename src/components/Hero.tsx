@@ -22,7 +22,7 @@ const heroSlideData = [
       "24/7 AI doubt clearing in Kannada, Hindi & English",
       "Unlimited practice questions & mock tests",
     ],
-    cta: "Start Learning at Just ₹1000 + GST",
+    cta: "Start Learning at Just ₹2,950 incl. GST",
   },
   {
     title: "10th Board Made Easy with AI",
@@ -32,7 +32,7 @@ const heroSlideData = [
       "AI-generated practice papers matching board pattern",
       "Personalized weak area improvement",
     ],
-    cta: "Join 1,00,000+ SSLC Students at ₹1000 + GST",
+    cta: "Join 1,00,000+ SSLC Students at ₹2,950 incl. GST",
   },
   {
     title: "Ace Your SSLC Exams",
@@ -42,7 +42,7 @@ const heroSlideData = [
       "AI tutor explains concepts until you master them",
       "Previous years' papers & video solutions",
     ],
-    cta: "Begin Your Board Prep – ₹1000 + GST",
+    cta: "Begin Your Board Prep – ₹2,950 incl. GST",
   },
 ];
 

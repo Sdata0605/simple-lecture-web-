@@ -513,6 +513,7 @@ const ProgramDetail = () => {
                       ₹{course.original_price_inr.toLocaleString()}
                     </span>
                   )}
+                  <span className="text-xs text-muted-foreground">incl. 18% GST</span>
                 </div>
               ) : (
                 <span className="text-lg font-bold text-green-600">Free</span>
@@ -656,6 +657,7 @@ const ProgramDetail = () => {
                             </Badge>
                           </>
                         )}
+                        <span className="text-xs text-muted-foreground">incl. 18% GST</span>
                       </div>
                     ) : (
                       <span className="text-3xl font-bold text-green-400">Free</span>
@@ -830,6 +832,7 @@ const ProgramDetail = () => {
                         <div className="text-3xl font-bold mb-1">
                           ₹{course.price_inr.toLocaleString()}
                         </div>
+                        <div className="text-xs text-muted-foreground mb-1">incl. 18% GST</div>
                         {course.original_price_inr && course.original_price_inr > course.price_inr && (
                           <div className="text-sm text-muted-foreground">
                             <span className="line-through">₹{course.original_price_inr.toLocaleString()}</span>

@@ -11,6 +11,7 @@ import { Footer } from '@/components/Footer';
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { useCart } from '@/hooks/useCart';
 import { formatINR } from '@/lib/utils';
+import { applyPromoToInclusive, splitInclusiveGST } from '@/lib/gst';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -60,9 +61,23 @@ const Cart = () => {
         return;
       }
 
-      const discountAmount = data.discount_percent
-        ? (total * data.discount_percent) / 100
-        : data.discount_amount || 0;
+      // Same validity rules as create-payment-order on the server.
+      const expired = data.valid_until ? new Date(data.valid_until).getTime() < Date.now() : false;
+      const exhausted = data.max_uses ? (data.times_used || 0) >= data.max_uses : false;
+      const courseMismatch = data.course_id
+        ? !items.some((item) => item.course_id === data.course_id)
+        : false;
+      if (expired || exhausted || courseMismatch) {
+        toast({
+          title: 'Invalid Code',
+          description: 'This discount code is not valid for these courses',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Same semantics as the server: promo applied to the GST-inclusive total.
+      const discountAmount = total - applyPromoToInclusive(total, data);
 
       setDiscount(discountAmount);
       setDiscountApplied(true);
@@ -76,6 +91,8 @@ const Cart = () => {
   };
 
   const finalAmount = total - discount;
+  // finalAmount is GST-inclusive; split it for display only.
+  const { base: finalBase, gst: finalGst } = splitInclusiveGST(finalAmount);
 
   if (checkingAuth || loading) {
     return (
@@ -213,7 +230,7 @@ const Cart = () => {
             <h2 className="font-bold mb-3">Order Summary</h2>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
+                <span className="text-muted-foreground">Subtotal (incl. GST)</span>
                 <span className="font-medium">{formatINR(total)}</span>
               </div>
               {discountApplied && (
@@ -222,6 +239,15 @@ const Cart = () => {
                   <span>-{formatINR(discount)}</span>
                 </div>
               )}
+              <Separator />
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal before GST</span>
+                <span>{formatINR(finalBase)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">GST (18%)</span>
+                <span>{formatINR(finalGst)}</span>
+              </div>
               <Separator />
               <div className="flex justify-between font-bold text-base">
                 <span>Total</span>
@@ -294,7 +320,7 @@ const Cart = () => {
 
                 <div className="space-y-3 mb-4">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">Subtotal (incl. GST)</span>
                     <span className="font-semibold">{formatINR(total)}</span>
                   </div>
 
@@ -304,6 +330,18 @@ const Cart = () => {
                       <span>-{formatINR(discount)}</span>
                     </div>
                   )}
+
+                  <Separator />
+
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal before GST</span>
+                    <span>{formatINR(finalBase)}</span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">GST (18%)</span>
+                    <span>{formatINR(finalGst)}</span>
+                  </div>
 
                   <Separator />
 

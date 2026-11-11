@@ -430,7 +430,6 @@ export const QuestionsTab = ({ topicId, chapterId, chapterOnly, subjectId }: Que
                   >
                     <RadioGroupItem value={key} id={`${q.id}-${key}`} className="mt-0.5" disabled={submitted} />
                     <Label htmlFor={`${q.id}-${key}`} className="flex-1 cursor-pointer text-sm">
-                      <span className="font-medium mr-1">{key.toUpperCase()}.</span>
                       <MathpixRenderer mmdText={getOptionText(value)} inline />
                     </Label>
                   </div>

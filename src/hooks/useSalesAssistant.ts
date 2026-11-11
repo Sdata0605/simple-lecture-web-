@@ -87,12 +87,12 @@ export const useSalesAssistant = (): UseSalesAssistantReturn => {
       const welcomeMessage = gender === "female"
         ? `नमस्ते ${displayName}! 👋 मैं प्रिया हूं, SimpleLecture में आपकी शिक्षा सलाहकार।
 
-यह Dr. Nagpal की एक खास पहल है - उनका मानना है कि हर बच्चे को quality education मिलनी चाहिए, चाहे वो गरीब हो या अमीर। इसलिए हमारे courses बिल्कुल FREE हैं - सिर्फ ₹1,000 + GST registration fees। Coaching में ₹1-2 लाख खर्च क्यों करें जब education आपके घर तक आ सकती है?
+यह Dr. Nagpal की एक खास पहल है - उनका मानना है कि हर बच्चे को quality education मिलनी चाहिए, चाहे वो गरीब हो या अमीर। इसलिए हमारे courses बिल्कुल FREE हैं - सिर्फ ₹2,950 incl. GST registration fees। Coaching में ₹1-2 लाख खर्च क्यों करें जब education आपके घर तक आ सकती है?
 
 बताइए, आप student हैं या parent? किस exam की तैयारी करनी है?`
         : `Hi ${displayName}! 👋 I'm Rahul, your education counselor at SimpleLecture.
 
-Welcome to Dr. Nagpal's revolutionary initiative! His vision is simple - quality education shouldn't be a privilege. Even the poorest student deserves the same education as the richest. That's why our courses are completely FREE - you only pay ₹1,000 + GST registration fee. Why spend ₹1-2 Lakhs at coaching centers when education can come to your doorstep?
+Welcome to Dr. Nagpal's revolutionary initiative! His vision is simple - quality education shouldn't be a privilege. Even the poorest student deserves the same education as the richest. That's why our courses are completely FREE - you only pay ₹2,950 incl. GST registration fee. Why spend ₹1-2 Lakhs at coaching centers when education can come to your doorstep?
 
 Tell me, are you a student preparing for exams, or a parent looking for the right course?`;
       

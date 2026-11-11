@@ -12,6 +12,7 @@ import { Footer } from '@/components/Footer';
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { useCart } from '@/hooks/useCart';
 import { formatINR } from '@/lib/utils';
+import { splitInclusiveGST } from '@/lib/gst';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -29,7 +30,9 @@ const Checkout = () => {
 
   const discount = location.state?.discount || 0;
   const promoCode = location.state?.promoCode || null;
+  // GST-inclusive final amount; base and GST are derived from it for display.
   const finalAmount = total - discount;
+  const { base: finalBase, gst: finalGst } = splitInclusiveGST(finalAmount);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -106,9 +109,11 @@ const Checkout = () => {
         await ensureRazorpay();
       }
       if (orderData.razorpayOrderId && orderData.razorpayKeyId && window.Razorpay) {
+        // Charge the server-computed amount so the Razorpay order and checkout match
+        const payAmount = typeof orderData?.amount === 'number' ? orderData.amount : finalAmount;
         const options = {
           key: orderData.razorpayKeyId,
-          amount: finalAmount * 100,
+          amount: payAmount * 100,
           currency: 'INR',
           name: 'SimpleLecture',
           description: `Payment for ${items.length} course(s)`,
@@ -338,7 +343,7 @@ const Checkout = () => {
                   <Separator />
 
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">Subtotal (incl. GST)</span>
                     <span className="font-semibold">{formatINR(total)}</span>
                   </div>
 
@@ -348,6 +353,18 @@ const Checkout = () => {
                       <span>-{formatINR(discount)}</span>
                     </div>
                   )}
+
+                  <Separator />
+
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Base (before GST)</span>
+                    <span>{formatINR(finalBase)}</span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">GST (18%)</span>
+                    <span>{formatINR(finalGst)}</span>
+                  </div>
 
                   <Separator />
 
