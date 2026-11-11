@@ -1,6 +1,5 @@
 import { teacherApi, TeacherApiError, type ChatResult } from "./aiTeacherApi";
 import { personaPayload, type TeacherPrefs } from "./aiTeacherPrefs";
-import { loadSubscription } from "./aiTeacherSubscription";
 
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -55,11 +54,6 @@ export async function teacherChat(
   prefs: TeacherPrefs,
   enrolledSubjects?: string
 ): Promise<ChatResult> {
-  const sub = loadSubscription();
-  if (!sub) {
-    throw new TeacherApiError("Please purchase an AI Teacher plan (Plus Plan ₹500) to chat with your personal AI teacher.");
-  }
-
   const enrolledList = enrolledSubjects || "your enrolled subjects";
   const question = typeof body.question === "string" ? body.question.trim() : "";
 

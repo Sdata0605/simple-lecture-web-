@@ -1,4 +1,3 @@
-import { useAITeacherSubscription } from "@/lib/aiTeacherSubscription";
 import { openAskAI } from "@/lib/askAIStore";
 import { AITeacherFab } from "./AITeacherFab";
 import { AITeacherShowcase } from "./AITeacherShowcase";
@@ -7,12 +6,11 @@ import { AITeacherShowcase } from "./AITeacherShowcase";
 // Ask AI overlay (the one the lecture player opens) through openAskAI().
 
 export function AITeacherPromo() {
-  const { hasActivePlan, plans } = useAITeacherSubscription();
   const enter = () => openAskAI();
 
   return (
     <>
-      {!hasActivePlan && <AITeacherShowcase price={plans.byok_500.price} onStart={enter} />}
+      <AITeacherShowcase onStart={enter} />
       <AITeacherFab onClick={enter} />
     </>
   );

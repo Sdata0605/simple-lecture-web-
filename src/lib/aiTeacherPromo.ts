@@ -64,7 +64,7 @@ export const PROMO_FEATURES: readonly PromoFeature[] = [
 export const PROMO_BADGE = "NEW · LIVE AI TEACHER";
 export const PROMO_TITLE = "Don’t just watch. Talk to your teacher.";
 export const PROMO_SUBTITLE = "Ask any doubt out loud and hear it explained from the very basics, one step at a time.";
-export const PROMO_CTA = "Unlock your AI Teacher";
+export const PROMO_CTA = "Open your AI Teacher";
 export const PROMO_FOOTNOTE = "Sample lesson shown · SSLC, PUC & more";
 
 export type AITeacherDestination = "teacher" | "plans";

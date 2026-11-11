@@ -6,7 +6,6 @@ import type { HeroVideoSettings } from "@/hooks/useHomepageData";
 import { HeroLecturePlayer } from "@/components/HeroLecturePlayer";
 import { HeroV4Launcher } from "@/components/HeroV4Launcher";
 import { HOMEPAGE_HERO_LECTURE } from "@/lib/homepageHeroLecture";
-import { usePlanState } from "@/lib/aiTeacherKeys";
 import { openAskAI } from "@/lib/askAIStore";
 
 // Only import first hero image statically - others loaded after first paint
@@ -52,15 +51,10 @@ interface HeroProps {
 
 export const Hero = (_props: HeroProps) => {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const { state: planState } = usePlanState();
   const heroImages = [heroBoardExams, heroBoardExams, heroBoardExams];
   const navigate = useNavigate();
-  // Only a confirmed non-subscriber is sent to the purchase page. Loading and unknown open the overlay,
-  // which shows the plan check or the retry message.
-  const onAITeacherClick = () => {
-    if (planState === "inactive") navigate("/aiteacher/plus");
-    else openAskAI();
-  };
+  // Everyone opens the AI Teacher overlay. It shows the enrollment or key step as needed.
+  const onAITeacherClick = () => openAskAI();
 
   // Auto-rotate slides - pause when tab is hidden (memory leak fix)
   useEffect(() => {
@@ -171,7 +165,7 @@ export const Hero = (_props: HeroProps) => {
                       onClick={onAITeacherClick}
                     >
                       <Sparkles className="w-5 h-5 text-slate-950 shrink-0" />
-                      <span>{planState === "inactive" ? "Purchase Your Personal AI Teacher" : "Open your AI Teacher"}</span>
+                      <span>Open your AI Teacher</span>
                     </Button>
                     <Button 
                       size="lg" 

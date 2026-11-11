@@ -171,7 +171,7 @@ export const useUpdateAITeacherSettings = () => {
         chat_model: settings.chat_model.trim() || DEFAULT_AI_TEACHER_SETTINGS.chat_model,
         teacher_name: settings.teacher_name.trim() || DEFAULT_AI_TEACHER_SETTINGS.teacher_name,
         plan_pricing: {
-          byok_price: Math.max(0, Number(settings.plan_pricing?.byok_price) || 500),
+          byok_price: Number.isFinite(Number(settings.plan_pricing?.byok_price)) ? Math.max(0, Number(settings.plan_pricing?.byok_price)) : 500,
           admin_price: Math.max(0, Number(settings.plan_pricing?.admin_price) || 1000),
         },
       };

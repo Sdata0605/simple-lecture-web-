@@ -150,18 +150,9 @@ export function AskAIAssistant(props: AskAIAssistantProps) {
     body = (
       <Gate
         icon={<Lock size={16} />}
-        title="Buy AI Teacher Plus (Rs 500) to start"
-        text="Plus lets you use your own free Google Gemini keys with your personal AI teacher."
-        action={{
-          label: "See the Plus plan",
-          onClick: () =>
-            navigate("/aiteacher/plus", {
-              state: {
-                returnTo: location.pathname + location.search,
-                reopenAskAI: { subjectName: props.subject?.name },
-              },
-            }),
-        }}
+        title="Enroll in a course to start"
+        text="Your personal AI teacher is included with your course. Add your own free Google Gemini keys to use it."
+        action={{ label: "Browse courses", onClick: () => navigate("/programs") }}
       />
     );
   } else if (keysLoading && !hasKeys) {

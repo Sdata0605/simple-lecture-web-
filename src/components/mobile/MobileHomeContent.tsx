@@ -9,7 +9,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import { MobileHomeSearch } from "./MobileHomeSearch";
-import { usePlanState } from "@/lib/aiTeacherKeys";
 import { openAskAI } from "@/lib/askAIStore";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAuth } from "@/contexts/AuthContext";
@@ -74,13 +73,8 @@ export const MobileHomeContent = () => {
   const navigate = useNavigate();
   
   const [currentSlide, setCurrentSlide] = useState(0);
-  const { state: planState } = usePlanState();
-  // Only a confirmed non-subscriber is sent to the purchase page. Loading and unknown open the overlay,
-  // which shows the plan check or the retry message.
-  const onAITeacherClick = () => {
-    if (planState === "inactive") navigate("/aiteacher/plus");
-    else openAskAI();
-  };
+  // Everyone opens the AI Teacher overlay. It shows the enrollment or key step as needed.
+  const onAITeacherClick = () => openAskAI();
   const heroImages = [heroBoardExams, heroBoardExams, heroBoardExams];
   
   const { data: user, isLoading: userLoading } = useCurrentUser();
@@ -219,7 +213,7 @@ export const MobileHomeContent = () => {
                   onClick={onAITeacherClick}
                 >
                   <Sparkles className="w-3.5 h-3.5 mr-1 text-slate-950" />
-                  {planState === "inactive" ? "Purchase AI Teacher" : "Open your AI Teacher"}
+                  "Open your AI Teacher"
                 </Button>
               </div>
             </div>

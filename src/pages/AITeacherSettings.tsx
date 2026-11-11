@@ -14,14 +14,8 @@ export default function AITeacherSettings() {
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [guideOpen, setGuideOpen] = useState(false);
-  const paymentSuccess = Boolean((location.state as { paymentSuccess?: boolean } | null)?.paymentSuccess);
-  const [showPaymentBanner, setShowPaymentBanner] = useState(paymentSuccess);
 
   useEffect(() => { document.title = "AI Teacher settings | SimpleLecture"; }, []);
-
-  useEffect(() => {
-    if (paymentSuccess) queryClient.invalidateQueries({ queryKey: TEACHER_SETTINGS_KEY });
-  }, [paymentSuccess, queryClient]);
 
   const goBack = () => {
     if (window.history.length > 1) navigate(-1);
@@ -85,17 +79,6 @@ export default function AITeacherSettings() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-4 pb-16 space-y-4">
-        {paymentSuccess && showPaymentBanner && (
-          <div role="status" className="flex items-start justify-between gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-sm font-medium text-emerald-900 shadow-sm">
-            <span className="flex items-start gap-2">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
-              Payment successful — AI Teacher Plus is active. Add your Gemini key below to start.
-            </span>
-            <button type="button" aria-label="Dismiss" onClick={() => setShowPaymentBanner(false)} className="shrink-0 rounded p-0.5 text-emerald-800 hover:bg-emerald-100">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
         <AITeacherSettingsPanel />
       </main>
 

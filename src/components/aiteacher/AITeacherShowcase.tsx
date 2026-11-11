@@ -87,13 +87,11 @@ function StepLine({ step }: { step: string }) {
 }
 
 interface AITeacherShowcaseProps {
-  /** The lowest plan price, shown as "From ₹…". */
-  price: number;
   /** Opens the plans. */
   onStart: () => void;
 }
 
-export function AITeacherShowcase({ price, onStart }: AITeacherShowcaseProps) {
+export function AITeacherShowcase({ onStart }: AITeacherShowcaseProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const { state, choose, reduceMotion } = usePromoDemo(stageRef);
   const demo = PROMO_DEMOS[state.demo] ?? PROMO_DEMOS[0];
@@ -191,7 +189,7 @@ export function AITeacherShowcase({ price, onStart }: AITeacherShowcaseProps) {
               {PROMO_CTA}
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-            <span className="text-sm font-semibold text-[#7ce0c3]">Plans from ₹{price}</span>
+            <span className="text-sm font-semibold text-[#7ce0c3]">Free with your own Gemini key</span>
           </div>
 
           <ul className="grid grid-cols-2 gap-3 lg:col-start-1 lg:row-start-2">

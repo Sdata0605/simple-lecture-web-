@@ -10,7 +10,6 @@ import { keysApi, TEACHER_SETTINGS_KEY, type TeacherSettings } from "@/lib/aiTea
 import { queryClient } from "@/lib/queryClient";
 import { matchSubjectByName } from "@/lib/aiTeacherSubjects";
 import { personaPayload, type TeacherPrefs } from "@/lib/aiTeacherPrefs";
-import { loadSubscription } from "@/lib/aiTeacherSubscription";
 import { KEEP_LANGUAGE } from "@/lib/aiTeacherVoice";
 import { safeLocalStorage } from "@/lib/safeStorage";
 import type { DocData } from "@/lib/aiTeacherExport";
@@ -547,12 +546,6 @@ export function useLiveTeacher({
     /** The last error the socket reported, used to recognise a key failure when it closes. */
     let lastSocketError = "";
     try {
-      const sub = loadSubscription();
-      if (!sub) {
-        setError("Please purchase an AI Teacher plan (Plus Plan ₹500) to start your 1-to-1 voice class.");
-        setStatusBoth("error");
-        return;
-      }
 
       // The server picks the student's active saved key and returns a one-use token made with it.
       const s = await teacherApi<LiveSession>("session", {

@@ -71,7 +71,7 @@ export function errorText(e: unknown): string {
       case "UNAUTHORIZED": return "Please log in again";
       case "NO_KEYS": return "Add a key first";
       case "ALL_KEYS_FAILED": return "None of your keys worked. See their status below.";
-      case "PLAN_REQUIRED": return "Buy the Plus plan first to add your own keys";
+      case "PLAN_REQUIRED": return "Enroll in a course to add your own API keys";
     }
   }
   return e instanceof Error && e.message ? e.message : "Something went wrong. Please try again.";
@@ -225,14 +225,6 @@ export function AITeacherSettingsPanel({ onClose }: { onClose?: () => void }) {
         <h1 className="text-base font-semibold">AI Teacher settings</h1>
       </div>
 
-      {planState === "active" && (
-        <div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-            <CheckCircle2 className="h-3.5 w-3.5" />Plus plan active
-          </span>
-        </div>
-      )}
-
       {planState === "loading" && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />Checking your plan…
@@ -248,22 +240,9 @@ export function AITeacherSettingsPanel({ onClose }: { onClose?: () => void }) {
 
       {planState === "inactive" && (
         <section className="rounded-2xl border border-amber-300 bg-amber-50/70 p-4 shadow-sm sm:p-5 dark:bg-amber-950/30">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1.5">
-              <h2 className="flex items-center gap-2 text-base font-semibold text-amber-950 dark:text-amber-100">
-                <Sparkles className="h-4 w-4 text-amber-600" />AI Teacher Plus
-              </h2>
-              <p className="text-2xl font-extrabold text-foreground">Rs 500 <span className="text-xs font-medium text-muted-foreground">one-time</span></p>
-              <ul className="space-y-1 text-xs text-muted-foreground">
-                <li>• 1-to-1 AI teacher for voice and chat classes</li>
-                <li>• Add up to 10 of your own Gemini keys</li>
-                <li>• Automatically switches to the next key if one stops working</li>
-              </ul>
-            </div>
-            <Button type="button" className="h-10 gap-2 bg-emerald-700 font-bold text-white hover:bg-emerald-800" onClick={() => navigate("/aiteacher/plus")}>
-              <CreditCard className="h-4 w-4" />Buy Plus for Rs 500
-            </Button>
-          </div>
+          <p className="text-sm text-amber-950 dark:text-amber-100">
+            Enroll in a course to use your personal AI teacher with your own free Google Gemini keys.
+          </p>
         </section>
       )}
 
@@ -303,7 +282,7 @@ export function AITeacherSettingsPanel({ onClose }: { onClose?: () => void }) {
 
         {count === 0 && planState !== "loading" && planState !== "unknown" && (
           <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
-            {planActive ? "No keys yet. Add one below to start your lessons." : "No keys yet. Buy Plus to add your own keys."}
+            {planActive ? "No keys yet. Add one below to start your lessons." : "No keys yet. Enroll in a course to add your own keys."}
           </p>
         )}
 

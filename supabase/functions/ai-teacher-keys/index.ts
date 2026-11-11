@@ -34,7 +34,7 @@ import {
   setActiveKey,
   sha256Hex,
 } from "../_shared/studentKeys.ts";
-import { hasPlusPlan } from "../_shared/plusPlan.ts";
+import { hasCourseAccess } from "../_shared/courseAccess.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -120,10 +120,10 @@ const toPublicKey = (r: any) => ({
   lastUsedAt: r.last_used_at ?? null,
 });
 
-/** Throws 402 PLAN_REQUIRED unless the user has the Plus plan (or Pro, which counts as Plus). */
+/** Throws 402 PLAN_REQUIRED unless the user has an active course enrollment. */
 async function requirePlus(userId: string): Promise<void> {
-  if (!(await hasPlusPlan(sb, userId))) {
-    throw fail(402, "PLAN_REQUIRED", "Buy the Plus plan (Rs 500) to add your keys.");
+  if (!(await hasCourseAccess(sb, userId))) {
+    throw fail(402, "PLAN_REQUIRED", "Enroll in a course to add your own API keys.");
   }
 }
 
@@ -131,7 +131,7 @@ async function settingsFor(userId: string) {
   const [keysRes, prefRes, plus] = await Promise.all([
     sb.from("ai_teacher_user_keys").select(KEY_COLUMNS).eq("user_id", userId).order("position", { ascending: true }),
     sb.from("ai_teacher_user_prefs").select(PREF_COLUMNS).eq("user_id", userId).maybeSingle(),
-    hasPlusPlan(sb, userId),
+    hasCourseAccess(sb, userId),
   ]);
   dbCheck(keysRes.error);
   dbCheck(prefRes.error);

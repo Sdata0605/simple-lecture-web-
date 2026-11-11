@@ -349,7 +349,7 @@ export default function AdminAITeacher() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Configure up to 100 Gemini API keys with automatic failover, voice personality models, and student plan pricing.
+            Configure up to 100 Gemini API keys with automatic failover, and voice personality models.
           </p>
         </div>
 
@@ -412,16 +412,6 @@ export default function AdminAITeacher() {
           </p>
         </Card>
 
-        <Card className="p-4 shadow-sm bg-card border">
-          <div className="text-xs font-medium text-muted-foreground">Student Key Plan (BYOK)</div>
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-2xl font-bold text-amber-700 dark:text-amber-400">
-              ₹{local.plan_pricing?.byok_price ?? 500}
-            </span>
-            <span className="text-xs text-muted-foreground">one-time</span>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Uses student's personal key</p>
-        </Card>
       </div>
 
       {/* Main Tabs Container */}
@@ -430,10 +420,6 @@ export default function AdminAITeacher() {
           <TabsTrigger value="keys-pool" className="gap-2 py-2.5 font-semibold text-xs sm:text-sm">
             <KeyRound className="h-4 w-4" />
             <span>API Keys Pool ({pool.length}/100)</span>
-          </TabsTrigger>
-          <TabsTrigger value="pricing" className="gap-2 py-2.5 font-semibold text-xs sm:text-sm">
-            <IndianRupee className="h-4 w-4" />
-            <span>Plan Pricing</span>
           </TabsTrigger>
           <TabsTrigger value="voice-models" className="gap-2 py-2.5 font-semibold text-xs sm:text-sm">
             <Sparkles className="h-4 w-4" />
@@ -769,99 +755,6 @@ export default function AdminAITeacher() {
                   </Table>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* TAB 2: PLAN PRICING MANAGEMENT */}
-        <TabsContent value="pricing" className="space-y-5">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <IndianRupee className="h-5 w-5 text-emerald-600" />
-                <span>AI Teacher Subscription Plan Pricing</span>
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Modify the one-time subscription prices for both plans. Changes immediately reflect across the Student Homepage Banner, Course Navigation, Paywall, and Razorpay checkout.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Plan 1: Plus Plan (BYOK) */}
-                <div className="rounded-2xl border-2 border-border/80 bg-card p-5 space-y-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-300 font-semibold text-xs">
-                      Budget Friendly (BYOK)
-                    </Badge>
-                    <span className="p-2 rounded-xl bg-amber-100 text-amber-700">
-                      <KeyRound className="h-4 w-4" />
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="font-bold text-base text-foreground">Plan 1: Plus Plan</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Student provides their own Google Gemini API key.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5 pt-2">
-                    <Label htmlFor="byok-price" className="text-xs font-semibold">
-                      Plan Price (₹ INR)
-                    </Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-sm font-bold text-muted-foreground">
-                        ₹
-                      </span>
-                      <Input
-                        id="byok-price"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={local.plan_pricing?.byok_price ?? 500}
-                        onChange={(e) =>
-                          patchLocal({
-                            plan_pricing: {
-                              byok_price: Number(e.target.value),
-                              admin_price: local.plan_pricing?.admin_price ?? 1000,
-                            },
-                          })
-                        }
-                        className="pl-7 font-bold text-base bg-background"
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">Default: ₹500</p>
-                  </div>
-
-                  <div className="rounded-xl border bg-muted/30 p-3 space-y-1.5 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5 font-medium text-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span>Full 1-to-1 Voice & Chat Tutoring</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 font-medium text-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span>Zero server API consumption costs for admin</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 font-medium text-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span>Free Google AI Studio key walkthrough provided</span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <Button
-                  onClick={handleSaveAll}
-                  disabled={updateSettings.isPending}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs"
-                >
-                  <Check className="h-4 w-4 mr-1.5" />
-                  Save Updated Prices
-                </Button>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>

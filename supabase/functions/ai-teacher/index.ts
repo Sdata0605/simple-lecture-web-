@@ -30,7 +30,7 @@ import {
   touchKey,
   type StudentKey,
 } from "../_shared/studentKeys.ts";
-import { hasPlusPlan } from "../_shared/plusPlan.ts";
+import { hasCourseAccess } from "../_shared/courseAccess.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -1037,8 +1037,8 @@ Deno.serve(async (req) => {
       case "chat": {
         const userId = await requireUserId(req);
         if (!userId) return json({ error: "Sign in to use the AI Teacher.", code: "UNAUTHORIZED" }, 401);
-        if (!(await hasPlusPlan(sb, userId))) {
-          return json({ error: "Buy the Plus plan (Rs 500) to use the AI Teacher.", code: "PLAN_REQUIRED" }, 402);
+        if (!(await hasCourseAccess(sb, userId))) {
+          return json({ error: "Enroll in a course to use the AI Teacher with your own API keys.", code: "PLAN_REQUIRED" }, 402);
         }
         return action === "session" ? await handleSession(body, userId) : await handleChat(body, userId);
       }
