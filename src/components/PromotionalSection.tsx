@@ -54,7 +54,7 @@ export const PromotionalSection = () => {
                 <TrendingUp className="w-7 h-7 text-white" />
               </div>
               <h3 className="text-xl font-bold text-white mb-2">Proven Results</h3>
-              <p className="text-white/80">1,00,000+ students, 95% report improved grades within 3 months</p>
+              <p className="text-white/80">50,000+ students, 95% report improved grades within 3 months</p>
             </div>
           </div>
 
@@ -86,7 +86,7 @@ export const PromotionalSection = () => {
           </div>
 
           <p className="text-white/70 text-sm">
-            Join 1,00,000+ students already learning on SimpleLecture
+            Join 50,000+ students already learning on SimpleLecture
           </p>
         </div>
       </div>

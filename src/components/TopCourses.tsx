@@ -34,7 +34,7 @@ export const TopCourses = ({ featuredCoursesData }: TopCoursesProps) => {
     rating: fc.courses?.rating || 4.9,
     students: fc.courses?.student_count || 0,
     duration: `${(fc.courses?.duration_months || 6) * 50} Hours`,
-    price: fc.courses?.price_inr || 1000,
+    price: fc.courses?.price_inr || 2950,
     originalPrice: fc.courses?.original_price_inr || 25000,
     instructor: fc.courses?.instructor_name || "SimpleLecture Team",
     slug: fc.courses?.slug || "",

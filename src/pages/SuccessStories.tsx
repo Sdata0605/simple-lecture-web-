@@ -18,7 +18,7 @@ const stories: Story[] = [
     id: "1",
     name: "Rahul Kumar",
     rating: 5,
-    text: "The coaching that cost my brother ₹50,000 is here for just ₹1000. I scored 94% in SSLC boards! The AI-generated MCQs were game-changers.",
+    text: "The coaching that cost my brother ₹50,000 is here for just ₹2,950. I scored 94% in SSLC boards! The AI-generated MCQs were game-changers.",
     course: "10th SSLC Complete",
   },
   {
@@ -32,7 +32,7 @@ const stories: Story[] = [
     id: "3",
     name: "Arjun Patel",
     rating: 5,
-    text: "At just ₹1000 a year, this is 100x better than my ₹80,000 coaching. The AI tutor was available 24/7, no traveling, and very personalized.",
+    text: "At just ₹2,950 a year, this is 100x better than my ₹80,000 coaching. The AI tutor was available 24/7, no traveling, and very personalized.",
     course: "10th SSLC Complete",
   },
   {

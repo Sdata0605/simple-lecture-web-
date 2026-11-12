@@ -29,7 +29,7 @@ import { generateBreadcrumbSchema, generateCollectionPageSchema } from "@/lib/se
 /** Compact trust badges for Programs page */
 const ProgramsTrustBadges = () => {
   const badges = [
-    { icon: Users, label: "1,00,000+ Students" },
+    { icon: Users, label: "50,000+ Students" },
     { icon: Star, label: "4.9★ Rating" },
     { icon: Headphones, label: "24/7 AI Support" },
     { icon: IndianRupee, label: "From ₹2,950/yr (incl. GST)" },
@@ -55,7 +55,7 @@ const CategoryAIContent = ({ categoryName }: { categoryName: string }) => {
   const contentMap: Record<string, { question: string; answer: string }> = {
     "Board Exams": {
       question: "What are the best online courses for board exam preparation?",
-      answer: "SimpleLecture offers AI-powered board exam courses for SSLC 10th and PUC with personalised learning, 24/7 AI doubt clearing, chapter-wise video lessons, and board-pattern mock tests — all starting at just ₹2,950/year (incl. GST). Join 1,00,000+ students scoring 90+ with our mastery-based approach."
+      answer: "SimpleLecture offers AI-powered board exam courses for SSLC 10th and PUC with personalised learning, 24/7 AI doubt clearing, chapter-wise video lessons, and board-pattern mock tests — all starting at just ₹2,950/year (incl. GST). Join 50,000+ students scoring 90+ with our mastery-based approach."
     },
     "Entrance Exams": {
       question: "Which online platform is best for NEET and JEE entrance exam preparation?",

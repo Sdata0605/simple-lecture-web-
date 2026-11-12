@@ -17,7 +17,7 @@ const testimonials: Testimonial[] = [
     name: "Priya Sharma",
     role: "10th SSLC",
     rating: 5,
-    text: "I scored 95% in SSLC Science with SimpleLecture's AI tutors. The mastery-based approach ensured I was truly prepared. Best ₹1000 I ever spent!",
+    text: "I scored 95% in SSLC Science with SimpleLecture's AI tutors. The mastery-based approach ensured I was truly prepared. Best ₹2,950 I ever spent!",
     course: "10th SSLC Complete",
   },
   {
@@ -25,7 +25,7 @@ const testimonials: Testimonial[] = [
     name: "Rahul Kumar",
     role: "10th SSLC",
     rating: 5,
-    text: "The coaching that cost my brother ₹50,000 is here for just ₹1000. I scored 94% in SSLC boards! The AI-generated MCQs were game-changers.",
+    text: "The coaching that cost my brother ₹50,000 is here for just ₹2,950. I scored 94% in SSLC boards! The AI-generated MCQs were game-changers.",
     course: "10th SSLC Complete",
   },
   {
@@ -41,7 +41,7 @@ const testimonials: Testimonial[] = [
     name: "Arjun Patel",
     role: "10th SSLC",
     rating: 5,
-    text: "At just ₹1000 + GST/year, this is 100x better than my ₹80,000 coaching. AI tutor was available 24/7 for SSLC prep, no traveling, and personalized attention. Highly recommended!",
+    text: "At just ₹2,950 incl. GST/year, this is 100x better than my ₹80,000 coaching. AI tutor was available 24/7 for SSLC prep, no traveling, and personalized attention. Highly recommended!",
     course: "10th SSLC Complete",
   },
   {
@@ -129,7 +129,7 @@ export const TestimonialsSection = () => {
         <div className="grid md:grid-cols-4 gap-6 max-w-4xl mx-auto mt-16">
           <div className="text-center">
             <div className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-2">
-              1,00,000+
+              50,000+
             </div>
             <p className="text-muted-foreground">Active Students</p>
           </div>

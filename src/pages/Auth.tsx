@@ -36,7 +36,7 @@ const promos = [
 
 const benefits = [
   { icon: Sparkles, title: "AI-Powered Tutors", description: "Get instant doubt clearing 24/7" },
-  { icon: Users, title: "1,00,000+ Students", description: "Join our thriving community" },
+  { icon: Users, title: "50,000+ Students", description: "Join our thriving community" },
   { icon: Award, title: "Certificates", description: "From top institutions" },
   { icon: Zap, title: "Fast Learning", description: "At your own pace" },
   { icon: Shield, title: "Secure & Trusted", description: "Your data is safe" },
@@ -597,7 +597,7 @@ const Auth = () => {
     <>
       <SEOHead
         title={activeTab === "login" ? "Login - SimpleLecture | Access Your Courses" : "Sign Up - SimpleLecture | Start Learning Today"}
-        description={activeTab === "login" ? "Login to SimpleLecture to continue your learning journey." : "Join 1,00,000+ students on SimpleLecture."}
+        description={activeTab === "login" ? "Login to SimpleLecture to continue your learning journey." : "Join 50,000+ students on SimpleLecture."}
         keywords="login, sign up, online learning India, SimpleLecture, NEET, JEE, board exams"
         canonicalUrl={`https://simplelecture.com/auth?tab=${activeTab}`}
       />
@@ -635,7 +635,7 @@ const Auth = () => {
                   { icon: MessageCircle, label: "Instant Doubt Solving" },
                   { icon: FileText, label: "Mock Tests & DPPs" },
                   { icon: Globe, label: "Kannada & English Support" },
-                  { icon: Tag, label: "₹1000 Per Year" },
+                  { icon: Tag, label: "₹2,950 Per Year" },
                 ].map(({ icon: Icon, label }) => (
                   <div key={label} className="flex flex-col items-center text-center gap-2">
                     <div className="w-14 h-14 rounded-2xl bg-accent/60 flex items-center justify-center">

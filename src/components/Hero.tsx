@@ -31,7 +31,7 @@ const heroSlideData = [
       "AI-generated practice papers matching board pattern",
       "Personalized weak area improvement",
     ],
-    cta: "Join 1,00,000+ SSLC Students at ₹2,950 incl. GST",
+    cta: "Join 50,000+ SSLC Students at ₹2,950 incl. GST",
   },
   {
     title: "Ace Your SSLC Exams",
@@ -201,7 +201,7 @@ export const Hero = (_props: HeroProps) => {
                   <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3 text-white/70 text-sm">
                     <span className="flex items-center gap-1">⭐ 4.9/5 rating</span>
                     <span className="w-1 h-1 rounded-full bg-white/40" />
-                    <span>1,00,000+ students</span>
+                    <span>50,000+ students</span>
                     <span className="w-1 h-1 rounded-full bg-white/40" />
                     <span>95% success rate</span>
                   </div>

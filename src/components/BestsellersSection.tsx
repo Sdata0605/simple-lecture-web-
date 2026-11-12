@@ -36,7 +36,7 @@ export const BestsellersSection = ({ featuredCoursesData }: BestsellersSectionPr
       rating: fc.courses?.rating || 5.0,
       students: fc.courses?.student_count || 0,
       duration: `${(fc.courses?.duration_months || 6) * 50} Hours`,
-      price: fc.courses?.price_inr || 1000,
+      price: fc.courses?.price_inr || 2950,
       originalPrice: fc.courses?.original_price_inr || 25000,
       slug: fc.courses?.slug || "",
       isComingSoon: fc.courses?.is_coming_soon || false,

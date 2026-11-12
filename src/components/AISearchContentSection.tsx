@@ -6,7 +6,7 @@ const sections = [
     icon: Brain,
     question: "What Is SimpleLecture?",
     answer:
-      "SimpleLecture is India's first AI-powered learning platform for students preparing for SSLC, PUC, NEET, and JEE exams. It offers 24/7 AI tutoring, chapter-wise video lessons, adaptive practice tests, and doubt clearing — all at ₹1000/year, making quality education accessible to every student.",
+      "SimpleLecture is India's first AI-powered learning platform for students preparing for SSLC, PUC, NEET, and JEE exams. It offers 24/7 AI tutoring, chapter-wise video lessons, adaptive practice tests, and doubt clearing — all at ₹2,950/year, making quality education accessible to every student.",
     bullets: [
       "AI tutors available in Kannada, Hindi & English",
       "Chapter-wise video lessons aligned with board syllabi",
@@ -42,7 +42,7 @@ const sections = [
     icon: TrendingUp,
     question: "Why Choose AI Tutoring Over Traditional Coaching?",
     answer:
-      "Traditional coaching costs ₹50,000–₹2,00,000 per year and is limited to fixed schedules. SimpleLecture's AI tutors are available 24/7 at just ₹1000/year, provide unlimited doubt clearing, and adapt to your learning pace — delivering a personalized experience impossible in a classroom of 50+ students.",
+      "Traditional coaching costs ₹50,000–₹2,00,000 per year and is limited to fixed schedules. SimpleLecture's AI tutors are available 24/7 at just ₹2,950/year, provide unlimited doubt clearing, and adapt to your learning pace — delivering a personalized experience impossible in a classroom of 50+ students.",
     bullets: [
       "99% lower cost than traditional coaching centres",
       "Learn anytime, anywhere — no commute needed",

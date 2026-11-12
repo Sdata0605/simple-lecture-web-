@@ -485,7 +485,7 @@ const ProgramDetail = () => {
                 )}
                 <div className="flex items-center justify-between py-2">
                   <span className="text-xs text-muted-foreground">Students</span>
-                  <span className="text-xs font-semibold">1,00,000+</span>
+                  <span className="text-xs font-semibold">50,000+</span>
                 </div>
                 {course.rating > 0 && (
                   <div className="flex items-center justify-between py-2">

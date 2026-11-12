@@ -2,7 +2,7 @@ import { Shield, Users, Star, Building2 } from "lucide-react";
 
 const badges = [
   { icon: Star, label: "4.9★ Rating" },
-  { icon: Users, label: "1,00,000+ Students" },
+  { icon: Users, label: "50,000+ Students" },
   { icon: Shield, label: "AI-Powered Platform" },
   { icon: Building2, label: "KRUPA KNOWLEDGE STORE PVT LTD" },
 ];
