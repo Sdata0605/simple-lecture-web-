@@ -3,13 +3,13 @@ import { CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import type { HeroVideoSettings } from "@/hooks/useHomepageData";
-import { HeroLecturePlayer } from "@/components/HeroLecturePlayer";
+import { LazyHeroLecturePlayer as HeroLecturePlayer } from "@/components/LazyHeroLecturePlayer";
 import { HeroV4Launcher } from "@/components/HeroV4Launcher";
 import { HOMEPAGE_HERO_LECTURE } from "@/lib/homepageHeroLecture";
 import { openAskAI } from "@/lib/askAIStore";
 
 // Only import first hero image statically - others loaded after first paint
-import heroBoardExams from "@/assets/hero-board-exams.jpg";
+import heroBoardExams from "@/assets/hero-board-exams.webp";
 
 // Hero slide data - images loaded dynamically except first
 const heroSlideData = [
@@ -136,10 +136,16 @@ export const Hero = (_props: HeroProps) => {
                     <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
                   </div>
 
-                  {/* Title */}
-                  <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight">
-                    {slide.title}
-                  </h1>
+                  {/* Title: only the active slide is an H1 so the page keeps exactly one */}
+                  {currentSlide === index ? (
+                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight">
+                      {slide.title}
+                    </h1>
+                  ) : (
+                    <div className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight">
+                      {slide.title}
+                    </div>
+                  )}
                   
                   {/* Gradient Subtitle */}
                   <p className="text-xl md:text-2xl font-semibold bg-gradient-to-r from-amber-200 via-yellow-100 to-orange-200 bg-clip-text text-transparent">

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, forwardRef } from "react";
 import { useCourseThumbnail } from "@/hooks/useCourseThumbnail";
 import { cn } from "@/lib/utils";
-import { rewriteStorageUrl } from "@/lib/proxyUrl";
+import { rewriteStorageUrl, resizedStorageUrl } from "@/lib/proxyUrl";
 
 interface CourseThumbnailProps {
   /** Course ID - used for lazy loading via query */
@@ -30,6 +30,7 @@ export const CourseThumbnail = forwardRef<HTMLDivElement, CourseThumbnailProps>(
   const [isVisible, setIsVisible] = useState(!lazy);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [useOriginal, setUseOriginal] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const mergedRef = (node: HTMLDivElement | null) => {
     (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
@@ -71,7 +72,10 @@ export const CourseThumbnail = forwardRef<HTMLDivElement, CourseThumbnailProps>(
   const rawUrl = thumbnailUrl || fetchedUrl;
   
   // Skip base64 data URLs for performance, then rewrite to proxy
-  const validUrl = rawUrl && !rawUrl.startsWith("data:") ? rewriteStorageUrl(rawUrl) : null;
+  // Card-sized WebP from the image-transform endpoint; falls back to the original file if it fails.
+  const originalUrl = rawUrl && !rawUrl.startsWith("data:") ? rewriteStorageUrl(rawUrl) : null;
+  const resizedUrl = rawUrl && !rawUrl.startsWith("data:") ? resizedStorageUrl(rawUrl, 640, 288) : null;
+  const validUrl = useOriginal ? originalUrl : resizedUrl;
 
   // Gradient placeholder
   const gradientPlaceholder = (
@@ -123,8 +127,13 @@ export const CourseThumbnail = forwardRef<HTMLDivElement, CourseThumbnailProps>(
           src={validUrl}
           alt={alt}
           loading="lazy"
+          decoding="async"
           onLoad={() => setImageLoaded(true)}
-          onError={() => setImageError(true)}
+          onError={() => {
+            // Resized copy failed: retry once with the original file before giving up.
+            if (!useOriginal && resizedUrl !== originalUrl) setUseOriginal(true);
+            else setImageError(true);
+          }}
           className={cn(
             "w-full h-full object-cover transition-opacity duration-300",
             imageLoaded ? "opacity-100" : "opacity-0"

@@ -45,16 +45,10 @@ export const CounselorAvatar = ({
         {conversationState === "speaking" && (
           <div className="absolute -inset-2">
             <div 
-              className="absolute inset-0 rounded-full border-4 border-primary/50"
-              style={{
-                animation: 'speak-ripple 1.5s ease-out infinite'
-              }}
+              className="absolute inset-0 rounded-full border-4 border-primary/50 animate-[speak-ripple_1.5s_ease-out_infinite]"
             />
-            <div 
-              className="absolute inset-0 rounded-full border-2 border-primary"
-              style={{
-                animation: 'speak-ripple 1.5s ease-out infinite 0.75s'
-              }}
+            <div
+              className="absolute inset-0 rounded-full border-2 border-primary animate-[speak-ripple_1.5s_ease-out_infinite_0.75s]"
             />
           </div>
         )}

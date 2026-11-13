@@ -116,6 +116,7 @@ export const Header = ({ minimal = false }: { minimal?: boolean } = {}) => {
                 {searchQuery && (
                   <button
                     type="button"
+                    aria-label="Clear search"
                     onClick={() => {
                       setSearchQuery("");
                       setIsSearchOpen(false);

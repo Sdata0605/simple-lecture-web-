@@ -2,7 +2,6 @@ import { forwardRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Star, ArrowRight } from "lucide-react";
 import { formatINR } from "@/lib/utils";
 import { LazyCourseThumbnail } from "@/components/ui/course-thumbnail";
@@ -47,7 +46,7 @@ const CourseRow = forwardRef<HTMLDivElement, { courses?: FeaturedCourse[]; title
         </Button>
       </div>
 
-      <ScrollArea className="w-full whitespace-nowrap -mx-4 px-4">
+      <div className="w-full whitespace-nowrap -mx-4 px-4 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex gap-3 pb-2">
           {courses?.slice(0, 5).map((featured) => {
             const course = featured.courses;
@@ -96,8 +95,7 @@ const CourseRow = forwardRef<HTMLDivElement, { courses?: FeaturedCourse[]; title
             </div>
           </div>
         </div>
-        <ScrollBar orientation="horizontal" className="invisible" />
-      </ScrollArea>
+      </div>
     </div>
   );
 });

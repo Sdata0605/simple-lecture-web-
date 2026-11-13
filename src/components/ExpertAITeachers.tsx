@@ -55,6 +55,7 @@ export const ExpertAITeachers = () => {
                   height={256}
                   className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                   loading="lazy"
+                  decoding="async"
                 />
               </div>
               <CardContent className="pt-6 pb-8">

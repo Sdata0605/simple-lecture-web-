@@ -21,7 +21,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { BottomNav } from "@/components/mobile/BottomNav";
 import { MobileCategorySheet } from "@/components/mobile/MobileCategorySheet";
 import { formatINR } from "@/lib/utils";
-import { rewriteStorageUrl } from "@/lib/proxyUrl";
+import { rewriteStorageUrl, resizedStorageUrl } from "@/lib/proxyUrl";
 import { DEFAULT_OG_IMAGE } from "@/lib/seo/constants";
 
 import { generateBreadcrumbSchema, generateCollectionPageSchema } from "@/lib/seo/structuredData";
@@ -425,7 +425,11 @@ const Programs = () => {
                       <div className="relative h-20 w-20 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/20 to-accent/20">
                         {(course.course_thumbnails?.storage_url || course.thumbnail_url) && (
                           <img
-                            src={rewriteStorageUrl(course.course_thumbnails?.storage_url || course.thumbnail_url) || undefined}
+                            src={resizedStorageUrl(course.course_thumbnails?.storage_url || course.thumbnail_url, 240, 240) || undefined}
+                            onError={(e) => {
+                              const orig = rewriteStorageUrl(course.course_thumbnails?.storage_url || course.thumbnail_url);
+                              if (orig && e.currentTarget.src !== orig) e.currentTarget.src = orig;
+                            }}
                             alt={course.name}
                             className="h-full w-full object-cover"
                           />
@@ -762,7 +766,11 @@ const Programs = () => {
                       <div className="relative h-48 overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20">
                         {(course.course_thumbnails?.storage_url || course.thumbnail_url) && (
                           <img
-                          src={rewriteStorageUrl(course.course_thumbnails?.storage_url || course.thumbnail_url) || undefined}
+                            src={resizedStorageUrl(course.course_thumbnails?.storage_url || course.thumbnail_url, 640, 288) || undefined}
+                            onError={(e) => {
+                              const orig = rewriteStorageUrl(course.course_thumbnails?.storage_url || course.thumbnail_url);
+                              if (orig && e.currentTarget.src !== orig) e.currentTarget.src = orig;
+                            }}
                             alt={course.name}
                             className="w-full h-full object-cover"
                             loading="lazy"

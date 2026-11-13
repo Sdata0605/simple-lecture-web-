@@ -2,7 +2,7 @@
 
 export const generateOrganizationSchema = () => ({
   "@context": "https://schema.org",
-  "@type": "EducationalOrganization",
+  "@type": ["EducationalOrganization", "LocalBusiness"],
   "name": "SimpleLecture",
   "description": "India's first AI-powered learning platform for board exams, entrance tests, and skill development",
   "url": "https://simplelecture.com",
@@ -23,7 +23,11 @@ export const generateOrganizationSchema = () => ({
     "bestRating": "5",
     "ratingCount": "50000"
   },
-  "sameAs": [],
+  "sameAs": [
+    "https://www.facebook.com/profile.php?id=61588319520885",
+    "https://www.youtube.com/@simplelecture",
+    "https://www.instagram.com/simplelecture_1/"
+  ],
   "contactPoint": {
     "@type": "ContactPoint",
     "contactType": "Customer Service",
@@ -105,7 +109,7 @@ export const generateWebsiteSchema = () => ({
   "url": "https://simplelecture.com",
   "potentialAction": {
     "@type": "SearchAction",
-    "target": "https://simplelecture.com/search?q={search_term_string}",
+    "target": "https://simplelecture.com/programs?q={search_term_string}",
     "query-input": "required name=search_term_string"
   }
 });

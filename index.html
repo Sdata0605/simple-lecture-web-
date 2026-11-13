@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/favicon.png" type="image/png" />
     <title>SimpleLecture – Online Classes for NEET, JEE & Board Exams</title>
-    <meta name="description" content="India's AI-powered online learning platform. Live classes, recorded lectures, mock tests & 24/7 AI doubt solver for NEET, JEE, CBSE, SSLC & PUC. Join 50,000+ students from ₹1000/year." />
+    <meta name="description" content="India's AI-powered learning platform with AI tutors. Live classes, recorded lectures, mock tests & 24/7 AI doubt solver for NEET, JEE, CBSE, SSLC & PUC." />
     <meta name="keywords" content="online classes, online lectures, online coaching, online learning platform India, NEET online coaching, JEE online classes, CBSE Class 12 online classes, physics online classes, chemistry online lectures, maths online tuition, biology online classes, mock test series, AI tutor, live classes, video lectures, board exam preparation, JEE Main 2026, NEET 2026, SSLC, PUC" />
     <meta name="author" content="SimpleLecture" />
     <meta name="robots" content="index, follow" />
-    <link rel="canonical" href="https://simplelecture.com/" />
+    <!-- data-rh lets react-helmet-async replace this tag on the homepage instead of adding a second canonical -->
+    <link rel="canonical" href="https://simplelecture.com/" data-rh="true" />
 
     <link rel="preconnect" href="https://oxwhqvsoelqqsblmqkxx.supabase.co" />
     <link rel="dns-prefetch" href="https://oxwhqvsoelqqsblmqkxx.supabase.co" />
@@ -18,7 +19,7 @@
     <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
 
     <meta property="og:title" content="SimpleLecture – Online Classes for NEET, JEE & Board Exams" />
-    <meta property="og:description" content="India's AI-powered online learning platform. Live classes, recorded lectures, mock tests & 24/7 AI doubt solver for NEET, JEE, CBSE, SSLC & PUC. From ₹1000/year." />
+    <meta property="og:description" content="India's AI-powered online learning platform. Live classes, recorded lectures, mock tests & 24/7 AI doubt solver for NEET, JEE, CBSE, SSLC & PUC. From ₹2,950/year." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://simplelecture.com/" />
 
@@ -26,7 +27,7 @@
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="SimpleLecture – Online Classes for NEET, JEE & Board Exams" />
-    <meta name="twitter:description" content="AI-powered online coaching for NEET, JEE, CBSE & PUC. Live classes, recorded lectures, mock tests, 24/7 AI doubt solver. From ₹1000/year." />
+    <meta name="twitter:description" content="AI-powered online coaching for NEET, JEE, CBSE & PUC. Live classes, recorded lectures, mock tests, 24/7 AI doubt solver. From ₹2,950/year." />
     <meta name="twitter:image" content="https://simplelecture.com/og-default.png" />
 
     <!-- Pre-rendered JSON-LD for non-JS crawlers (ChatGPT, Perplexity, etc.) -->
@@ -35,15 +36,20 @@
       "@context": "https://schema.org",
       "@graph": [
         {
-          "@type": "EducationalOrganization",
+          "@type": ["EducationalOrganization", "LocalBusiness"],
           "name": "SimpleLecture",
           "url": "https://simplelecture.com",
           "logo": "https://simplelecture.com/logo.png",
-          "description": "India's first AI-powered learning platform for board exams, entrance tests, and skill development. Courses starting at ₹1000/year.",
+          "description": "India's first AI-powered learning platform for board exams, entrance tests, and skill development. Courses starting at ₹2,950/year.",
           "foundingDate": "2024",
           "areaServed": "IN",
           "telephone": "+917353021234",
           "email": "contact@simplelecture.com",
+          "sameAs": [
+            "https://www.facebook.com/profile.php?id=61588319520885",
+            "https://www.youtube.com/@simplelecture",
+            "https://www.instagram.com/simplelecture_1/"
+          ],
           "address": {
             "@type": "PostalAddress",
             "addressLocality": "Koramangala, Bangalore",
@@ -74,18 +80,33 @@
   </head>
 
   <body>
-    <noscript><img height="1" width="1" style="display:none"
+    <noscript><img height="1" width="1" hidden
       src="https://www.facebook.com/tr?id=4466207520265747&ev=PageView&noscript=1"
     /></noscript>
     <div id="root">
       <!-- Minimal universal loading state for all pages -->
-      <div id="app-shell" style="min-height: 100vh; background: hsl(0 0% 100%); display: flex; align-items: center; justify-content: center;">
-        <div style="width: 32px; height: 32px; border: 3px solid hsl(262 83% 58%); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+      <div id="app-shell" class="app-shell">
+        <div class="app-shell-spinner"></div>
       </div>
     </div>
     <style>
       @keyframes spin {
         to { transform: rotate(360deg); }
+      }
+      .app-shell {
+        min-height: 100vh;
+        background: hsl(0 0% 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .app-shell-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid hsl(262 83% 58%);
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
       }
     </style>
     <script type="module" src="/src/main.tsx"></script>

@@ -210,6 +210,7 @@ export const ReelMedia = forwardRef<ReelHandle, ReelMediaProps>(
       return (
         <iframe
           ref={iframeRef}
+          title="Lecture video"
           src={`https://player.vimeo.com/video/${vimeoId}?${params.toString()}`}
           allow="autoplay; fullscreen; picture-in-picture"
           allowFullScreen

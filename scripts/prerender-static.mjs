@@ -99,24 +99,29 @@ const ROUTES = [
     path: "/",
     title: "AI Learning for Board & Entrance Exams",
     description:
-      "Score 90+ in SSLC, PUC, NEET & JEE with AI tutors available 24/7. Personalised learning at ₹1000/year. Join 50,000+ students. Start free today.",
+      "India's AI-powered learning platform with AI tutors. Live classes, recorded lectures, mock tests & 24/7 AI doubt solver for NEET, JEE, CBSE, SSLC & PUC.",
     keywords: DEFAULT_KEYWORDS,
     h1: "AI Learning for Board & Entrance Exams",
     lead:
-      "India's first AI-powered learning platform for SSLC, PUC, NEET, JEE and skill development. 24/7 AI tutors, mastery-based learning, ₹1000/year.",
+      "India's first AI-powered learning platform for SSLC, PUC, NEET, JEE and skill development. 24/7 AI tutors, mastery-based learning, ₹2,950/year.",
     jsonLd: [
       {
         "@context": "https://schema.org",
-        "@type": "EducationalOrganization",
+        "@type": ["EducationalOrganization", "LocalBusiness"],
         name: SITE_NAME,
         url: SITE_URL,
         logo: `${SITE_URL}/logo.png`,
         description:
-          "India's first AI-powered learning platform for board exams, entrance tests, and skill development. Courses starting at ₹1000/year.",
+          "India's first AI-powered learning platform for board exams, entrance tests, and skill development. Courses starting at ₹2,950/year.",
         foundingDate: "2024",
         areaServed: "IN",
         telephone: "+917353021234",
         email: "contact@simplelecture.com",
+        sameAs: [
+          "https://www.facebook.com/profile.php?id=61588319520885",
+          "https://www.youtube.com/@simplelecture",
+          "https://www.instagram.com/simplelecture_1/",
+        ],
         address: {
           "@type": "PostalAddress",
           addressLocality: "Koramangala, Bangalore",
@@ -295,6 +300,35 @@ const escHtml = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /**
+ * Routes whose page component always renders <SEOHead canonicalUrl=…> (and
+ * therefore a Helmet canonical). Keep in sync with the SEOHead usages in src/pages.
+ * Routes NOT listed here (/reels, /v3-trial, /v4-player, /v5-player, /aiteacher)
+ * have no Helmet canonical and must keep their plain static canonical.
+ */
+const HELMET_CANONICAL_PATHS = new Set([
+  "/",
+  "/programs",
+  "/blog",
+  "/about",
+  "/contact",
+  "/support",
+  "/terms",
+  "/privacy",
+  "/forum",
+  "/success-stories",
+  "/how-it-works",
+  "/invention-disclosure",
+]);
+const HELMET_CANONICAL_PREFIXES = ["/course/", "/subject/", "/blog/", "/explore/", "/learn/"];
+
+function setsHelmetCanonical(path) {
+  return (
+    HELMET_CANONICAL_PATHS.has(path) ||
+    HELMET_CANONICAL_PREFIXES.some((prefix) => path.startsWith(prefix))
+  );
+}
+
+/**
  * Replace the head of dist/index.html with route-specific meta. We do this by
  * string operations on known patterns rather than a real HTML parser — Vite's
  * output is stable enough that a few regexes are reliable, and we don't need
@@ -320,10 +354,14 @@ function rewriteShell(shell, route) {
   if (route.keywords) {
     html = replaceMeta(html, "name", "keywords", route.keywords);
   }
-  // canonical link
+  // canonical link. Pages whose SEOHead always renders a canonical get
+  // data-rh: react-helmet-async then replaces this tag with its own canonical
+  // instead of adding a second one. Pages without a SEOHead canonical keep the
+  // plain tag, because Helmet would otherwise strip any data-rh tag it does not
+  // manage and leave the page with no canonical at all.
   html = html.replace(
     /<link\s+rel="canonical"[^>]*>/i,
-    `<link rel="canonical" href="${escAttr(canonical)}" />`
+    `<link rel="canonical" href="${escAttr(canonical)}"${setsHelmetCanonical(route.path) ? ' data-rh="true"' : ""} />`
   );
 
   // OG tags
@@ -369,7 +407,7 @@ function rewriteShell(shell, route) {
         </article>
       </noscript>
       <div data-seo-fallback="1" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;">
-        <h1>${escHtml(route.h1)}</h1>
+        <p><strong>${escHtml(route.h1)}</strong></p>
         <p>${escHtml(route.lead)}</p>
       </div>`;
 

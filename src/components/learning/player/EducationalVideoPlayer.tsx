@@ -786,6 +786,12 @@ export const EducationalVideoPlayer = ({
       console.warn('[BOOT][PHASE1][SKIP] settings still loading');
       return;
     }
+    // Tap-to-start players (homepage hero) defer all avatar/beat preloading
+    // until the user presses play, so visitors who never play download nothing.
+    if (requireTapToStart && !userHasStarted) {
+      console.log('[BOOT][PHASE1][DEFERRED] waiting for user to press play');
+      return;
+    }
 
     const INITIAL_CACHE_COUNT = Math.min(2, presentationData.sections.length);
     const cacheIdentity = [
@@ -946,7 +952,7 @@ export const EducationalVideoPlayer = ({
         readySections: Array.from(readySectionsRef.current),
       });
     };
-  }, [presentationData, settingsLoading, preloadSection, primarySource, getSectionCacheReport, isSectionReady, clearAllBlobCaches, jobId, effectiveLocalServerIp, effectiveFallbackServerIp, effectiveLanguageServerIp, cdnBaseUrl, selectedLanguage]);
+  }, [presentationData, settingsLoading, preloadSection, primarySource, getSectionCacheReport, isSectionReady, clearAllBlobCaches, jobId, effectiveLocalServerIp, effectiveFallbackServerIp, effectiveLanguageServerIp, cdnBaseUrl, selectedLanguage, requireTapToStart, userHasStarted]);
 
   // Phase 2: sequential background prefetch — load next 3 sections one by one
   useEffect(() => {
@@ -2614,8 +2620,10 @@ export const EducationalVideoPlayer = ({
     return <div className={cn("player-stage flex items-center justify-center", className)}><p className="opacity-50">No presentation data</p></div>;
   }
 
-  // Show loading screen until all avatars are preloaded
-  if (!allAvatarsReady && !isSectionReady(currentSectionIndex)) {
+  // Show loading screen until all avatars are preloaded.
+  // Tap-to-start players wait on the play overlay instead while nothing is loaded.
+  const awaitingUserStart = requireTapToStart && !userHasStarted;
+  if (!awaitingUserStart && !allAvatarsReady && !isSectionReady(currentSectionIndex)) {
     return (
       <div className={cn("flex flex-col h-full w-full overflow-hidden", className)}>
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-background">

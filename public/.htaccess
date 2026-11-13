@@ -107,8 +107,44 @@ ErrorDocument 404 /404.html
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
   Header always set Permissions-Policy "camera=(), geolocation=(), microphone=(self)"
-  # TODO (follow-up): add a Content-Security-Policy. Not added here because a
-  # wrong policy would break the app (inline scripts, Supabase, video/CDN hosts).
+  # Content-Security-Policy in REPORT-ONLY mode: violations are logged by the
+  # browser but nothing is blocked, so the app cannot break. Review console
+  # reports before switching to enforcing "Content-Security-Policy".
+  Header always set Content-Security-Policy-Report-Only "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-src https:; media-src 'self' blob: https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+</IfModule>
+
+# ── Browser caching (mod_expires) ───────────────────────────────────────────
+# Long lifetimes for static assets so repeat visits are faster. HTML is set to
+# zero so deploys roll out instantly. Hashed Vite output under /assets/ is safe
+# to cache for a year. Non-hashed files in public/ (logos, og images) are also
+# cached for a year, so rename such a file when its content changes.
+<IfModule mod_expires.c>
+  ExpiresActive On
+
+  # Images
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/avif "access plus 1 year"
+  ExpiresByType image/gif "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType image/x-icon "access plus 1 year"
+  ExpiresByType image/vnd.microsoft.icon "access plus 1 year"
+
+  # CSS and JavaScript
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType text/javascript "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+
+  # Fonts
+  ExpiresByType font/woff "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType application/font-woff "access plus 1 year"
+  ExpiresByType application/font-woff2 "access plus 1 year"
+
+  # HTML: never cached long. Explicit zero so index.html and prerendered
+  # pages always revalidate (matches the no-cache rule above).
+  ExpiresByType text/html "access plus 0 seconds"
 </IfModule>
 
 # ── Compression ─────────────────────────────────────────────────────────────

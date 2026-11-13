@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -7,17 +7,17 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useSearchCourses } from "@/hooks/usePaginatedCourses";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/utils";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerClose,
-} from "@/components/ui/drawer";
+import { lazyWithRetry } from "@/lib/lazyWithRetry";
+
+// The category drawer (and its animation library) loads the first time it is opened.
+const LazyMobileCategoryDrawer = lazyWithRetry(() =>
+  import("@/components/mobile/MobileCategoryDrawer").then((m) => ({ default: m.MobileCategoryDrawer }))
+);
 
 export const MobileHomeSearch = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const [drawerMounted, setDrawerMounted] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -133,7 +133,10 @@ export const MobileHomeSearch = () => {
         </div>
         <button
           type="button"
-          onClick={() => setDrawerOpen(true)}
+          onClick={() => {
+            setDrawerMounted(true);
+            setDrawerOpen(true);
+          }}
           className="h-11 w-11 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30 transition-colors flex-shrink-0"
           aria-label="Browse categories"
         >
@@ -218,29 +221,16 @@ export const MobileHomeSearch = () => {
       )}
 
       {/* Category Bottom Sheet */}
-      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Browse Categories</DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4 pb-6 grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
-            {allCategories?.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => handleCategoryClick(cat.slug)}
-                className="flex items-center gap-2 p-3 rounded-xl border bg-background hover:bg-accent text-left transition-colors"
-              >
-                {cat.icon ? (
-                  <span className="text-lg">{cat.icon}</span>
-                ) : (
-                  <FolderOpen className="h-4 w-4 text-primary" />
-                )}
-                <span className="text-sm font-medium text-foreground truncate">{cat.name}</span>
-              </button>
-            ))}
-          </div>
-        </DrawerContent>
-      </Drawer>
+      {drawerMounted && (
+        <Suspense fallback={null}>
+          <LazyMobileCategoryDrawer
+            open={drawerOpen}
+            onOpenChange={setDrawerOpen}
+            categories={allCategories ?? []}
+            onSelect={handleCategoryClick}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

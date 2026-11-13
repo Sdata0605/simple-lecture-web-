@@ -5,7 +5,6 @@ import { useCoursesByHierarchy } from "@/hooks/useCoursesByHierarchy";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Users, Clock, AlertCircle, RefreshCw } from "lucide-react";
 import { CategoryIcon } from "@/components/CategoryIcon";
@@ -198,7 +197,7 @@ export const ExploreProgramsSection = ({ categoriesData, coursesData }: ExploreP
             {selectedParentId && subCategories.length > 0 && (
               <Card>
                 <CardContent className="p-3">
-                  <ScrollArea className="w-full whitespace-nowrap">
+                  <div className="w-full whitespace-nowrap overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="flex gap-2 pb-2">
                       <Badge
                         variant={!selectedSubCategoryId ? "default" : "outline"}
@@ -219,8 +218,7 @@ export const ExploreProgramsSection = ({ categoriesData, coursesData }: ExploreP
                         </Badge>
                       ))}
                     </div>
-                    <ScrollBar orientation="horizontal" />
-                  </ScrollArea>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -229,7 +227,7 @@ export const ExploreProgramsSection = ({ categoriesData, coursesData }: ExploreP
             {selectedSubCategoryId && subSubCategories.length > 0 && (
               <Card>
                 <CardContent className="p-3">
-                  <ScrollArea className="w-full whitespace-nowrap">
+                  <div className="w-full whitespace-nowrap overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="flex gap-2 pb-2">
                       <Badge
                         variant={!selectedSubSubCategoryId ? "secondary" : "outline"}
@@ -250,8 +248,7 @@ export const ExploreProgramsSection = ({ categoriesData, coursesData }: ExploreP
                         </Badge>
                       ))}
                     </div>
-                    <ScrollBar orientation="horizontal" />
-                  </ScrollArea>
+                  </div>
                 </CardContent>
               </Card>
             )}

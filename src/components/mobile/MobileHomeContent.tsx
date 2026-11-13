@@ -14,13 +14,13 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHomepageData } from "@/hooks/useHomepageData";
 import { useDailyAttendance } from "@/hooks/useDailyAttendance";
-import { HeroLecturePlayer } from "@/components/HeroLecturePlayer";
+import { LazyHeroLecturePlayer as HeroLecturePlayer } from "@/components/LazyHeroLecturePlayer";
 import { HeroV4Launcher } from "@/components/HeroV4Launcher";
 import { HOMEPAGE_HERO_LECTURE } from "@/lib/homepageHeroLecture";
-import headerIcon from "@/assets/header-icon.jpeg";
+import headerIcon from "@/assets/header-icon.webp";
 
 // Only import first hero image statically - others loaded after first paint
-import heroBoardExams from "@/assets/hero-board-exams.jpg";
+import heroBoardExams from "@/assets/hero-board-exams.webp";
 
 // Lazy-load heavy components
 const HamburgerMenu = lazy(() => import("./HamburgerMenu").then(m => ({ default: m.HamburgerMenu })));
@@ -142,7 +142,7 @@ export const MobileHomeContent = () => {
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/30 shadow-md flex-shrink-0">
             <img
               src={headerIcon} 
-              alt="Header Icon" 
+              alt="Header Icon" width={48} height={48} 
               className="w-full h-full object-cover"
               loading="lazy"
             />
@@ -153,7 +153,7 @@ export const MobileHomeContent = () => {
       </div>
 
       {/* Hero Section - Fixed dimensions for CLS */}
-      <div className="relative overflow-hidden" style={{ height: '280px' }}>
+      <div className="relative overflow-hidden h-[280px]">
         {heroSlides.map((slide, index) => {
           const isActive = currentSlide === index;
           const isFirst = index === 0;
@@ -264,7 +264,7 @@ export const MobileHomeContent = () => {
 
       {/* Course Sections - Lazy loaded */}
       <Suspense fallback={<div className="min-h-[420px] animate-pulse bg-muted/40 rounded-xl mx-4 mt-4" />}>
-        <div style={{ minHeight: 420 }}>
+        <div className="min-h-[420px]">
           <MobileCourseSections 
             mostPopularCourses={mostPopularCourses as any} 
             newestCourses={newestCourses as any} 

@@ -99,12 +99,10 @@ export const VoiceStatusIndicator = ({
         {state === "speaking" && (
           <>
             <div 
-              className="absolute -inset-2 rounded-2xl border-4 border-primary/50"
-              style={{ animation: 'speak-ripple 1.5s ease-out infinite' }}
+              className="absolute -inset-2 rounded-2xl border-4 border-primary/50 animate-[speak-ripple_1.5s_ease-out_infinite]"
             />
-            <div 
-              className="absolute -inset-4 rounded-2xl border-2 border-primary/30"
-              style={{ animation: 'speak-ripple 1.5s ease-out infinite 0.75s' }}
+            <div
+              className="absolute -inset-4 rounded-2xl border-2 border-primary/30 animate-[speak-ripple_1.5s_ease-out_infinite_0.75s]"
             />
           </>
         )}
@@ -113,8 +111,7 @@ export const VoiceStatusIndicator = ({
         {state === "listening" && (
           <>
             <div 
-              className="absolute -inset-2 rounded-2xl border-4 border-green-500/50"
-              style={{ animation: 'speak-ripple 1.5s ease-out infinite' }}
+              className="absolute -inset-2 rounded-2xl border-4 border-green-500/50 animate-[speak-ripple_1.5s_ease-out_infinite]"
             />
           </>
         )}

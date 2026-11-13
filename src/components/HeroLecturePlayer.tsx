@@ -60,7 +60,6 @@ export const HeroLecturePlayer = ({
   // user explicitly taps the central play button.
 
 
-  const mobileMinHeight = 270 + (mobileExtraHeight || 0);
   return (
     <div
       className={cn(
@@ -73,10 +72,9 @@ export const HeroLecturePlayer = ({
         className={cn(
           "relative w-full aspect-video overflow-hidden shadow-2xl border-4 border-white/20 bg-black",
           isMobile && mobileFullBleed ? "rounded-none border-x-0" : "rounded-2xl",
-          isMobile && `min-h-[${mobileMinHeight}px]`,
+          isMobile && "min-h-[300px]",
           forceCompact && "force-mobile-player"
         )}
-        style={isMobile ? { minHeight: `${mobileMinHeight}px` } : undefined}
       >
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center text-white/80">

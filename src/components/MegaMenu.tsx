@@ -15,7 +15,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 const getCategoryDisplayName = (name: string) => {
   const isBoardExams = name.toLowerCase().includes('board exam');
@@ -73,7 +72,7 @@ export const MegaMenu = () => {
               <SheetTitle className="text-left text-lg">All Courses</SheetTitle>
             </SheetHeader>
 
-            <ScrollArea className="h-[calc(85vh-70px)]">
+            <div className="h-[calc(85vh-70px)] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="px-5 py-4 space-y-6">
                 {/* Explore by Goal */}
                 {goals && goals.length > 0 && (
@@ -166,7 +165,7 @@ export const MegaMenu = () => {
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </SheetContent>
         </Sheet>
       </>

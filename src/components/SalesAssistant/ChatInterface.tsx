@@ -317,8 +317,8 @@ export const ChatInterface = ({
               <div className="bg-muted rounded-lg p-3">
                 <div className="flex space-x-2">
                   <div className="w-2 h-2 bg-foreground rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-foreground rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                  <div className="w-2 h-2 bg-foreground rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+                  <div className="w-2 h-2 bg-foreground rounded-full animate-bounce ![animation-delay:0.2s]"></div>
+                  <div className="w-2 h-2 bg-foreground rounded-full animate-bounce ![animation-delay:0.4s]"></div>
                 </div>
               </div>
             </div>

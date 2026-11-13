@@ -784,6 +784,7 @@ export const RecordedVideos = ({
             <div className="space-y-4 p-4 pt-2">
               <div className="aspect-video rounded-lg overflow-hidden bg-black">
                 <iframe
+                  title="Recorded lecture video"
                   src={getEmbedUrl(selectedVideo)}
                   className="w-full h-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
@@ -1295,6 +1296,7 @@ const LegacyAILectureCard = ({
             <div className="flex flex-col gap-4 p-4 pt-2 overflow-y-auto">
               <div className="h-[60vh] max-h-[600px] rounded-lg overflow-hidden bg-black flex-shrink-0">
                 <iframe
+                  title="AI-generated lecture video"
                   src={aiGeneratedVideoUrl}
                   className="w-full h-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"

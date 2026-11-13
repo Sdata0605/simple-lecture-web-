@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Mail, Phone, MapPin, BookOpen, Send } from "lucide-react";
 
 import { Link } from "react-router-dom";
-import headerIcon from "@/assets/header-icon.jpeg";
+import headerIcon from "@/assets/header-icon.webp";
 export const Footer = () => {
   return <footer className="bg-card border-t">
       {/* Main Footer */}
@@ -36,6 +36,11 @@ export const Footer = () => {
               <div className="flex items-center gap-3 text-sm">
                 <MapPin className="w-4 h-4 text-primary" />
                 <span>Koramangala, Bangalore, Karnataka, India</span>
+              </div>
+              <div className="flex items-center gap-4 text-sm pt-2">
+                <a href="https://www.facebook.com/profile.php?id=61588319520885" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">Facebook</a>
+                <a href="https://www.youtube.com/@simplelecture" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">YouTube</a>
+                <a href="https://www.instagram.com/simplelecture_1/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">Instagram</a>
               </div>
             </div>
           </div>

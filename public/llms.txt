@@ -1,0 +1,18 @@
+# SimpleLecture
+
+> India's AI-powered online learning platform. Live classes, recorded lectures, mock tests and a 24/7 AI doubt solver for NEET, JEE, CBSE, SSLC and PUC.
+
+Main website: https://simplelecture.com
+
+## Key pages
+
+- [Programs](https://simplelecture.com/programs): all courses and programs
+- [About](https://simplelecture.com/about): about SimpleLecture
+- [Blog](https://simplelecture.com/blog): study tips and course guides
+- [Contact](https://simplelecture.com/contact): contact the team
+- [Support](https://simplelecture.com/support): help and support
+- [How it works](https://simplelecture.com/how-it-works): how SimpleLecture works
+
+## Contact
+
+- Email: contact@simplelecture.com

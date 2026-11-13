@@ -146,6 +146,7 @@ export const SocialProofToast = () => {
     >
       <div className="bg-card border border-border shadow-lg rounded-xl p-4 relative">
         <button
+          aria-label="Dismiss notification"
           onClick={() => {
             setDismissed(true);
             safeSessionStorage.setItem('social-proof-dismissed', 'true');

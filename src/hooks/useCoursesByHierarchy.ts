@@ -12,10 +12,10 @@ const COURSE_SELECT_FIELDS = `
 
 // Helper to get safe thumbnail URL (skip base64 data)
 export const getSafeThumbnailUrl = (url: string | null): string => {
-  if (!url) return "/placeholder-course.jpg";
+  if (!url) return "/placeholder-course.webp";
   // Only return if it's a proper URL, not base64
   if (url.startsWith('http') || url.startsWith('/')) return url;
-  return "/placeholder-course.jpg"; // Skip base64 images
+  return "/placeholder-course.webp"; // Skip base64 images
 };
 
 export const useCoursesByHierarchy = (

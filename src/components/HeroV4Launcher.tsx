@@ -25,8 +25,6 @@ export const HeroV4Launcher = ({
   forceCompact = false,
   mobileExtraHeight = 0,
 }: HeroV4LauncherProps) => {
-  const mobileMinHeight = 270 + (mobileExtraHeight || 0);
-
   return (
     <div
       className={cn(
@@ -36,20 +34,16 @@ export const HeroV4Launcher = ({
     >
       <div
         className={cn(
-          "relative w-full aspect-video overflow-hidden rounded-2xl shadow-2xl border-4 border-white/20 bg-black"
+          "relative w-full aspect-video overflow-hidden rounded-2xl shadow-2xl border-4 border-white/20 bg-black min-h-[300px]"
         )}
-        style={{ minHeight: `${mobileMinHeight}px` }}
       >
         {videoMp4Url && (
           <video
             src={videoMp4Url}
             title={title}
-            autoPlay
-            muted
-            loop
             playsInline
             controls
-            preload="metadata"
+            preload="none"
             className="absolute inset-0 w-full h-full bg-black object-contain"
           />
         )}
