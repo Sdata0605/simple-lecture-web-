@@ -13,7 +13,7 @@ export function withTrailingSlash(url: string): string {
   const rest = match ? (match[2] || "") + (match[3] || "") : "";
   // Homepage and URLs that point at a file (for example .png) are left alone.
   const isRoot = /^https?:\/\/[^/]+\/?$/.test(base);
-  const hasFileExtension = /\/[^/]+\.[a-z0-9]+$/i.test(base);
+  const hasFileExtension = /\/[^/]+\.(png|jpe?g|gif|webp|avif|svg|ico|xml|txt|json|js|css|pdf|webmanifest)$/i.test(base);
   if (isRoot || hasFileExtension || base.endsWith("/")) return base + rest;
   return base + "/" + rest;
 }

@@ -81,7 +81,7 @@ function url(
 ): string {
   // Apache redirects folder URLs without the slash, so every page location must end with "/"
   // (the homepage already does). Keep in sync with src/lib/seo/canonical.ts.
-  const pageLoc = loc.endsWith("/") || /\.[a-z0-9]+$/i.test(loc) ? loc : loc + "/";
+  const pageLoc = loc.endsWith("/") || /\.(png|jpe?g|gif|webp|avif|svg|ico|xml|txt|json|js|css|pdf|webmanifest)$/i.test(loc) ? loc : loc + "/";
   const lastmodTag = lastmod ? `\n    <lastmod>${escapeXml(lastmod)}</lastmod>` : "";
   return `  <url>\n    <loc>${escapeXml(pageLoc)}</loc>${lastmodTag}\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
 }
