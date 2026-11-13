@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { DEFAULT_OG_IMAGE } from '@/lib/seo/constants';
+import { withTrailingSlash } from '@/lib/seo/canonical';
 
 interface SEOHeadProps {
   title: string;
@@ -47,7 +48,8 @@ export const SEOHead = ({
   preloadImage,
 }: SEOHeadProps) => {
   const fullTitle = /SimpleLecture\s*$/.test(title) ? title : `${title} | SimpleLecture`;
-  const currentUrl = canonicalUrl || (typeof window !== 'undefined' ? window.location.href : '');
+  const canonical = canonicalUrl ? withTrailingSlash(canonicalUrl) : undefined;
+  const currentUrl = canonical || (typeof window !== 'undefined' ? window.location.href : '');
 
   useJsonLdInjection(structuredData, 'page');
 
@@ -60,7 +62,7 @@ export const SEOHead = ({
       {keywords && <meta name="keywords" content={keywords} />}
 
       {/* Canonical URL */}
-      {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+      {canonical && <link rel="canonical" href={canonical} />}
 
       {/* LCP image preload */}
       {preloadImage && <link rel="preload" as="image" href={preloadImage} {...({ fetchpriority: 'high' } as any)} />}

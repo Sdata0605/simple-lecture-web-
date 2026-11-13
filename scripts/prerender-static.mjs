@@ -167,7 +167,7 @@ const ROUTES = [
         "@context": "https://schema.org",
         "@type": "Blog",
         name: "SimpleLecture Blog",
-        url: `${SITE_URL}/blog`,
+        url: `${SITE_URL}/blog/`,
       },
     ],
   },
@@ -335,7 +335,9 @@ function setsHelmetCanonical(path) {
  * a 2 MB parser dep just for this.
  */
 function rewriteShell(shell, route) {
-  const canonical = SITE_URL + (route.path === "/" ? "/" : route.path);
+  // Every page URL ends with "/" except the homepage (Apache redirects folder URLs
+  // without the slash). Keep in sync with src/lib/seo/canonical.ts.
+  const canonical = route.path === "/" ? SITE_URL + "/" : SITE_URL + route.path.replace(/\/+$/, "") + "/";
   const title = `${route.title} | ${SITE_NAME}`;
   const ogType = route.ogType ?? "website";
   const ogImage = route.ogImage ?? DEFAULT_OG;
