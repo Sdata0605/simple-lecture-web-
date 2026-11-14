@@ -11,18 +11,20 @@
 <meta property="og:url" content="https://simplelecture.com/sslc-landing.html"/>
 <link rel="icon" href="/favicon.ico"/>
 
-<!-- Facebook Pixel -->
+<!-- Facebook Pixel: live site only (preview/dev/localhost must not send events) -->
 <script>
+if (['simplelecture.com','www.simplelecture.com'].indexOf(window.location.hostname) !== -1) {
 !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
 n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
 (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('set','autoConfig',false,'4466207520265747');
 fbq('init','4466207520265747');
 fbq('track','PageView');
 fbq('track','ViewContent',{content_name:'SSLC Board Course Landing'});
+}
 </script>
-<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=4466207520265747&ev=PageView&noscript=1"/></noscript>
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -70,7 +72,7 @@ h1{font-size:20px;font-weight:800;line-height:1.25;color:#312e81}
   </div>
 
   <div class="cta-wrap">
-    <a href="https://simplelecture.com/course/10th-boards" target="_blank" rel="noopener noreferrer" class="cta">Join SSLC Board Course →</a>
+    <a href="https://simplelecture.com/course/class-10-sslc-karnataka/" target="_blank" rel="noopener noreferrer" class="cta">Join SSLC Board Course →</a>
   </div>
 
   <div class="url-banner">

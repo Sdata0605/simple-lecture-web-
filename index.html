@@ -114,6 +114,10 @@
     <!-- Defer third-party analytics scripts to after page load -->
     <script>
       window.addEventListener('load', function() {
+        // Only the live site may send analytics. Preview, dev and localhost builds stay silent.
+        var LIVE_HOSTS = ['simplelecture.com', 'www.simplelecture.com'];
+        if (LIVE_HOSTS.indexOf(window.location.hostname) === -1) return;
+
         try {
           // Google Analytics
           var gs = document.createElement('script');
@@ -139,6 +143,9 @@
           t.src=v;s=b.getElementsByTagName(e)[0];
           s.parentNode.insertBefore(t,s)}(window, document,'script',
           'https://connect.facebook.net/en_US/fbevents.js');
+          // Turn off Meta's automatic button-click events (SubscribedButtonClick).
+          // Only explicit events we send ourselves should count as conversions.
+          fbq('set', 'autoConfig', false, '4466207520265747');
           fbq('init', '4466207520265747');
           fbq('track', 'PageView');
         } catch(e) { console.warn('FB Pixel init failed', e); }
