@@ -111,6 +111,24 @@ export const onceKey = (key: string): boolean => {
   }
 };
 
+/**
+ * Like onceKey, but remembered across browser sessions and devices' local storage
+ * (same browser). Use for purchases, so reopening a receipt in a new session never
+ * sends the same purchase twice.
+ */
+export const onceForever = (key: string): boolean => {
+  const storageKey = ONCE_STORAGE_PREFIX + key;
+  try {
+    if (localStorage.getItem(storageKey)) return false;
+    localStorage.setItem(storageKey, '1');
+    return true;
+  } catch {
+    if (memoryOnce.has(storageKey)) return false;
+    memoryOnce.add(storageKey);
+    return true;
+  }
+};
+
 // ---- queue for calls made before gtag / fbq exist ----
 
 interface QueuedCall {

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import confetti from 'canvas-confetti';
 import { downloadReceipt } from '@/lib/receiptDownload';
-import { onceKey, trackEvent } from '@/lib/analytics';
+import { onceForever, trackEvent } from '@/lib/analytics';
 import {
   formatReceiptDate,
   formatRupees,
@@ -51,7 +51,7 @@ const Receipt = ({ receipt }: { receipt: PaymentReceipt }) => {
   // eventID = orderId so a future server-side (CAPI) Purchase can be deduplicated against it.
   useEffect(() => {
     if (receipt.status !== 'success' || !receipt.orderId) return;
-    if (!onceKey(`purchase_${receipt.orderId}`)) return;
+    if (!onceForever(`purchase_${receipt.orderId}`)) return;
     const contentIds = receipt.courses.map((c) => c.slug || c.id);
     trackEvent({
       ga4: 'purchase',
