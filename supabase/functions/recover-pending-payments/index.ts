@@ -23,7 +23,7 @@ serve(async (req) => {
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data: pendingPayments, error: fetchError } = await supabase
       .from('payments')
-      .select('id, order_id, user_id, gateway_order_id, amount_inr, created_at')
+      .select('id, order_id, user_id, gateway_order_id, final_amount, created_at')
       .eq('status', 'pending')
       .not('gateway_order_id', 'is', null)
       .lt('created_at', fifteenMinutesAgo)
@@ -71,6 +71,13 @@ serve(async (req) => {
         }
 
         console.log(`Found captured payment ${capturedPayment.id} for order ${payment.gateway_order_id}`);
+
+        // Never recover unless the captured amount matches what we stored (paise, INR).
+        if (Number(capturedPayment.amount) !== Math.round(Number(payment.final_amount) * 100) || capturedPayment.currency !== 'INR') {
+          console.error(`Amount mismatch for order ${payment.gateway_order_id}`);
+          results.push({ order_id: payment.order_id, status: 'amount_mismatch' });
+          continue;
+        }
 
         // Update payment record
         const { error: updateError } = await supabase

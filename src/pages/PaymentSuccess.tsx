@@ -1,191 +1,225 @@
-import { useEffect, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { CheckCircle, Download, ArrowRight, Loader2 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { CheckCircle, Download, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { SEOHead } from '@/components/SEO';
-import { SmartHeader } from '@/components/SmartHeader';
-import { Footer } from '@/components/Footer';
-import { BottomNav } from '@/components/mobile/BottomNav';
-import { formatINR } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
 import confetti from 'canvas-confetti';
+import { downloadReceipt } from '@/lib/receiptDownload';
+import { onceKey, trackEvent } from '@/lib/analytics';
+import {
+  formatReceiptDate,
+  formatRupees,
+  usePaymentOrder,
+  usePaymentOrderId,
+  type PaymentReceipt,
+} from '@/hooks/usePaymentOrder';
+import {
+  OrderNotFoundCard,
+  PaymentLoadingCard,
+  PaymentLookupErrorCard,
+  PaymentPageShell,
+  PaymentPendingCard,
+  PaymentTimeoutCard,
+} from '@/components/payment/PaymentStatusViews';
 
-interface OrderDetails {
-  orderId: string;
-  amount: number;
-  courses: { id: string; course_name: string }[];
-}
-
-const PaymentSuccess = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const loadOrderDetails = async () => {
-      // Priority 1: location.state (normal JS handler flow)
-      if (location.state?.orderId) {
-        setOrderDetails({
-          orderId: location.state.orderId,
-          amount: location.state.amount,
-          courses: location.state.courses || [],
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Priority 2: query param (WebView redirect flow)
-      const orderId = searchParams.get('orderId');
-      if (orderId) {
-        try {
-          const { data: payment } = await supabase
-            .from('payments')
-            .select('order_id, amount_inr, status')
-            .eq('order_id', orderId)
-            .single();
-
-          if (payment) {
-            // Get courses from order_items
-            const { data: orderItems } = await supabase
-              .from('order_items')
-              .select('course_id, courses(name)')
-              .eq('payment_id', (
-                await supabase.from('payments').select('id').eq('order_id', orderId).single()
-              ).data?.id || '');
-
-            const courses = orderItems?.map((item: any) => ({
-              id: item.course_id,
-              course_name: item.courses?.name || 'Course',
-            })) || [];
-
-            setOrderDetails({
-              orderId: payment.order_id,
-              amount: payment.amount_inr || 0,
-              courses,
-            });
-            setLoading(false);
-            return;
-          }
-        } catch (err) {
-          console.error('[PaymentSuccess] Error fetching order:', err);
-        }
-      }
-
-      // No order info at all — redirect home
-      setLoading(false);
-      navigate('/', { replace: true });
-    };
-
-    loadOrderDetails();
-  }, [location.state, searchParams, navigate]);
-
-  useEffect(() => {
-    if (orderDetails) {
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
-    }
-  }, [orderDetails]);
-
-  if (loading) {
-    return (
-      <>
-        <SmartHeader />
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
-            <p className="text-lg">Loading your order details...</p>
-          </div>
-        </div>
-      </>
-    );
+// Print only the receipt card, on a plain white page.
+const PRINT_CSS = `
+@media print {
+  @page { margin: 12mm; }
+  body * { visibility: hidden !important; }
+  #payment-receipt, #payment-receipt * { visibility: visible !important; }
+  #payment-receipt {
+    position: absolute; left: 0; top: 0; width: 100%;
+    box-shadow: none !important; border: none !important;
+    background: #fff !important; color: #000 !important;
   }
+  #payment-receipt .receipt-muted { background: #fff !important; border: 1px solid #ddd !important; }
+}
+`;
 
-  if (!orderDetails) return null;
+const Row = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
+  <div className="flex justify-between gap-4 py-1.5">
+    <span className={strong ? 'font-semibold' : 'text-muted-foreground'}>{label}</span>
+    <span className={strong ? 'font-bold text-lg' : 'font-medium text-right'}>{value}</span>
+  </div>
+);
 
-  const { orderId, amount, courses } = orderDetails;
+const Receipt = ({ receipt }: { receipt: PaymentReceipt }) => {
+  const firstSlug = receipt.courses.find((c) => c.slug)?.slug;
+
+  // Purchase: only for a server-confirmed 'success' receipt, once per order per session.
+  // eventID = orderId so a future server-side (CAPI) Purchase can be deduplicated against it.
+  useEffect(() => {
+    if (receipt.status !== 'success' || !receipt.orderId) return;
+    if (!onceKey(`purchase_${receipt.orderId}`)) return;
+    const contentIds = receipt.courses.map((c) => c.slug || c.id);
+    trackEvent({
+      ga4: 'purchase',
+      meta: 'Purchase',
+      eventId: receipt.orderId,
+      params: {
+        transaction_id: receipt.orderId,
+        value: receipt.total,
+        currency: 'INR',
+        items: receipt.courses.map((c) => ({ item_id: c.slug || c.id, item_name: c.name, price: c.price })),
+      },
+      metaParams: {
+        value: receipt.total,
+        currency: 'INR',
+        content_ids: contentIds,
+        content_type: 'product',
+        num_items: receipt.courses.length,
+      },
+    });
+  }, [receipt]);
 
   return (
-    <>
-      <SEOHead title="Payment Successful | SimpleLecture" description="Your payment was successful" />
-      <SmartHeader />
-      <div className="min-h-screen bg-background flex items-center justify-center p-4 pb-20 md:pb-4">
-        <Card className="max-w-2xl w-full p-4 md:p-8">
-          <div className="text-center mb-6 md:mb-8">
-            <CheckCircle className="h-16 w-16 md:h-20 md:w-20 text-green-500 mx-auto mb-4" />
-            <h1 className="text-2xl md:text-3xl font-bold mb-2">Thank You for Your Purchase!</h1>
-            <p className="text-sm md:text-base text-muted-foreground">Your payment was successful</p>
+    <Card id="payment-receipt" className="max-w-2xl w-full p-4 md:p-8">
+      <style>{PRINT_CSS}</style>
+      <div className="text-center mb-6 md:mb-8">
+        <CheckCircle className="h-16 w-16 md:h-20 md:w-20 text-green-500 mx-auto mb-4 print:h-10 print:w-10" />
+        <h1 className="text-2xl md:text-3xl font-bold mb-2">Payment successful</h1>
+        <p className="text-sm md:text-base text-muted-foreground">
+          You're enrolled. This is your payment receipt.
+        </p>
+      </div>
+
+      <div className="receipt-muted bg-muted p-4 md:p-6 rounded-lg mb-4 md:mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          <div>
+            <p className="text-muted-foreground">Receipt number</p>
+            <p className="font-mono font-semibold break-all">{receipt.orderId}</p>
           </div>
-
-          <div className="bg-muted p-4 md:p-6 rounded-lg mb-4 md:mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Order ID</p>
-                <p className="font-mono font-semibold">{orderId}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Amount Paid</p>
-                <p className="text-2xl font-bold text-green-600">{formatINR(amount)}</p>
-              </div>
-            </div>
-
-            {courses.length > 0 && (
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Courses Purchased:</p>
-                <div className="space-y-2">
-                  {courses.map((course) => (
-                    <div key={course.id} className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      <span className="font-medium">{course.course_name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          <div>
+            <p className="text-muted-foreground">Date</p>
+            <p className="font-semibold">{formatReceiptDate(receipt.completedAt ?? receipt.createdAt)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Payment ID</p>
+            <p className="font-mono font-semibold break-all">{receipt.gatewayPaymentId ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Student</p>
+            <p className="font-semibold">{receipt.studentName ?? '—'}</p>
+            {receipt.studentEmail && (
+              <p className="text-muted-foreground break-all">{receipt.studentEmail}</p>
             )}
           </div>
-
-          <div className="bg-primary/10 p-6 rounded-lg mb-6">
-            <h3 className="font-bold mb-3 text-lg">Enrollment Confirmed!</h3>
-            <p className="mb-3 text-sm">You now have full access to:</p>
-            <ul className="list-disc list-inside space-y-1 text-sm mb-4">
-              <li>All course videos and materials</li>
-              <li>AI-powered doubt clearing assistant</li>
-              <li>Practice quizzes and assignments</li>
-              <li>Daily practice tests (DPT)</li>
-              <li>Certificate upon completion</li>
-              <li>Live doubt sessions (if applicable)</li>
-            </ul>
-            <div className="bg-background/80 p-3 rounded-md">
-              <p className="text-sm font-semibold">
-                Access valid for: <span className="text-primary">1 Year from today</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="text-center text-sm text-muted-foreground mb-6">
-            <p>A confirmation email has been sent to your registered email address</p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
-            <Button onClick={() => navigate('/student-dashboard')} className="flex-1" size="lg">
-              Go to My Dashboard
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="lg" className="sm:flex-none">
-              <Download className="mr-2 h-4 w-4" />
-              Receipt
-            </Button>
-          </div>
-        </Card>
+        </div>
       </div>
-      <Footer />
-      <BottomNav />
-    </>
+
+      <div className="mb-4 md:mb-6">
+        <p className="text-sm text-muted-foreground mb-2">
+          {receipt.courses.length > 1 ? 'Courses' : 'Course'}
+        </p>
+        {receipt.courses.length > 0 ? (
+          <ul className="space-y-2">
+            {receipt.courses.map((course) => (
+              <li key={course.id || course.name} className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                <span className="font-medium">{course.name}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm">—</p>
+        )}
+      </div>
+
+      <div className="border-t border-b py-3 mb-6 text-sm">
+        {receipt.discount > 0 && (
+          <>
+            <Row label="Course price (incl. GST)" value={formatRupees(receipt.subtotal)} />
+            <Row
+              label={receipt.promoCode ? `Discount (${receipt.promoCode})` : 'Discount'}
+              value={`− ${formatRupees(receipt.discount)}`}
+            />
+          </>
+        )}
+        <Row label="Base amount" value={formatRupees(receipt.baseAmount)} />
+        <Row label="GST 18% (included)" value={formatRupees(receipt.gstAmount)} />
+        <div className="border-t mt-2 pt-2">
+          <Row label="Total paid" value={formatRupees(receipt.total)} strong />
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground text-center mb-6">
+        SimpleLecture · Keep this receipt for your records. Need help?{' '}
+        <Link to="/support" className="text-primary underline print:no-underline">Contact support</Link>
+      </p>
+
+      <div className="flex flex-col sm:flex-row gap-3 md:gap-4 print:hidden">
+        <Button asChild className="flex-1" size="lg">
+          <Link to="/my-courses">
+            Go to My Courses
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
+        <Button variant="outline" size="lg" className="sm:flex-none" onClick={() => downloadReceipt(receipt)}>
+          <Download className="mr-2 h-4 w-4" />
+          Download receipt
+        </Button>
+      </div>
+      {firstSlug && (
+        <p className="text-center text-sm mt-4 print:hidden">
+          <Link to={`/learning/${firstSlug}`} className="text-primary underline">
+            Start learning now
+          </Link>
+        </p>
+      )}
+    </Card>
+  );
+};
+
+const PaymentSuccess = () => {
+  const navigate = useNavigate();
+  const orderId = usePaymentOrderId();
+  const state = usePaymentOrder(orderId);
+  const celebrated = useRef(false);
+
+  useEffect(() => {
+    if (state.kind === 'success' && !celebrated.current) {
+      celebrated.current = true;
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    }
+    if (state.kind === 'failed') {
+      navigate(`/payment-failed?orderId=${encodeURIComponent(state.receipt.orderId)}`, { replace: true });
+    }
+  }, [state, navigate]);
+
+  let content;
+  switch (state.kind) {
+    case 'loading':
+    case 'failed':
+      content = <PaymentLoadingCard />;
+      break;
+    case 'pending':
+      content = <PaymentPendingCard orderId={state.orderId} />;
+      break;
+    case 'timeout':
+      content = <PaymentTimeoutCard orderId={state.orderId} />;
+      break;
+    case 'error':
+      content = <PaymentLookupErrorCard orderId={state.orderId} />;
+      break;
+    case 'success':
+      content = <Receipt receipt={state.receipt} />;
+      break;
+    case 'no-order':
+      content = <OrderNotFoundCard />;
+      break;
+    case 'not-found':
+      content = <OrderNotFoundCard orderId={state.orderId} />;
+      break;
+  }
+
+  return (
+    <PaymentPageShell
+      title={state.kind === 'success' ? 'Payment Successful | SimpleLecture' : 'Payment | SimpleLecture'}
+      description="Your SimpleLecture payment receipt"
+    >
+      {content}
+    </PaymentPageShell>
   );
 };
 

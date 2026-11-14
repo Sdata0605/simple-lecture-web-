@@ -1,4 +1,5 @@
-import { lazy, Suspense, useState, useMemo } from "react";
+import { lazy, Suspense, useState, useMemo, useEffect } from "react";
+import { courseEventPrefix, onceKey, trackEvent } from "@/lib/analytics";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { goHome } from "@/lib/goHome";
 import { rewriteStorageUrl } from "@/lib/proxyUrl";
@@ -157,6 +158,27 @@ const ProgramDetail = () => {
       ],
     };
   }, [course?.id, course?.slug, course?.course_faqs?.length]);
+
+  // Course page view: once per course per browser session.
+  const courseSlug: string | undefined = course?.slug;
+  const courseName: string | undefined = course?.name;
+  const coursePrice: number = Number(course?.price_inr) || 0;
+  useEffect(() => {
+    if (!courseSlug || !courseName) return;
+    if (!onceKey(`course_view_${courseSlug}`)) return;
+    trackEvent({
+      ga4: `${courseEventPrefix(courseSlug, courseName)}_Page_view`,
+      meta: 'ViewContent',
+      params: { course_id: courseSlug, course_name: courseName, value: coursePrice, currency: 'INR' },
+      metaParams: {
+        content_ids: [courseSlug],
+        content_name: courseName,
+        content_type: 'product',
+        value: coursePrice,
+        currency: 'INR',
+      },
+    });
+  }, [courseSlug, courseName, coursePrice]);
 
   if (isLoading) {
     if (isMobile) {

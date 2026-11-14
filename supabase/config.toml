@@ -376,3 +376,6 @@ verify_jwt = false
 
 [functions.delete-my-account]
 verify_jwt = true
+
+[functions.razorpay-callback]
+verify_jwt = false

@@ -117,6 +117,9 @@
         // Only the live site may send analytics. Preview, dev and localhost builds stay silent.
         var LIVE_HOSTS = ['simplelecture.com', 'www.simplelecture.com'];
         if (LIVE_HOSTS.indexOf(window.location.hostname) === -1) return;
+        // Admin / internal pages never count a page view (same list as src/lib/analytics.ts).
+        var p = window.location.pathname;
+        var INTERNAL = /^\/(admin|instructor|payment-callback|auth)(\/|$)/i.test(p);
 
         try {
           // Google Analytics
@@ -129,7 +132,7 @@
             function gtag(){dataLayer.push(arguments);}
             window.gtag = gtag;
             gtag('js', new Date());
-            gtag('config', 'G-58WPH9BBXM');
+            gtag('config', 'G-58WPH9BBXM', INTERNAL ? { send_page_view: false } : {});
           };
         } catch(e) { console.warn('GA init failed', e); }
 
@@ -147,7 +150,7 @@
           // Only explicit events we send ourselves should count as conversions.
           fbq('set', 'autoConfig', false, '4466207520265747');
           fbq('init', '4466207520265747');
-          fbq('track', 'PageView');
+          if (!INTERNAL) fbq('track', 'PageView');
         } catch(e) { console.warn('FB Pixel init failed', e); }
       });
     </script>

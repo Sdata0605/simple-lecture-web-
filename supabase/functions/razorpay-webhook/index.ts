@@ -73,7 +73,7 @@ serve(async (req) => {
     // Look up payment by gateway_order_id
     const { data: payment, error: fetchError } = await supabase
       .from('payments')
-      .select('id, user_id, status')
+      .select('id, user_id, status, final_amount')
       .eq('gateway_order_id', razorpayOrderId)
       .single();
 
@@ -90,6 +90,16 @@ serve(async (req) => {
       console.log(`Payment ${payment.id} already ${payment.status}, skipping`);
       return new Response(JSON.stringify({ status: 'already_processed' }), {
         status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Never mark success unless Razorpay's captured amount matches what we stored (paise).
+    const expectedPaise = Math.round(Number(payment.final_amount) * 100);
+    if (Number(paymentEntity.amount) !== expectedPaise || paymentEntity.currency !== 'INR') {
+      console.error(`Amount mismatch for payment ${payment.id}: got ${paymentEntity.amount} ${paymentEntity.currency}, expected ${expectedPaise} INR`);
+      return new Response(JSON.stringify({ status: 'amount_mismatch' }), {
+        status: 200, // do not let Razorpay retry; needs manual review
         headers: { 'Content-Type': 'application/json' }
       });
     }

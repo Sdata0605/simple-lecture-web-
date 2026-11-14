@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SEOHead } from "@/components/SEO";
 import Learning from "./Learning";
+import { courseEventPrefix, onceKey, trackEvent } from "@/lib/analytics";
 
 interface PreviewCourseMeta {
   id: string;
@@ -73,6 +74,19 @@ export default function CoursePreviewRoute() {
       navigate(`/learning/${course.id}`, { replace: true });
     }
   }, [course?.id, enrollment?.enrolled, navigate]);
+
+  // Free chapter preview view: once per course per session, only when the preview is shown
+  // (enrolled students are redirected above and are not counted).
+  useEffect(() => {
+    if (!course?.slug || enrollment?.enrolled !== false) return;
+    if (!onceKey(`free_chapter_view_${course.slug}`)) return;
+    const eventName = `${courseEventPrefix(course.slug, course.name)}_Free_Chapter_views`;
+    trackEvent({
+      ga4: eventName,
+      metaCustom: eventName,
+      params: { course_id: course.slug, course_name: course.name },
+    });
+  }, [course?.slug, course?.name, enrollment?.enrolled]);
 
   if (loading) {
     return (

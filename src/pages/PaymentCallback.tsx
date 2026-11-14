@@ -50,33 +50,23 @@ const PaymentCallback = () => {
           return;
         }
 
-        // Get order items (courses) for this payment
-        const { data: orderItems } = await supabase
-          .from('order_items')
-          .select('course_id')
-          .eq('payment_id', payment.id);
-
-        const courseIds = orderItems?.map((item: any) => item.course_id) || [];
-
-        // Call verify-payment
+        // The server takes the course, user and amount from the order itself.
         const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-payment', {
           body: {
             razorpay_order_id,
             razorpay_payment_id,
             razorpay_signature,
             orderId: payment.order_id,
-            userId: payment.user_id,
-            courses: courseIds.map((id: string) => ({ id })),
           },
         });
 
-        if (verifyError) {
-          console.warn('[PaymentCallback] Verification error (proceeding anyway):', verifyError);
-        } else {
-          console.log('[PaymentCallback] Verification result:', verifyData);
+        if (verifyError || !verifyData?.verified) {
+          // Never show success unless the server confirmed the payment.
+          console.error('[PaymentCallback] Payment not verified:', verifyError, verifyData);
+          setError(`We could not confirm your payment yet. Your order ID is ${payment.order_id}. If money was deducted, please contact support with this ID.`);
+          return;
         }
 
-        // Redirect to success page with orderId as query param
         navigate(`/payment-success?orderId=${payment.order_id}`, { replace: true });
       } catch (err: any) {
         console.error('[PaymentCallback] Error:', err);
