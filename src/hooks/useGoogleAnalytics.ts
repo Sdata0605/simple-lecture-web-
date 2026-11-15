@@ -12,7 +12,7 @@ export const useGoogleAnalytics = () => {
     // Never report admin / internal pages.
     if (isExcludedPath(location.pathname)) return;
     if (window.gtag) {
-      window.gtag('config', 'G-58WPH9BBXM', {
+      window.gtag('config', 'G-Y9TRRTCVJR', {
         page_path: location.pathname + location.search,
         send_page_view: true,
       });
