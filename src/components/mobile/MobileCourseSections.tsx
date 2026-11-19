@@ -1,4 +1,7 @@
 import { forwardRef } from "react";
+import { offerDisplayPrice } from "@/components/offers/OfferComponents";
+import { OfferGstNote } from "@/components/offers/OfferComponents";
+import { OfferBadge } from "@/components/offers/OfferComponents";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +17,8 @@ interface Course {
   price_inr?: number | null;
   rating?: number | null;
   is_coming_soon?: boolean | null;
+  offer_active?: boolean | null;
+  offer_content?: unknown;
 }
 
 interface FeaturedCourse {
@@ -58,6 +63,7 @@ const CourseRow = forwardRef<HTMLDivElement, { courses?: FeaturedCourse[]; title
                 onClick={() => navigate(`/course/${course.slug}`)}
               >
                 <div className="relative h-24 w-full bg-muted">
+                  <OfferBadge course={course} className="absolute left-2 top-2 z-10 !px-2 !py-0.5 !text-[10px]" />
                   <LazyCourseThumbnail courseId={course.id} alt={course.name} className="h-full w-full" />
                   {course.is_coming_soon && (
                     <div className="absolute top-2 right-2 bg-amber-500 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold">
@@ -77,8 +83,9 @@ const CourseRow = forwardRef<HTMLDivElement, { courses?: FeaturedCourse[]; title
                     {course.instructor_name || "Expert Instructor"}
                   </p>
                   <p className="text-xs font-bold text-primary mt-1">
-                    {formatINR(course.price_inr || 0)}
+                    {formatINR(offerDisplayPrice(course, course.price_inr || 0))}
                   </p>
+                  <OfferGstNote course={course} total={course.price_inr || 0} />
                 </CardContent>
               </Card>
             );

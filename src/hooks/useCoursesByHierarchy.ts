@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 // Optimized course fields - include thumbnail_url (skip base64 via getSafeThumbnailUrl helper)
 const COURSE_SELECT_FIELDS = `
-  id, name, slug, price_inr, original_price_inr,
+  id, name, slug, price_inr, original_price_inr, offer_active, offer_content,
   instructor_name, rating, student_count, duration_months, short_description,
   is_coming_soon,
   course_categories!inner(category_id),

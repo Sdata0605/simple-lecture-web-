@@ -45,7 +45,7 @@ export const useFeaturedCourses = (sectionType?: SectionType, enabled: boolean =
         .select(`
           *,
           courses (
-            id, name, slug, price_inr, original_price_inr,
+            id, name, slug, price_inr, original_price_inr, offer_active, offer_content,
             instructor_name, rating, student_count, duration_months, short_description,
             course_thumbnails(storage_url)
           )
@@ -73,7 +73,7 @@ export const useAdminFeaturedCourses = (sectionType?: SectionType) => {
         .select(`
           *,
           courses (
-            id, name, slug, price_inr, original_price_inr,
+            id, name, slug, price_inr, original_price_inr, offer_active, offer_content,
             instructor_name, rating, student_count,
             course_thumbnails(storage_url)
           )

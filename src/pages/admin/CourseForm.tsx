@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { CourseContentTab } from "@/components/admin/course/CourseContentTab";
 import { CourseFAQsTab } from "@/components/admin/course/CourseFAQsTab";
 import { CourseInstructorsTab } from "@/components/admin/course/CourseInstructorsTab";
 import { CoursePricingTab } from "@/components/admin/course/CoursePricingTab";
+import { CourseOffersTab } from "@/components/admin/course/CourseOffersTab";
 import { CourseTopUpsTab } from "@/components/admin/course/CourseTopUpsTab";
 import { CoursePromoCodesTab } from "@/components/admin/course/CoursePromoCodesTab";
 import { CourseFreeAccessTab } from "@/components/admin/course/CourseFreeAccessTab";
@@ -38,6 +39,8 @@ export default function CourseForm() {
     promotional_video_url: "",
     duration_months: 0,
     price_inr: 0,
+    regular_price_inr: 0,
+    offer_active: false,
     original_price_inr: 0,
     what_you_learn: [],
     course_includes: [],
@@ -83,8 +86,12 @@ export default function CourseForm() {
     }
   }, [courseCategories]);
 
+  // Seed the whole form once per course. Later refetches (e.g. after Start/Stop
+  // in the Offers tab) must not wipe unsaved edits in other tabs.
+  const seededCourseId = useRef<string | null>(null);
   useEffect(() => {
-    if (course) {
+    if (course && seededCourseId.current !== course.id) {
+      seededCourseId.current = course.id;
       const courseData = course as any; // Type assertion for new fields not yet in generated types
       setFormData({
         id: course.id, // Include the course ID for thumbnail saving
@@ -96,6 +103,8 @@ export default function CourseForm() {
         promotional_video_url: courseData.promotional_video_url || "",
         duration_months: course.duration_months || 0,
         price_inr: course.price_inr || 0,
+        regular_price_inr: courseData.regular_price_inr ?? course.price_inr ?? 0,
+        offer_active: courseData.offer_active ?? false,
         original_price_inr: course.original_price_inr || 0,
         what_you_learn: course.what_you_learn || [],
         course_includes: course.course_includes || [],
@@ -118,6 +127,17 @@ export default function CourseForm() {
       });
     }
   }, [course]);
+
+  // Keep the live-offer fields in sync after Start/Stop, without touching other edits.
+  useEffect(() => {
+    if (!course) return;
+    setFormData((prev: any) => ({
+      ...prev,
+      price_inr: course.price_inr || 0,
+      original_price_inr: course.original_price_inr || 0,
+      offer_active: Boolean((course as any).offer_active),
+    }));
+  }, [course?.price_inr, course?.original_price_inr, (course as any)?.offer_active]);
 
   const handleChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
@@ -158,9 +178,22 @@ export default function CourseForm() {
       return;
     }
 
+    // Offer fields and the live price are managed by the Offers tab and the
+    // database trigger; never write them from this form.
+    const {
+      price_inr: _livePrice,
+      offer_active: _oa,
+      offer_price_inr: _op,
+      offer_content: _oc,
+      offer_started_at: _os,
+      offer_saved_original_inr: _oso,
+      batch_info: _bi,
+      ...editable
+    } = formData;
+
     if (courseId) {
       updateCourse.mutate(
-        { id: courseId, ...formData },
+        { id: courseId, ...editable },
         {
           onSuccess: async () => {
             try {
@@ -173,7 +206,7 @@ export default function CourseForm() {
         }
       );
     } else {
-      const { _pendingThumbnailFile, ...coursePayload } = formData;
+      const { _pendingThumbnailFile, ...coursePayload } = editable;
 
       // A newly selected file is represented by a local data URL until the course
       // has an ID. Neither the File object nor its preview belongs in `courses`.
@@ -243,13 +276,14 @@ export default function CourseForm() {
       <Card>
         <CardContent className="pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-11">
+            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="categories">Categories</TabsTrigger>
               <TabsTrigger value="subjects">Subjects</TabsTrigger>
               <TabsTrigger value="freeaccess" disabled={!courseId}>Free Access</TabsTrigger>
               <TabsTrigger value="instructors" disabled={!courseId}>Instructors</TabsTrigger>
               <TabsTrigger value="pricing">Pricing</TabsTrigger>
+              <TabsTrigger value="offers" disabled={!courseId}>Offers</TabsTrigger>
               <TabsTrigger value="topups">Top-Ups</TabsTrigger>
               <TabsTrigger value="content" disabled={!courseId}>Content</TabsTrigger>
               <TabsTrigger value="faqs" disabled={!courseId}>FAQs</TabsTrigger>
@@ -282,6 +316,14 @@ export default function CourseForm() {
 
             <TabsContent value="pricing" className="space-y-6 pt-6">
               <CoursePricingTab formData={formData} onChange={handleChange} />
+            </TabsContent>
+
+            <TabsContent value="offers" className="space-y-6 pt-6">
+              <CourseOffersTab
+                courseId={courseId}
+                course={course}
+                regularPrice={Number(formData.regular_price_inr) || 0}
+              />
             </TabsContent>
 
             <TabsContent value="topups" className="space-y-6 pt-6">

@@ -21,7 +21,7 @@ export const PromotionalSection = () => {
           {/* Heading */}
           <h2 className="text-4xl md:text-6xl font-bold text-white leading-tight">
             Complete Education at
-            <span className="block mt-2">₹2,950 incl. GST Per Course</span>
+            <span className="block mt-2">Affordable Per Course</span>
           </h2>
 
           <p className="text-xl text-white/90 max-w-2xl mx-auto">
@@ -37,7 +37,7 @@ export const PromotionalSection = () => {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">Massive Cost Savings</h3>
               <p className="text-white/80">
-                ₹2,950 incl. GST per course vs high coaching fees - quality learning at a fraction of the cost
+                Affordable per-course fees vs high coaching fees - quality learning at a fraction of the cost
               </p>
             </div>
 
@@ -63,13 +63,13 @@ export const PromotionalSection = () => {
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20 inline-block">
               <div className="flex flex-col md:flex-row items-center gap-6">
                 <div className="text-left">
-                  <p className="text-white/80 text-sm mb-1">1-Year Access - Per Course</p>
+                  <p className="text-white/80 text-sm mb-1">Exam Batch Access - Per Course</p>
                   <div className="flex items-baseline gap-3">
-                    <span className="text-5xl font-bold text-white">₹2,950 incl. GST</span>
-                    <span className="text-2xl text-white/60 line-through">₹50,000</span>
-                    <Badge className="bg-success text-white">Save 96%</Badge>
+                    <span className="text-5xl font-bold text-white">Affordable</span>
+                    <span className="text-2xl text-white/60">vs ₹50,000+ coaching</span>
+                    
                   </div>
-                  <p className="text-white/80 text-sm mt-1">Per course for 1-year access</p>
+                  <p className="text-white/80 text-sm mt-1">Per course, batch validity shown on each course page</p>
                 </div>
                 <Button
                   asChild

@@ -16,6 +16,7 @@ export const useSubjectCourses = (subjectId?: string) => {
             name,
             slug,
             price_inr,
+            original_price_inr, offer_active, offer_content,
             is_active
           )
         `)

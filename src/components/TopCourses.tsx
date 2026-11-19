@@ -1,4 +1,6 @@
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { CardPrice, DiscountBadge, OfferBadge } from "@/components/offers/OfferComponents";
+import { isOfferLive } from "@/lib/offers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Star, Clock, Users, ChevronLeft, ChevronRight, ArrowRight, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
@@ -34,8 +36,9 @@ export const TopCourses = ({ featuredCoursesData }: TopCoursesProps) => {
     rating: fc.courses?.rating || 4.9,
     students: fc.courses?.student_count || 0,
     duration: `${(fc.courses?.duration_months || 6) * 50} Hours`,
-    price: fc.courses?.price_inr || 2950,
-    originalPrice: fc.courses?.original_price_inr || 25000,
+    price: fc.courses?.price_inr ?? 0,
+    originalPrice: fc.courses?.original_price_inr ?? null,
+    offer: fc.courses,
     instructor: fc.courses?.instructor_name || "SimpleLecture Team",
     slug: fc.courses?.slug || "",
     isComingSoon: fc.courses?.is_coming_soon || false,
@@ -75,7 +78,7 @@ export const TopCourses = ({ featuredCoursesData }: TopCoursesProps) => {
             Top <span className="text-primary">Courses</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Most popular courses for Indian students - All at ₹2,950 incl. GST
+            Most popular courses for Indian students - Affordable prices incl. GST
           </p>
         </div>
 
@@ -132,10 +135,11 @@ export const TopCourses = ({ featuredCoursesData }: TopCoursesProps) => {
             {visibleCourses.map((course, idx) => (
               <Card
                 key={`${course.id}-${idx}`}
-                className="group hover:shadow-hover transition-all duration-300 overflow-hidden animate-fade-in cursor-pointer"
+                className={`group hover:shadow-hover transition-all duration-300 overflow-hidden animate-fade-in cursor-pointer ${isOfferLive(course.offer) ? "offer-card-ring" : ""}`}
                 onClick={() => navigate(`/course/${course.slug}`)}
               >
                 <div className="relative h-48 overflow-hidden">
+                  <OfferBadge course={course.offer} className="absolute bottom-4 right-4 z-10" />
                    <CourseThumbnail
                      thumbnailUrl={course.thumbnailUrl}
                     alt={course.title}
@@ -180,14 +184,9 @@ export const TopCourses = ({ featuredCoursesData }: TopCoursesProps) => {
                   <div className="space-y-2">
                     <div className="flex items-baseline justify-between">
                       <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-bold text-primary">₹{course.price}</span>
-                        <span className="text-lg line-through text-muted-foreground">
-                          ₹{course.originalPrice.toLocaleString()}
-                        </span>
+                        <CardPrice price={course.price} originalPrice={course.originalPrice} offerLive={isOfferLive(course.offer)} offer={course.offer} />
                       </div>
-                      <Badge className="bg-success text-white">
-                        {Math.round(((course.originalPrice - course.price) / course.originalPrice) * 100)}% OFF
-                      </Badge>
+                      <DiscountBadge price={course.price} originalPrice={course.originalPrice} />
                     </div>
                     <p className="text-xs text-muted-foreground">
                       + Optional AI Tutoring & Live Classes add-ons available

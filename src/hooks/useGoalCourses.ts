@@ -21,6 +21,7 @@ export const useGoalCourses = (goalId?: string) => {
             short_description,
             price_inr,
             original_price_inr,
+            offer_active, offer_content,
             duration_months,
             student_count
           )

@@ -464,12 +464,12 @@ export const CourseGeneralTab = ({ formData, onChange }: CourseGeneralTabProps) 
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="price_inr">Price (INR)</Label>
+          <Label htmlFor="regular_price_inr">Regular Price (INR)</Label>
           <Input
-            id="price_inr"
+            id="regular_price_inr"
             type="number"
-            value={formData.price_inr || ""}
-            onChange={(e) => onChange("price_inr", parseInt(e.target.value) || 0)}
+            value={formData.regular_price_inr || ""}
+            onChange={(e) => onChange("regular_price_inr", parseInt(e.target.value) || 0)}
           />
         </div>
         

@@ -11,7 +11,8 @@ interface CoursePricingTabProps {
 }
 
 export const CoursePricingTab = ({ formData, onChange }: CoursePricingTabProps) => {
-  const priceBreakdown = splitInclusiveGST(Number(formData.price_inr) || 0);
+  const priceBreakdown = splitInclusiveGST(Number(formData.regular_price_inr) || 0);
+  const offerLive = Boolean(formData.offer_active);
 
   return (
     <div className="space-y-6">
@@ -23,17 +24,22 @@ export const CoursePricingTab = ({ formData, onChange }: CoursePricingTabProps) 
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="price_inr">Final Price (₹, incl. 18% GST)</Label>
+              <Label htmlFor="regular_price_inr">Regular Price (₹, incl. 18% GST)</Label>
               <Input
-                id="price_inr"
+                id="regular_price_inr"
                 type="number"
-                value={formData.price_inr || 0}
-                onChange={(e) => onChange("price_inr", parseInt(e.target.value))}
-                placeholder="2000"
+                value={formData.regular_price_inr || 0}
+                onChange={(e) => onChange("regular_price_inr", parseInt(e.target.value) || 0)}
+                placeholder="2950"
               />
               {priceBreakdown.total > 0 && (
                 <p className="text-xs text-muted-foreground">
                   Base ₹{priceBreakdown.base} + GST (18%) ₹{priceBreakdown.gst}
+                </p>
+              )}
+              {offerLive && (
+                <p className="text-xs font-medium text-primary">
+                  An offer is live: students currently pay ₹{Number(formData.price_inr || 0).toLocaleString("en-IN")}. Stop it in the Offers tab to show this price.
                 </p>
               )}
             </div>
@@ -42,11 +48,14 @@ export const CoursePricingTab = ({ formData, onChange }: CoursePricingTabProps) 
               <Input
                 id="original_price_inr"
                 type="number"
+                disabled={offerLive}
                 value={formData.original_price_inr || 0}
-                onChange={(e) => onChange("original_price_inr", parseInt(e.target.value))}
+                onChange={(e) => onChange("original_price_inr", parseInt(e.target.value) || 0)}
                 placeholder="3000"
               />
-              <p className="text-xs text-muted-foreground">Shows as strikethrough price</p>
+              <p className="text-xs text-muted-foreground">
+                {offerLive ? "Managed automatically while an offer is live (shows the regular price)." : "Shows as strikethrough price"}
+              </p>
             </div>
           </div>
         </CardContent>

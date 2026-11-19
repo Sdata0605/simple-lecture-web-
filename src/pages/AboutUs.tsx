@@ -20,7 +20,7 @@ const AboutUs = () => {
     <>
       <SEOHead
         title="About Us"
-        description="Learn about SimpleLecture by KRUPA KNOWLEDGE STORE PRIVATE LIMITED — AI-powered affordable education platform. Quality courses at ₹2,950/year for SSLC, PUC, NEET & JEE."
+        description="Learn about SimpleLecture by KRUPA KNOWLEDGE STORE PRIVATE LIMITED — AI-powered affordable education platform. Quality courses at affordable prices for SSLC, PUC, NEET & JEE."
         keywords="SimpleLecture, about, AI education, KRUPA KNOWLEDGE STORE, affordable learning, board exams, NEET, JEE"
         canonicalUrl="https://simplelecture.com/about"
         structuredData={structuredData}
@@ -88,7 +88,7 @@ const AboutUs = () => {
               Dr. Nagpal's Legacy
             </h2>
             <blockquote className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-6 italic border-l-4 border-primary pl-6 text-left">
-              "Dr. Nagpal envisioned a world where students from all backgrounds have access to high-quality educational resources without financial barriers. To make this a reality, we strive to offer comprehensive, structured courses at just <strong className="text-foreground">₹2,950</strong>, empowering students to unlock their academic potential and pursue their dreams without compromise."
+              "Dr. Nagpal envisioned a world where students from all backgrounds have access to high-quality educational resources without financial barriers. To make this a reality, we strive to offer comprehensive, structured courses at just <strong className="text-foreground">affordable prices</strong>, empowering students to unlock their academic potential and pursue their dreams without compromise."
             </blockquote>
             <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed">
               At Simple Lecture, we combine innovative teaching methods, expert instructors, and student-centric technology to bring that vision to life — <span className="text-primary font-semibold">because education should open doors, not close them.</span>
@@ -147,7 +147,7 @@ const AboutUs = () => {
                   We observed that quality coaching in India costs lakhs of rupees — putting it out of reach for the vast majority of families. Dr. Nagpal believed this was unacceptable. At the same time, advances in AI made it possible to deliver personalized, high-quality instruction at near-zero marginal cost.
                 </p>
                 <p>
-                  SimpleLecture bridges this gap. Inspired by Dr. Nagpal's lifelong dedication to accessible education, our AI-powered platform delivers expert-level tutoring, video lessons, daily practice problems, and live classes — all at just ₹2,950, a price that any Indian family can afford.
+                  SimpleLecture bridges this gap. Inspired by Dr. Nagpal's lifelong dedication to accessible education, our AI-powered platform delivers expert-level tutoring, video lessons, daily practice problems, and live classes — all at prices any Indian family can afford.
                 </p>
                 <p>
                   We're committed to continuously improving our platform, expanding our course offerings, and ensuring every student who dreams of academic success has the tools to achieve it — just as Dr. Nagpal envisioned.

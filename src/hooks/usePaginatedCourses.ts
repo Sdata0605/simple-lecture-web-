@@ -20,7 +20,7 @@ interface PaginatedResult {
 
 // Optimized fields for card display - excludes large text columns
 const CARD_SELECT_FIELDS = `
-  id, name, slug, price_inr, original_price_inr, short_description,
+  id, name, slug, price_inr, original_price_inr, offer_active, offer_content, short_description,
   duration_months, student_count, rating, instructor_name, thumbnail_url,
   course_thumbnails(storage_url)
 `;

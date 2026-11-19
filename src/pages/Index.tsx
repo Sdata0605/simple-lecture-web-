@@ -12,6 +12,7 @@ import { lazyWithRetry } from "@/lib/lazyWithRetry";
 // Eager above-the-fold (ships in main route chunk → no Suspense waterfall before paint)
 import { SmartHeader } from "@/components/SmartHeader";
 import { Hero } from "@/components/Hero";
+import { HomeOfferBanner } from "@/components/offers/OfferComponents";
 import { ExploreProgramsSection } from "@/components/ExploreProgramsSection";
 import heroBoardExams from "@/assets/hero-board-exams.webp";
 
@@ -80,6 +81,7 @@ const Index = () => {
           canonicalUrl="https://simplelecture.com/"
           structuredData={structuredData}
         />
+        <HomeOfferBanner className="pt-3" />
         <MobileHomeContent />
         <BottomNav />
         <Suspense fallback={null}><SSLCPromoDialog /></Suspense>
@@ -101,6 +103,7 @@ const Index = () => {
       <div className="min-h-screen bg-background">
         <SmartHeader />
         <main>
+          <HomeOfferBanner className="pt-6" />
           <Hero heroVideoSettings={homepageData?.heroVideoSettings} />
           <Suspense fallback={null}>
             <AITeacherPromo />

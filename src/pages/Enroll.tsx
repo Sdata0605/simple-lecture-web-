@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { OfferBadge } from "@/components/offers/OfferComponents";
+import { isOfferLive, type BatchInfo } from "@/lib/offers";
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { SUPABASE_URL } from '@/lib/supabaseUrl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -695,10 +697,11 @@ const Enroll = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Price Details</CardTitle>
+                  {isOfferLive(course) && <div className="pt-2"><OfferBadge course={course} /></div>}
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span>Course Price (incl. GST)</span>
+                    <span>{isOfferLive(course) ? "Exam offer price (incl. GST)" : "Course Price (incl. GST)"}</span>
                     <span>₹{originalPrice.toLocaleString()}</span>
                   </div>
                   
@@ -745,7 +748,7 @@ const Enroll = () => {
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Clock className="h-4 w-4 text-primary" />
-                    <span>1 Year validity</span>
+                    <span>{isOfferLive(course) && (course.batch_info as BatchInfo | null)?.enabled && (course.batch_info as BatchInfo | null)?.validity ? `Validity: ${(course.batch_info as BatchInfo).validity}` : "1 Year validity"}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Award className="h-4 w-4 text-primary" />

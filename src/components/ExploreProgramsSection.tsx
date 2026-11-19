@@ -1,4 +1,7 @@
 import { useState, useMemo } from "react";
+import { offerDisplayPrice } from "@/components/offers/OfferComponents";
+import { OfferGstNote } from "@/components/offers/OfferComponents";
+import { OfferBadge } from "@/components/offers/OfferComponents";
 import { Loader2 } from "lucide-react";
 import { useCategoriesHierarchy } from "@/hooks/useCategoriesHierarchy";
 import { useCoursesByHierarchy } from "@/hooks/useCoursesByHierarchy";
@@ -266,6 +269,7 @@ export const ExploreProgramsSection = ({ categoriesData, coursesData }: ExploreP
                     <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow group">
                       <Link to={`/course/${course.slug}`} className="block">
                         <div className="relative h-48 overflow-hidden bg-gradient-to-br from-primary/10 to-secondary/10">
+                          <OfferBadge course={course} className="absolute top-3 left-3 z-10" />
                           <CourseThumbnail
                             thumbnailUrl={(() => {
                               const ct = (course as any).course_thumbnails;
@@ -306,7 +310,8 @@ export const ExploreProgramsSection = ({ categoriesData, coursesData }: ExploreP
                             <div>
                               {course.price_inr > 0 ? (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-lg font-bold">₹{course.price_inr.toLocaleString()}</span>
+                                  <span className="text-lg font-bold">₹{offerDisplayPrice(course, course.price_inr).toLocaleString()}</span>
+<OfferGstNote course={course} total={course.price_inr || 0} />
                                   {course.original_price_inr && course.original_price_inr > course.price_inr && (
                                     <span className="text-xs text-muted-foreground line-through">
                                       ₹{course.original_price_inr.toLocaleString()}

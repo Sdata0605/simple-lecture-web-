@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { offerDisplayPrice } from "@/components/offers/OfferComponents";
+import { OfferGstNote } from "@/components/offers/OfferComponents";
+import { OfferBadge } from "@/components/offers/OfferComponents";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { goHome } from "@/lib/goHome";
 import { SmartHeader } from "@/components/SmartHeader";
@@ -117,6 +120,7 @@ const ExploreByGoal = () => {
                     <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                       <Link to={`/course/${course.slug}`}>
                         <div className="aspect-video overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 relative">
+                          <OfferBadge course={course} className="absolute left-3 top-3 z-10" />
                           {(course.course_thumbnails?.storage_url || course.thumbnail_url) && (
                             <img
                               src={course.course_thumbnails?.storage_url || course.thumbnail_url}
@@ -169,8 +173,9 @@ const ExploreByGoal = () => {
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <span className="text-xl md:text-2xl font-bold">
-                                ₹{course.price_inr || 0}
+                                ₹{offerDisplayPrice(course, course.price_inr || 0)}
                               </span>
+<OfferGstNote course={course} total={course.price_inr || 0} />
                               {course.original_price_inr && course.original_price_inr > course.price_inr && (
                                 <span className="text-xs md:text-sm text-muted-foreground line-through">
                                   ₹{course.original_price_inr}

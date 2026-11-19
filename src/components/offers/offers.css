@@ -1,0 +1,170 @@
+/* Exam-season offer decoration. Only rendered when an offer is live.
+ *
+ * Gold accent comes from the --warning token (38 92% 50%). Text placed on gold
+ * uses a fixed deep brown so it stays readable in light and dark themes.
+ * Every infinite animation is switched off under prefers-reduced-motion.
+ */
+
+:root {
+  --offer-gold: var(--warning);
+  --offer-gold-light: 45 100% 62%;
+  --offer-gold-ink: 28 80% 12%;
+  --offer-deep: 158 62% 9%;
+  --offer-mid: 152 56% 20%;
+}
+
+@keyframes offer-shimmer {
+  0% { transform: translateX(-120%) skewX(-20deg); }
+  100% { transform: translateX(320%) skewX(-20deg); }
+}
+
+@keyframes offer-glow {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--offer-gold) / 0.55), 0 8px 24px -10px hsl(var(--offer-gold) / 0.6); }
+  50% { box-shadow: 0 0 0 7px hsl(var(--offer-gold) / 0), 0 12px 32px -8px hsl(var(--offer-gold) / 0.85); }
+}
+
+@keyframes offer-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes offer-bounce {
+  0%, 70%, 100% { transform: translateY(0) scale(1); }
+  78% { transform: translateY(-4px) scale(1.03); }
+  86% { transform: translateY(0) scale(1); }
+  92% { transform: translateY(-2px) scale(1.01); }
+}
+
+@keyframes offer-pop-in {
+  0% { opacity: 0; transform: scale(0.94) translateY(8px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes offer-ping {
+  0% { transform: scale(1); opacity: 0.8; }
+  80%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+@keyframes offer-stripes {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+@keyframes offer-ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px hsl(var(--offer-gold) / 0.9), 0 10px 28px -12px hsl(var(--offer-gold) / 0.55); }
+  50% { box-shadow: 0 0 0 3px hsl(var(--offer-gold) / 1), 0 14px 36px -10px hsl(var(--offer-gold) / 0.8); }
+}
+
+/* ---------- Shine sweep ---------- */
+/* Needs a positioned element; the badge adds `relative` unless placed absolutely. */
+.offer-shimmer {
+  overflow: hidden;
+}
+.offer-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.45), transparent);
+  animation: offer-shimmer 2.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Wider, slower sweep for the full banner. */
+.offer-shine::after {
+  content: "";
+  position: absolute;
+  inset: -20% auto -20% 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, hsl(var(--offer-gold-light) / 0.28), hsl(0 0% 100% / 0.35), transparent);
+  animation: offer-shimmer 3.4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ---------- Gold surfaces ---------- */
+.offer-gold {
+  background-image: linear-gradient(135deg, hsl(var(--offer-gold-light)), hsl(var(--offer-gold)) 55%, hsl(32 95% 46%));
+  color: hsl(var(--offer-gold-ink));
+}
+
+.offer-gold-text {
+  color: hsl(var(--offer-gold-light));
+}
+
+/* Diagonal moving stripes for the top ribbon. */
+.offer-stripes {
+  background-image:
+    repeating-linear-gradient(-45deg, hsl(0 0% 100% / 0.18) 0 10px, transparent 10px 20px),
+    linear-gradient(90deg, hsl(var(--offer-gold)), hsl(var(--offer-gold-light)), hsl(var(--offer-gold)));
+  background-size: 40px 100%, 100% 100%;
+  color: hsl(var(--offer-gold-ink));
+  animation: offer-stripes 1.6s linear infinite;
+}
+
+/* ---------- Banner body ---------- */
+.offer-banner {
+  background-color: hsl(var(--offer-deep));
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, hsl(var(--offer-gold) / 0.28), transparent 55%),
+    radial-gradient(80% 80% at 0% 100%, hsl(var(--offer-mid) / 0.9), transparent 70%),
+    linear-gradient(135deg, hsl(var(--offer-deep)), hsl(var(--offer-mid)));
+  color: hsl(0 0% 100%);
+  box-shadow:
+    0 0 0 2px hsl(var(--offer-gold)),
+    0 18px 40px -16px hsl(var(--offer-gold) / 0.55);
+}
+
+/* ---------- Motion helpers ---------- */
+.offer-glow {
+  animation: offer-glow 2.4s ease-in-out infinite;
+}
+
+.offer-float {
+  animation: offer-float 3s ease-in-out infinite;
+}
+
+.offer-bounce {
+  animation: offer-bounce 2.8s ease-in-out infinite;
+}
+
+.offer-pop-in {
+  animation: offer-pop-in 0.6s ease-out both;
+}
+
+.offer-ping::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: hsl(0 85% 55% / 0.7);
+  animation: offer-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* The card ring for a course on offer: a clear gold edge plus warm tint. */
+.offer-card-ring {
+  box-shadow: 0 0 0 2px hsl(var(--offer-gold) / 0.9), 0 10px 28px -12px hsl(var(--offer-gold) / 0.55);
+  background-image: linear-gradient(180deg, hsl(var(--offer-gold) / 0.1), transparent 45%);
+  animation: offer-ring-pulse 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offer-shimmer::after,
+  .offer-shine::after,
+  .offer-stripes,
+  .offer-glow,
+  .offer-float,
+  .offer-bounce,
+  .offer-pop-in,
+  .offer-ping::before,
+  .offer-card-ring {
+    animation: none !important;
+  }
+  .offer-shimmer::after,
+  .offer-shine::after {
+    display: none;
+  }
+}

@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { extractYouTubeVideoId, getYouTubeEmbedUrl } from "@/utils/videoUtils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { OfferBadge, OfferBanner, OfferPrice, AboutTheBatch } from "@/components/offers/OfferComponents";
+import { isOfferLive } from "@/lib/offers";
 import { BottomNav } from "@/components/mobile/BottomNav";
 import { generateCourseSchema, generateBreadcrumbSchema, generateFAQSchema } from "@/lib/seo/structuredData";
 import { stripMarkdown } from "@/lib/stripMarkdown";
@@ -310,6 +312,11 @@ const ProgramDetail = () => {
           structuredData={courseStructuredData}
         />
 
+        {/* Exam offer banner (only while the offer is live) */}
+        <div className="px-4 pb-3 pt-3">
+          <OfferBanner course={course} />
+        </div>
+
         {/* Mobile Header */}
         <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b">
           <div className="flex items-center gap-3 px-4 py-3">
@@ -450,6 +457,12 @@ const ProgramDetail = () => {
             </div>
           )}
 
+          {isOfferLive(course) && (
+            <div>
+              <AboutTheBatch batch={course.batch_info} />
+            </div>
+          )}
+
           {/* About This Program */}
           {course.detailed_description && (
             <Card className="border">
@@ -527,7 +540,19 @@ const ProgramDetail = () => {
         <div className="fixed bottom-16 left-0 right-0 bg-background border-t shadow-[0_-4px_12px_rgba(0,0,0,0.08)] z-40 px-4 py-3">
           <div className="flex items-center justify-between max-w-md mx-auto">
             <div>
-              {course.price_inr > 0 ? (
+              {course.price_inr > 0 && isOfferLive(course) && course.original_price_inr > course.price_inr ? (
+                <div className="space-y-0.5">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-black leading-none text-primary">₹{course.price_inr.toLocaleString("en-IN")}</span>
+                    <span className="text-xs line-through text-muted-foreground">
+                      ₹{course.original_price_inr.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <span className="offer-gold inline-block rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase">
+                    Save ₹{(course.original_price_inr - course.price_inr).toLocaleString("en-IN")} · incl. GST
+                  </span>
+                </div>
+              ) : course.price_inr > 0 ? (
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-lg font-bold">₹{course.price_inr.toLocaleString()}</span>
                   {course.original_price_inr && course.original_price_inr > course.price_inr && (
@@ -600,6 +625,11 @@ const ProgramDetail = () => {
           </ol>
         </nav>
 
+        {/* Exam offer banner (only while the offer is live) */}
+        <div className="container mx-auto px-4 pb-4 pt-4">
+          <OfferBanner course={course} />
+        </div>
+
         {/* Hero Section with Gradient */}
         <section className="relative bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-primary-foreground overflow-hidden">
           <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,black)]" />
@@ -617,6 +647,7 @@ const ProgramDetail = () => {
                   </div>
                 )}
                 
+                <OfferBadge course={course} className="mb-1" />
                 <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight">
                   {course.name}
                 </h1>
@@ -666,7 +697,12 @@ const ProgramDetail = () => {
 
                 <div className="flex flex-wrap items-center gap-4">
                   <div>
-                    {course.price_inr > 0 ? (
+                    {course.price_inr > 0 && isOfferLive(course) && course.original_price_inr > course.price_inr ? (
+                      <div className="space-y-1">
+                        <OfferPrice tone="dark" price={course.price_inr} originalPrice={course.original_price_inr} course={course} />
+                        <span className="text-xs opacity-80">incl. 18% GST · Limited time</span>
+                      </div>
+                    ) : course.price_inr > 0 ? (
                       <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-bold">₹{course.price_inr.toLocaleString()}</span>
                         {course.original_price_inr && course.original_price_inr > course.price_inr && (
@@ -806,6 +842,8 @@ const ProgramDetail = () => {
                 </Card>
               )}
 
+              {isOfferLive(course) && <AboutTheBatch batch={course.batch_info} />}
+
               {/* About Program */}
               {course.detailed_description && (
                 <Card className="border-2">
@@ -846,10 +884,15 @@ const ProgramDetail = () => {
 
             {/* Sidebar - Sticky */}
             <div className="lg:sticky lg:top-24 h-fit space-y-6">
-              <Card className="border-2 border-primary bg-gradient-to-br from-primary/10 to-background shadow-xl">
+              <Card className={`border-2 bg-gradient-to-br from-primary/10 to-background shadow-xl ${isOfferLive(course) ? "border-warning offer-card-ring" : "border-primary"}`}>
                 <CardContent className="pt-6 text-center space-y-4">
                   <div>
-                    {course.price_inr > 0 ? (
+                    {course.price_inr > 0 && isOfferLive(course) && course.original_price_inr > course.price_inr ? (
+                      <>
+                        <OfferPrice align="center" price={course.price_inr} originalPrice={course.original_price_inr} course={course} />
+                        <div className="mt-1 text-xs text-muted-foreground">incl. 18% GST · Limited time</div>
+                      </>
+                    ) : course.price_inr > 0 ? (
                       <>
                         <div className="text-3xl font-bold mb-1">
                           ₹{course.price_inr.toLocaleString()}

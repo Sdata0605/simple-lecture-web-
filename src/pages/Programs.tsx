@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { offerDisplayPrice } from "@/components/offers/OfferComponents";
+import { OfferGstNote } from "@/components/offers/OfferComponents";
+import { OfferBadge } from "@/components/offers/OfferComponents";
 import { useSearchParams, useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,7 +35,7 @@ const ProgramsTrustBadges = () => {
     { icon: Users, label: "50,000+ Students" },
     { icon: Star, label: "4.9★ Rating" },
     { icon: Headphones, label: "24/7 AI Support" },
-    { icon: IndianRupee, label: "From ₹2,950/yr (incl. GST)" },
+    { icon: IndianRupee, label: "Affordable prices (incl. GST)" },
   ];
 
   return (
@@ -55,7 +58,7 @@ const CategoryAIContent = ({ categoryName }: { categoryName: string }) => {
   const contentMap: Record<string, { question: string; answer: string }> = {
     "Board Exams": {
       question: "What are the best online courses for board exam preparation?",
-      answer: "SimpleLecture offers AI-powered board exam courses for SSLC 10th and PUC with personalised learning, 24/7 AI doubt clearing, chapter-wise video lessons, and board-pattern mock tests — all starting at just ₹2,950/year (incl. GST). Join 50,000+ students scoring 90+ with our mastery-based approach."
+      answer: "SimpleLecture offers AI-powered board exam courses for SSLC 10th and PUC with personalised learning, 24/7 AI doubt clearing, chapter-wise video lessons, and board-pattern mock tests — at affordable per-course prices (incl. GST). Join 50,000+ students scoring 90+ with our mastery-based approach."
     },
     "Entrance Exams": {
       question: "Which online platform is best for NEET and JEE entrance exam preparation?",
@@ -423,6 +426,7 @@ const Programs = () => {
                     <div className="flex gap-3 p-2">
                       {/* Course Image */}
                       <div className="relative h-20 w-20 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/20 to-accent/20">
+                        <OfferBadge course={course} className="absolute bottom-1 left-1 z-10 !px-1.5 !py-0 !text-[9px]" />
                         {(course.course_thumbnails?.storage_url || course.thumbnail_url) && (
                           <img
                             src={resizedStorageUrl(course.course_thumbnails?.storage_url || course.thumbnail_url, 240, 240) || undefined}
@@ -462,8 +466,9 @@ const Programs = () => {
                           {course.price_inr > 0 ? (
                             <>
                               <span className="font-bold text-primary text-sm">
-                                {formatINR(course.price_inr)}
+                                {formatINR(offerDisplayPrice(course, course.price_inr))}
                               </span>
+<OfferGstNote course={course} total={course.price_inr || 0} />
                               {course.original_price_inr && course.original_price_inr > course.price_inr && (
                                 <span className="text-[10px] text-muted-foreground line-through">
                                   {formatINR(course.original_price_inr)}
@@ -808,7 +813,8 @@ const Programs = () => {
                           <div>
                             {course.price_inr > 0 ? (
                               <div className="flex items-center gap-2">
-                                <span className="text-lg font-bold">₹{course.price_inr.toLocaleString()}</span>
+                                <span className="text-lg font-bold">₹{offerDisplayPrice(course, course.price_inr).toLocaleString()}</span>
+<OfferGstNote course={course} total={course.price_inr || 0} />
                                 {course.original_price_inr && course.original_price_inr > course.price_inr && (
                                   <span className="text-xs text-muted-foreground line-through">
                                     ₹{course.original_price_inr.toLocaleString()}

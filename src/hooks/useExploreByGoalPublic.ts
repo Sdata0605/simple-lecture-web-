@@ -72,7 +72,7 @@ export const useCoursesByGoal = (goalSlug?: string, filterCategoryId?: string) =
         .from("courses")
         .select(`
           id, name, slug, thumbnail_url, short_description,
-          price_inr, original_price_inr, duration_months,
+          price_inr, original_price_inr, offer_active, offer_content, duration_months,
           student_count, rating, is_active, is_coming_soon,
           course_categories!inner(category_id),
           course_subjects(id),

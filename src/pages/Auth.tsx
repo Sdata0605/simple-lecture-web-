@@ -635,7 +635,7 @@ const Auth = () => {
                   { icon: MessageCircle, label: "Instant Doubt Solving" },
                   { icon: FileText, label: "Mock Tests & DPPs" },
                   { icon: Globe, label: "Kannada & English Support" },
-                  { icon: Tag, label: "₹2,950 Per Year" },
+                  { icon: Tag, label: "Affordable Per Course" },
                 ].map(({ icon: Icon, label }) => (
                   <div key={label} className="flex flex-col items-center text-center gap-2">
                     <div className="w-14 h-14 rounded-2xl bg-accent/60 flex items-center justify-center">

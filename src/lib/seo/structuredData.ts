@@ -131,7 +131,7 @@ export const generateHomepageFAQSchema = () => ({
       "name": "How much does SimpleLecture cost?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Our AI-powered courses start at just ₹2,950 incl. GST per course for 1-year access — far less than traditional coaching centres. Live classes and language add-ons are available at affordable top-up prices."
+        "text": "Our AI-powered courses are priced per course, with GST-inclusive prices shown on each course page — far less than traditional coaching centres. Live classes and language add-ons are available at affordable top-up prices."
       }
     },
     {

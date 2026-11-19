@@ -1678,6 +1678,13 @@ export type Database = {
           og_image_url: string | null
           og_title: string | null
           original_price_inr: number | null
+          regular_price_inr: number | null
+          offer_active: boolean
+          offer_price_inr: number | null
+          offer_started_at: string | null
+          offer_saved_original_inr: number | null
+          offer_content: Json
+          batch_info: Json | null
           price_inr: number | null
           promotional_video_url: string | null
           rating: number | null
@@ -1722,6 +1729,13 @@ export type Database = {
           og_image_url?: string | null
           og_title?: string | null
           original_price_inr?: number | null
+          regular_price_inr?: number | null
+          offer_active?: boolean
+          offer_price_inr?: number | null
+          offer_started_at?: string | null
+          offer_saved_original_inr?: number | null
+          offer_content?: Json
+          batch_info?: Json | null
           price_inr?: number | null
           promotional_video_url?: string | null
           rating?: number | null
@@ -1766,6 +1780,13 @@ export type Database = {
           og_image_url?: string | null
           og_title?: string | null
           original_price_inr?: number | null
+          regular_price_inr?: number | null
+          offer_active?: boolean
+          offer_price_inr?: number | null
+          offer_started_at?: string | null
+          offer_saved_original_inr?: number | null
+          offer_content?: Json
+          batch_info?: Json | null
           price_inr?: number | null
           promotional_video_url?: string | null
           rating?: number | null

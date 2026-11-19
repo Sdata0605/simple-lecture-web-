@@ -37,13 +37,13 @@ const heroSlideData = [
     title: "SSLC Board Exam Prep",
     subtitle: "Score 90+ in Your 10th Board Exams",
     points: ["All subjects covered", "AI doubt clearing 24/7", "Unlimited practice tests"],
-    cta: "Start Learning - ₹2,950 incl. GST",
+    cta: "Start Learning",
   },
   {
     title: "10th Board Made Easy",
     subtitle: "Complete SSLC Course with AI Tutoring",
     points: ["Chapter-wise video lessons", "Previous year papers solved", "Personalized weak area focus"],
-    cta: "Join Now - ₹2,950 incl. GST",
+    cta: "Join Now",
   },
   {
     title: "Ace Your SSLC Exams",
